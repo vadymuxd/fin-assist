@@ -1,22 +1,21 @@
 # Fin Assist — Claude Instructions
 
-## Memory: Read This First
+## At the start of every session, fetch these two pages:
 
-At the start of every session, read the memory index:
-→ `memory/MEMORY.md`
+1. **Agent Config** — your identity, current phase, safety rules, scripts, and what to update where
+   → https://www.notion.so/33f416f27566811aa994e1a3561adac7
 
-Then follow links to any topic files relevant to the current task. This tells you who Vadym is, what's been built, what decisions were made, and what's in scope.
+2. **Memory Index** — decision log of everything meaningful that's been decided or built
+   → https://www.notion.so/33f416f27566812a8b25fea944567cab
 
-## Memory: Writing
+Agent Config tells you when to fetch reference pages (User Profile, Architecture, Credentials, Sheet Structure, Sessions) — only load those when the topic requires it.
 
-- When significant decisions are made or new things are built, update `memory/sessions/session_NNN.md` (increment the session number)
-- Update the index entry in `memory/MEMORY.md` to include the new session
-- Update any relevant topic files in `memory/topics/` if facts changed (credentials, architecture, sheet structure, etc.)
-- Do this at natural session end or when the memory reminder fires
+## After every meaningful decision or outcome
 
-## Ground Rules
+Add a detailed summary to the Sessions DB in Notion, then add a one-liner entry to Memory Index pointing to it. Update Agent Config if anything structural changed. Full instructions are in Agent Config.
 
-- **Never touch** the following Google Sheet tabs: `Inv25+`, `Summary (+)`, `Money Flow (+)`, `Joint Spendings (+)`, `Personal Spendings (+)`, `Savings (+)`, `Accounts (+)`, `Legend`, `Inv22-24`, `Earnings 2025`
-- Scripts may only read/write to: `Inv26`, `InvTransactions`, `Alerts Config`, `Analysis Log`
-- No new scripts until Phase 2 design session is complete and real holdings data is in the sheet
-- See `PLAN.md` for current task state before starting any work
+## Safety rules (always apply, even if Notion is unavailable)
+
+- **Never touch** these Google Sheet tabs: `Inv25+`, `Summary (+)`, `Money Flow (+)`, `Joint Spendings (+)`, `Personal Spendings (+)`, `Savings (+)`, `Accounts (+)`, `Legend`, `Inv22-24`, `Earnings 2025`
+- Scripts may only read/write: `Inv26`, `InvTransactions`, `Alerts Config`, `Analysis Log`
+- No new scripts until Phase 3 design session is complete and real holdings data is in the sheet

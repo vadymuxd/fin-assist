@@ -39,26 +39,22 @@ Cloud-hosted automation pipeline running on **GitHub Actions** (no Mac required 
 
 ---
 
-## Phase 2 — Memory & Assistant Continuity ⏳ IN PROGRESS
+## Phase 2 — Memory & Assistant Continuity ✅ COMPLETE
 
-> ⚠️ Must be complete before the design session — the Claude Project is where the design session happens.
-
-Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile (Claude.ai).
+Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile (claude.ai).
 
 ### What's built
-- [x] `memory/` folder in repo: `MEMORY.md` + `topics/` + `sessions/`
-- [x] `CLAUDE.md` in repo root — Claude Code reads memory at session start
-- [x] `scripts/memory_reminder.sh` + Stop hook — reminds Claude to update memory every 5 turns
-- [x] `~/.claude/projects/.../memory/MEMORY.md` — redirect so Claude auto-memory writes to correct place
-
-### What's next (do next session)
-- [ ] **2.1** Create Notion pages mirroring `memory/topics/` structure (user_profile, architecture, credentials, sheet_structure)
-- [ ] **2.2** Create Notion "Sessions" database for session logs
-- [ ] **2.3** Update Stop hook to also sync memory changes to Notion after reminder fires
-- [ ] **2.4** Configure Notion MCP in claude.ai Settings → Integrations
-- [ ] **2.5** Create Claude Project on claude.ai named `Fin Assist`
-- [ ] **2.6** Write Claude Project system prompt: stable context (who is Vadym, holdings overview, philosophy, architecture, ground rules) + instruction to fetch Notion for dynamic context
-- [ ] **2.7** Verify: start a mobile session, confirm Claude Project reads from Notion and has full context
+- [x] `CLAUDE.md` in repo root — Claude Code fetches Agent Config + Memory Index from Notion on startup
+- [x] `scripts/memory_reminder.sh` + Stop hook — reminds Claude to update Notion every 5 turns
+- [x] Notion as memory backbone: Agent Config, Memory Index, Sessions DB, Reference pages
+- [x] `~/.claude/projects/.../memory/MEMORY.md` — redirect pointer to Notion (local `memory/` folder removed)
+- [x] **2.1** Notion pages: User Profile, Architecture, Credentials, Sheet Structure
+- [x] **2.2** Notion "Sessions" database for session logs
+- [x] **2.3** Stop hook updated to prompt Notion sync after every 5 turns
+- [x] **2.4** Notion MCP configured in claude.ai (Connectors tab)
+- [x] **2.5** Claude Project created on claude.ai: `Fin Assist`
+- [x] **2.6** Claude Project system prompt written — fetches Agent Config + Memory Index from Notion on startup
+- [x] **2.7** Mobile session verified — Claude Project reads from Notion and introduces itself correctly (Session 004)
 
 ### Memory architecture decisions
 | Decision | Choice | Reason |
@@ -231,7 +227,6 @@ Full budgeting layer: income, fixed costs, discretionary spending, joint vs pers
 
 ## Immediate Next Steps
 
-1. **Finish Phase 2** (next session) — Notion sync + Claude Project setup
-2. **Phase 3** — Design session inside Claude Project (export holdings first)
-3. **Phase 4** — Create Google Sheet tabs with real holdings
-4. **Phase 5** — Build remaining scripts with real data
+1. **Phase 3** — Design session from Mac (export holdings from T212 + Freetrade first)
+2. **Phase 4** — Create Google Sheet tabs with real holdings
+3. **Phase 5** — Build remaining scripts with real data
