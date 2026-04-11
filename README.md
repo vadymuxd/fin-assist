@@ -75,8 +75,8 @@ Required secrets in `.env`:
 |-------|-------------|--------|
 | 1 | Foundations & Infrastructure | ✅ Complete |
 | 2 | Memory & Assistant Continuity | ✅ Complete |
-| 3 | Design Session | ❌ Not started |
-| 4 | Google Sheet Setup | ⏳ In progress |
+| 3 | Data Import & Sheet Scaffolding | ❌ Not started |
+| 4 | Design Session | ❌ Not started |
 | 5 | Scripts & Automation | ⏳ In progress |
 | 6 | App & UI | ❌ Not started |
 | 7–10 | Savings, Pensions, Mortgage, Budgeting | ❌ Not started |
