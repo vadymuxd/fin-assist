@@ -138,6 +138,7 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 
 - [ ] **4.4** Define weekly digest format (what sections, what data, what cadence)
 - [ ] **4.5** Document all decisions to Notion (Agent Config if structural, Memory Index one-liner, Reference pages if schema changed)
+- [ ] **4.6** Define Portfolio Snapshot automation — decide trigger (post-trade, daily, on-demand), what data to push to Notion, and which script owns it (extend `sheets_updater.py` or dedicated `notion_sync.py`)
 
 ---
 
