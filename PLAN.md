@@ -66,80 +66,53 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 
 ---
 
-## Phase 3 — Data Import & Sheet Scaffolding ❌ NOT STARTED
+## Phase 3 — Data Import & Sheet Scaffolding ✅ COMPLETE
 
 > Goal: get real holdings into the sheet first. Schema emerges from actual data, not upfront design.
 
-> **Use existing sheet** `1IwBSuAzlP0xt0_9pQbztovmfy4Ng1BVCwUuhDurJhsI` — do NOT create a new one.
-> Already shared with service account. Sheet ID added to `.env`.
->
-> **Existing tabs — DO NOT TOUCH:** `Inv25+`, `Summary (+)`, `Money Flow (+)`, `Joint Spendings (+)`, `Personal Spendings (+)`, `Savings (+)`, `Accounts (+)`, `Legend`, `Inv22-24`, `Earnings 2025`
->
+> **Sheet:** `1IwBSuAzlP0xt0_9pQbztovmfy4Ng1BVCwUuhDurJhsI`
 > **Scripts may only read/write to:** `Inv26`, `InvTransactions`, `Alerts Config`, `Analysis Log`
->
-> **Scope:** Stocks only (T212 + Freetrade). Pensions, savings, CMC Invest excluded for now.
 > **JP Morgan** = Nutmeg Alpha (product was renamed)
 
-- [x] **3.1** Sheet exists and is shared with service account
+- [x] **3.1** Sheet exists and is shared with service account as Editor
 - [x] **3.2** Sheet ID added to `.env` → `PORTFOLIO_SHEET_ID`
-- [ ] **3.3** Export data from all four sources and drop into local `data/` folder (gitignored):
-  - **T212** — Account → History → Export CSV (full transaction history)
-  - **Freetrade** — Account → Statements → Download (transaction history or statement)
-  - **Moneyfarm** — statement or valuation export (deposit history + current value)
-  - **JP Morgan / Nutmeg Alpha** — statement or valuation export (deposit history + current value)
-  > Note: Moneyfarm and JP Morgan are managed funds — they won't have individual trade history. Whatever format they export (PDF, CSV, statement) is fine; Claude will handle parsing.
-- [ ] **3.4** Review exports — understand actual columns, formats, and structure before building anything
-- [ ] **3.5** Create `InvTransactions` tab and populate from T212 + Freetrade CSVs — source of truth for all stock positions and avg buy prices:
-  | Column | Notes |
-  |--------|-------|
-  | Date | Trade date |
-  | Ticker | e.g. AAPL, RHM.DE |
-  | Action | Buy / Sell |
-  | Qty | Number of shares |
-  | Price Per Share £ | At time of trade |
-  | Total Value £ | Qty × Price |
-  | Platform | T212 / Freetrade |
-  | Notes | Optional |
+- [x] **3.3** T212 + Freetrade CSVs exported and dropped into `data/` (gitignored)
+  - `data/Trading212_export_2025-04-11_to_2026-04-11.csv` — 8 stocks (NVDA, RIO, SGLN, INRG, RTX, TECK/B, GOOG, FIG→sold)
+  - `data/freetrade-export_2022-2026.csv` — 6 stocks (HOp/HO, RHMd/RHM, VGER, BRK.B, LGEN, GENM)
+  - Moneyfarm + JP Morgan/Nutmeg Alpha: managed funds — no trade-level CSV; values entered manually
+- [x] **3.4** Exports reviewed — T212 columns understood, Freetrade ticker mapping built (`FT_TICKER_MAP`)
+- [x] **3.5** `InvTransactions` tab created and populated — all buys/sells from T212 + Freetrade with normalised columns (Date, Ticker, Action, Qty, Price Per Share £, Total £, Platform)
+- [x] **3.6** `Inv26` tab built from real holdings with three sections:
+  - **Summary row** (row 5): Stocks Total Value, Stocks P&L £/%, Managed Funds Total, Grand Total (incl. cash)
+  - **Self-Managed Stocks** (rows 9–19): 11 live positions, current prices via `GOOGLEFINANCE`, P&L from purchase; SGLN priced via `update_manual_prices.py` (Yahoo Finance fallback)
+  - **Managed Funds** (rows 23–24): Nutmeg Alpha (£1,000 invested / £1,257 current), Moneyfarm (£1,000 invested / £1,238 current) — manually maintained, updated monthly from app
+  - **Cash**: manually added to sheet, included in Grand Total via formula `=B4+E4+Q4`
+  - **Grand Total as at April 2026: ~£20,507**
+- [x] **3.7** `Alerts Config` tab placeholder created (to be filled in Phase 4 design session)
+- [x] **3.8** `Analysis Log` tab created — empty, ready for `claude_analyst.py`
 
-- [ ] **3.6** Create `Inv26` tab scaffolded from real holdings — three sections:
+### Scripts built in Phase 3
+| Script | Purpose |
+|--------|---------|
+| `scripts/build_portfolio_sheet.py` | Parses T212 + Freetrade CSVs, builds InvTransactions + Inv26 tabs from scratch, applies formatting |
+| `scripts/update_manual_prices.py` | Fetches SGLN price from Yahoo Finance (yfinance), writes to Inv26 col F + timestamp col M |
 
-  **Section 1: Summary (top, pinned)**
-  - Stocks total value, Stocks total P&L, Managed funds total, Grand total, Last updated by script
+### Key technical decisions
+| Issue | Solution |
+|-------|---------|
+| GOOGLEFINANCE currency conversion (`USDGBP` returns array) | Use `/GOOGLEFINANCE("CURRENCY:GBPUSD")` — scalar, reliable |
+| SGLN not in Google Finance | Yahoo Finance via `yfinance` (`SGLN.L`), MANUAL_TICKERS dict (extensible) |
+| LON:VGER returns GBP not GBX | `FT_TICKER_MAP` maps VGER as `currency='GBP'` — no divide by 100 |
+| Service account 403 on first run | Reshared sheet as Editor (fin-assist@fin-assist-492923.iam.gserviceaccount.com) |
 
-  **Section 2: Self-Managed Stocks** (one row per ticker, derived from InvTransactions)
-  | Column | Source |
-  |--------|--------|
-  | Ticker, Name, Platform (T212/Freetrade) | Static |
-  | Qty, Avg Buy Price | Calculated from `InvTransactions` |
-  | Current Price | `=GOOGLEFINANCE(ticker,"price")` |
-  | P&L Today £/% | Formula |
-  | P&L This Week £ | Formula using `GOOGLEFINANCE` historical |
-  | P&L This Month £ | Formula |
-  | P&L This Year £ | Formula |
-  | P&L From Purchase £/% | Formula vs avg buy price |
-  | Score, Recommendation | Written by `claude_analyst.py` |
-  | Last Updated | Written by `sheets_updater.py` |
-
-  **Section 3: Managed Funds** (manual, updated monthly)
-  - JP Morgan / Nutmeg Alpha, Moneyfarm
-  | Column | Source |
-  |--------|--------|
-  | Name, Provider | Static |
-  | Invested £ | Manual |
-  | Current Value £ | Manual (update monthly from app) |
-  | P&L £, P&L % | Formula |
-  | Last Updated | Manual |
-
-- [ ] **3.7** Create `Alerts Config` tab (Ticker, Spike %, Drop %, Active Y/N) — one row per stock, filled with placeholder thresholds for now
-- [ ] **3.8** Create `Analysis Log` tab (Date, Ticker, Score, Confidence, Reason) — empty, written by `claude_analyst.py` later
-
-> **Note:** All P&L = Google Sheet formulas. Scripts write only to `Inv26` (Score, Recommendation, Last Updated) and `Analysis Log`.
+> **Note:** All P&L = Google Sheet formulas. Scripts write only to `Inv26` (price, Score, Recommendation, Last Updated) and `Analysis Log`.
 
 ---
 
 ## Phase 4 — Design Session ❌ NOT STARTED
 
-> Requires Phase 3 complete — real holdings must be in the sheet before this session.
+> Phase 3 is now complete — real holdings are in the sheet. Ready to start.
+> Requires real holdings visible in sheet ✅ done.
 > Do this inside the **Fin Assist Claude Project** on claude.ai (or Mac Claude Code).
 > Goal: define the intelligence layer with actual positions in front of you.
 
@@ -227,13 +200,13 @@ Full budgeting layer: income, fixed costs, discretionary spending, joint vs pers
 |------|--------|
 | `.env` | ✅ Complete (Claude API key, Telegram token + chat ID) |
 | `config/service_account.json` | ✅ In place |
-| `PORTFOLIO_SHEET_ID` in `.env` | ❌ Empty — needs sheet to be created |
+| `PORTFOLIO_SHEET_ID` in `.env` | ✅ Set |
 | GitHub repo secrets | ❌ Not added yet (needed for GitHub Actions) |
 
 ---
 
 ## Immediate Next Steps
 
-1. **Phase 3** — Export CSVs from T212 + Freetrade, build sheet from real holdings
-2. **Phase 4** — Design session with real positions in front of you (scoring model, thresholds, digest)
-3. **Phase 5** — Build remaining scripts against real data and defined rules
+1. **Phase 4** — Design session: scoring model, per-stock alert thresholds, weekly digest format (sheet is ready)
+2. **Phase 5** — Build remaining scripts against real data and defined rules
+3. **Ongoing** — Run `update_manual_prices.py` manually until added to GitHub Actions schedule

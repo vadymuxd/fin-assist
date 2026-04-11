@@ -1,0 +1,10 @@
+{
+  "default": {
+    "spike_pct": 6.0,
+    "drop_pct": 6.0
+  },
+  "overrides": {
+    "RHM.DE": { "spike_pct": 4.0, "drop_pct": 4.0 },
+    "BAESF": { "spike_pct": 4.0, "drop_pct": 4.0 }
+  }
+}
