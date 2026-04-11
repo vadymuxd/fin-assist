@@ -82,9 +82,14 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 
 - [x] **3.1** Sheet exists and is shared with service account
 - [x] **3.2** Sheet ID added to `.env` → `PORTFOLIO_SHEET_ID`
-- [ ] **3.3** Export transaction history from T212 (Account → History → Export CSV) and Freetrade (Account → Statements → Download)
-- [ ] **3.4** Review exports — understand actual columns, tickers, and transaction structure before building anything
-- [ ] **3.5** Create `InvTransactions` tab and populate from CSVs — this is the source of truth for all position sizes and avg buy prices:
+- [ ] **3.3** Export data from all four sources and drop into local `data/` folder (gitignored):
+  - **T212** — Account → History → Export CSV (full transaction history)
+  - **Freetrade** — Account → Statements → Download (transaction history or statement)
+  - **Moneyfarm** — statement or valuation export (deposit history + current value)
+  - **JP Morgan / Nutmeg Alpha** — statement or valuation export (deposit history + current value)
+  > Note: Moneyfarm and JP Morgan are managed funds — they won't have individual trade history. Whatever format they export (PDF, CSV, statement) is fine; Claude will handle parsing.
+- [ ] **3.4** Review exports — understand actual columns, formats, and structure before building anything
+- [ ] **3.5** Create `InvTransactions` tab and populate from T212 + Freetrade CSVs — source of truth for all stock positions and avg buy prices:
   | Column | Notes |
   |--------|-------|
   | Date | Trade date |
