@@ -10,11 +10,13 @@ Cloud-hosted automation pipeline running on **GitHub Actions** (no Mac required 
 
 | Layer | What it does | Technology |
 |-------|-------------|------------|
-| Data | Portfolio + live prices + sentiment + expenses + budget | Google Sheets + Yahoo Finance (yfinance) + Emma Live Export |
-| Brain | Analysis, scoring, recommendations, budget monitoring | Claude API (called by scripts) |
+| Data | Portfolio + live prices + news + sentiment + fundamentals | Google Sheets + Finnhub (primary) + yfinance (fallback) |
+| Brain | Analysis, scoring, recommendations | Claude API (called by scripts — FAS scoring only, not per-headline) |
 | Interface | Alerts + weekly digest + conversational assistant | Telegram + Claude Project (claude.ai) |
 
-**Key decision:** Checks run twice daily (8am + 3:30pm weekdays) via GitHub Actions cron. No always-on server needed.
+**Key decision:** Checks run 3× daily (09:30 / 13:00 / 16:30 BST, weekdays) + Sunday digest via GitHub Actions cron. No always-on server needed.
+
+**Data routing:** Finnhub free tier (60 req/min, 60+ exchanges incl. LSE) for US stocks + news sentiment + analyst data. yfinance as fallback for tickers Finnhub doesn't fully cover on free tier (some LSE endpoints). Script checks `Exchange` field and routes accordingly.
 
 **Notification channel:** Telegram (both urgent alerts and weekly digest)
 
@@ -71,7 +73,7 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 > Goal: get real holdings into the sheet first. Schema emerges from actual data, not upfront design.
 
 > **Sheet:** `1IwBSuAzlP0xt0_9pQbztovmfy4Ng1BVCwUuhDurJhsI`
-> **Scripts may only read/write to:** `Inv26`, `InvTransactions`, `Alerts Config`, `Analysis Log`
+> **Scripts may only read/write to:** `Inv26 - Summary`, `Inv26 - Trend`, `InvTransactions`, `Alerts Config`, `Analysis Log`
 > **JP Morgan** = Nutmeg Alpha (product was renamed)
 
 - [x] **3.1** Sheet exists and is shared with service account as Editor
@@ -82,20 +84,23 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
   - Moneyfarm + JP Morgan/Nutmeg Alpha: managed funds — no trade-level CSV; values entered manually
 - [x] **3.4** Exports reviewed — T212 columns understood, Freetrade ticker mapping built (`FT_TICKER_MAP`)
 - [x] **3.5** `InvTransactions` tab created and populated — all buys/sells from T212 + Freetrade with normalised columns (Date, Ticker, Action, Qty, Price Per Share £, Total £, Platform)
-- [x] **3.6** `Inv26` tab built from real holdings with three sections:
+- [x] **3.6** `Inv26 - Summary` tab built from real holdings with three sections:
   - **Summary row** (row 5): Stocks Total Value, Stocks P&L £/%, Managed Funds Total, Grand Total (incl. cash)
   - **Self-Managed Stocks** (rows 9–19): 11 live positions, current prices via `GOOGLEFINANCE`, P&L from purchase; SGLN priced via `update_manual_prices.py` (Yahoo Finance fallback)
   - **Managed Funds** (rows 23–24): Nutmeg Alpha (£1,000 invested / £1,257 current), Moneyfarm (£1,000 invested / £1,238 current) — manually maintained, updated monthly from app
   - **Cash**: manually added to sheet, included in Grand Total via formula `=B4+E4+Q4`
   - **Grand Total as at April 2026: ~£20,507**
+  - **5 benchmarks added**: S&P 500 (6816.89), FTSE 100 (10600.53), NASDAQ 100 (25116.34), MSCI World (132.23), Gold via SGLN (68.80 — references F18 from `update_manual_prices.py`)
 - [x] **3.7** `Alerts Config` tab placeholder created (to be filled in Phase 4 design session)
 - [x] **3.8** `Analysis Log` tab created — empty, ready for `claude_analyst.py`
+- [x] **3B** `Inv26 - Trend` tab created — 20-column schema (A–T). April 13 baseline hardcoded in row 17 (all % = 0). May 2026 template in row 18 with formulas locked to row 17. Benchmarks stored as raw index values; % vs start computed by formula. Tracking start: **April 13, 2026**.
+- [x] **3B** `InvTransactions` extended — Notes column (col I) added. New action types: `DEPOSIT`, `WITHDRAWAL`, `TRANSFER_IN`, `TRANSFER_OUT`. Total Invested = `SUMIF(Action=DEPOSIT)` — P&L stays clean when new cash arrives.
 
 ### Scripts built in Phase 3
 | Script | Purpose |
 |--------|---------|
 | `scripts/build_portfolio_sheet.py` | Parses T212 + Freetrade CSVs, builds InvTransactions + Inv26 tabs from scratch, applies formatting |
-| `scripts/update_manual_prices.py` | Fetches SGLN price from Yahoo Finance (yfinance), writes to Inv26 col F + timestamp col M |
+| `scripts/update_manual_prices.py` | Fetches SGLN price from Yahoo Finance (yfinance), writes to Inv26 - Summary col F + timestamp col M. ⚠️ Phase 5: rename worksheet lookup from `'Inv26'` → `'Inv26 - Summary'` |
 
 ### Key technical decisions
 | Issue | Solution |
@@ -109,53 +114,53 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 
 ---
 
-## Phase 4 — Design Session ❌ NOT STARTED
+## Phase 4 — Design Session ✅ COMPLETE
 
-> Phase 3 is now complete — real holdings are in the sheet. Ready to start.
-> Requires real holdings visible in sheet ✅ done.
-> Do this inside the **Fin Assist Claude Project** on claude.ai (or Mac Claude Code).
-> Goal: define the intelligence layer with actual positions in front of you.
+> All 5 design questions answered and locked. Decisions documented in Notion Sessions 012–014.
 
-- [ ] **4.1** Review `Inv26` — confirm all holdings are correct, tickers resolve, P&L looks right
-- [ ] **4.2** For each stock: write a one-line investment thesis and assign an alert threshold (fills `Alerts Config`)
-- [ ] **4.3** Define scoring model: Buy/Hold/Sell on scale -100 to +100
+### Decisions locked
 
-  ### Scoring Framework (starting point — adjust in session)
-  | Signal | Suggested Weight |
-  |--------|----------------|
-  | Price momentum (% vs 30-day avg, RSI) | 20% |
-  | News sentiment (headlines, last 7 days) | 20% |
-  | Analyst consensus (upgrades/targets) | 25% |
-  | Trader discussion (Reddit/StockTwits) | 15% |
-  | Thesis alignment (why you bought) | 20% |
+| Question | Decision |
+|----------|---------|
+| **Q1 — News & data source** | Finnhub free tier (primary) — 60 req/min, 60+ exchanges, news with sentiment built-in, analyst upgrades/price targets. yfinance as fallback for tickers Finnhub doesn't fully cover on free tier (some LSE). Script routes by `Exchange` field. |
+| **Q2 — Market universe** | Global — any market, gated by: (1) T212 UK can buy it, (2) live price fetchable. Practical scope: LSE, NYSE, NASDAQ, XETRA, Euronext. Asian markets deprioritised (generally not on T212 UK). |
+| **Q3 — Run frequency** | 3× daily weekdays: 09:30 / 13:00 / 16:30 BST. Mirrors market structure (open, mid, power hour close). Sunday 09:00 BST digest + full fundamental refresh. Alert dedup: same ticker can't re-alert within 6 hours. |
+| **Q4 — Fundamental data** | Weekly only (Sunday). P/E, revenue/EPS trend, analyst price targets — quarterly data, no point refreshing daily. Exception: if Finnhub news detects an earnings release, that ticker gets an ad-hoc fundamental refresh on the next run. |
+| **Q5 — Portfolio Snapshot** | Daily update after close run (16:30 BST). `sheets_updater.py` writes to Notion. Token cost ~$0.02/day. For portfolio changes: `build_portfolio_sheet.py --update-snapshot` triggers immediate refresh. No always-on worker needed. |
 
-  ### Alert Threshold Starting Point (per stock in 4.2)
-  | Stock type | Spike alert | Drop alert |
-  |-----------|------------|-----------|
-  | High volatility (defence/tech) | +4% | -4% |
-  | Mid volatility (diversified) | +6% | -6% |
-  | Index trackers | +3% | -3% |
+### Run schedule detail
 
-- [ ] **4.4** Define weekly digest format (what sections, what data, what cadence)
-- [ ] **4.5** Document all decisions to Notion (Agent Config if structural, Memory Index one-liner, Reference pages if schema changed)
-- [ ] **4.6** Define Portfolio Snapshot automation — decide trigger (post-trade, daily, on-demand), what data to push to Notion, and which script owns it (extend `sheets_updater.py` or dedicated `notion_sync.py`)
+| Run | UTC | London | Purpose |
+|-----|-----|--------|---------|
+| Morning | 08:30 | 09:30 BST | Just after LSE opens — overnight news, pre-market gaps |
+| Midday | 12:00 | 13:00 BST | US pre-market live, EU mid-session |
+| Close | 15:30 | 16:30 BST | Just after LSE closes — end-of-day signal confirmation |
+| Sunday digest | 08:00 | 09:00 BST | Weekly summary + full fundamental refresh |
 
 ---
 
-## Phase 5 — Scripts & Automation ⏳ IN PROGRESS
+## Phase 5 — Scripts & Automation ⏳ NEXT
 
-- [x] `price_monitor.py` — fetches prices, detects spikes/drops (placeholder tickers, needs real data)
-- [ ] `alert_sender.py` — sends Telegram message when threshold breached
-- [ ] `sheets_updater.py` — writes Claude analysis scores + Last Updated timestamp to sheet (P&L is handled by sheet formulas, not this script)
-- [ ] `claude_analyst.py` — sends portfolio data to Claude API, returns scored recommendations
-- [ ] `sentiment_fetch.py` — pulls headlines for tickers, scores sentiment
-- [ ] `weekly_digest.py` — compiles weekly report, sends via Telegram every Sunday
-- [ ] `main_runner.py` — orchestrates all scripts in sequence
-- [ ] `.github/workflows/daily_monitor.yml` — cron: weekdays 8am + 3:30pm UTC
-- [ ] `.github/workflows/weekly_digest.yml` — cron: Sunday 6pm UTC
+> Build order below. All design decisions are locked (see Phase 4).
+> Reference Notion Sessions 012–014 for full spec.
+
+### Task list (9 tasks)
+
+- [ ] **5.1** Patch `build_portfolio_sheet.py` — rename worksheet lookup `'Inv26'` → `'Inv26 - Summary'`
+- [ ] **5.2** Patch `update_manual_prices.py` — same rename
+- [ ] **5.3** Build `claude_analyst.py` — fetch Finnhub/yfinance data (news + sentiment + analyst upgrades + fundamentals), call Claude API for FAS score per stock. Claude called once per stock for final score, not per headline.
+- [ ] **5.4** Build `alert_sender.py` — 4-tier Telegram alerts (🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🟢 LOW) with 6h per-ticker dedup
+- [ ] **5.5** Build `sheets_updater.py` — write Analysis Log rows to sheet + daily Notion Portfolio Snapshot update after 15:30 UTC run
+- [ ] **5.6** Build `prospect_scanner.py` — score watchlist tickers + screener for new candidates
+- [ ] **5.7** Build `snapshot_trend.py` — append monthly row to `Inv26 - Trend`. Reads Grand Total + all 5 benchmark values from `Inv26 - Summary`. GitHub Actions cron: `0 16 28-31 * 1-5` (covers last few days of month, weekdays); script checks if it's actually the last weekday before running, exits silently if not. Manual dispatch always available.
+- [ ] **5.8** Build `weekly_digest.py` — Sunday Telegram summary (portfolio performance, top signals, fundamental snapshot)
+- [ ] **5.9** Update GitHub Actions workflows:
+  - `daily_monitor.yml` — 3× daily cron: `30 8 * * 1-5`, `0 12 * * 1-5`, `30 15 * * 1-5`
+  - `weekly_digest.yml` — Sunday: `0 8 * * 0`
+  - `monthly_trend.yml` — last weekday of month: `0 16 28-31 * 1-5`
+- [ ] **5.10** Create sheet tabs: `Analysis Log`, `Watchlist`, `Alerts Config` (with real per-stock thresholds)
 - [ ] Add all secrets to GitHub repo (Settings → Secrets)
 - [ ] End-to-end test: trigger workflow manually, confirm Telegram message received
-- [ ] Update `config/thresholds.json` with real per-stock thresholds
 
 ---
 
@@ -208,6 +213,6 @@ Full budgeting layer: income, fixed costs, discretionary spending, joint vs pers
 
 ## Immediate Next Steps
 
-1. **Phase 4** — Design session: scoring model, per-stock alert thresholds, weekly digest format (sheet is ready)
-2. **Phase 5** — Build remaining scripts against real data and defined rules
-3. **Ongoing** — Run `update_manual_prices.py` manually until added to GitHub Actions schedule
+1. **Phase 5** — Build all 9 tasks in order (see Phase 5 task list above). Start with patches 5.1 + 5.2, then core scripts.
+2. **Ongoing** — Run `update_manual_prices.py` manually until added to GitHub Actions schedule
+3. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`

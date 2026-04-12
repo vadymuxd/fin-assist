@@ -17,5 +17,6 @@ Add a detailed summary to the Sessions DB in Notion, then add a one-liner entry 
 ## Safety rules (always apply, even if Notion is unavailable)
 
 - **Never touch** these Google Sheet tabs: `Inv25+`, `Summary (+)`, `Money Flow (+)`, `Joint Spendings (+)`, `Personal Spendings (+)`, `Savings (+)`, `Accounts (+)`, `Legend`, `Inv22-24`, `Earnings 2025`
-- Scripts may only read/write: `Inv26`, `InvTransactions`, `Alerts Config`, `Analysis Log`
-- No new scripts until Phase 3 design session is complete and real holdings data is in the sheet
+- Scripts may only read/write: `Inv26 - Summary`, `Inv26 - Trend`, `InvTransactions`, `Alerts Config`, `Analysis Log`
+- `Inv26` tab has been renamed to `Inv26 - Summary`; `Inv26 - Trend` is a new tab created in Phase 3B
+- Phase 3B complete: sheet structure, benchmarks, Trend tab, and transaction architecture finalised
