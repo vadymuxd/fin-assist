@@ -318,26 +318,30 @@ def main():
     do_snapshot = '--snapshot' in sys.argv
     do_bot      = '--bot' in sys.argv
 
-    if not os.path.exists(RESULTS_PATH):
-        print(f"No results file at {RESULTS_PATH} — run claude_analyst.py first")
-        sys.exit(1)
-
-    with open(RESULTS_PATH) as f:
-        results = json.load(f)
-
-    print(f"Loaded {len(results)} results from {RESULTS_PATH}")
-
     print("\nConnecting to Google Sheets...")
     creds = Credentials.from_service_account_file(SA_FILE, scopes=SCOPES)
     gc = gspread.authorize(creds)
     sh = gc.open_by_key(SHEET_ID)
     print(f"  Opened: {sh.title}")
 
-    print("\nWriting scores to Inv26 - Summary...")
-    write_scores_to_inv26(sh, results)
+    if not os.path.exists(RESULTS_PATH):
+        if do_snapshot:
+            # Bot /snapshot command: skip score writing, just update Notion + notify
+            print(f"No results file at {RESULTS_PATH} — skipping score write, doing snapshot only")
+            results = {}
+        else:
+            print(f"No results file at {RESULTS_PATH} — run claude_analyst.py first")
+            sys.exit(1)
+    else:
+        with open(RESULTS_PATH) as f:
+            results = json.load(f)
+        print(f"Loaded {len(results)} results from {RESULTS_PATH}")
 
-    print("\nAppending to Analysis Log...")
-    append_to_analysis_log(sh, results)
+        print("\nWriting scores to Inv26 - Summary...")
+        write_scores_to_inv26(sh, results)
+
+        print("\nAppending to Analysis Log...")
+        append_to_analysis_log(sh, results)
 
     if do_snapshot:
         print("\nUpdating Notion portfolio snapshot...")
