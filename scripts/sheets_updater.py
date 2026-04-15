@@ -237,25 +237,24 @@ def update_notion_snapshot(sh, results):
             qty = parse_float(row[3]) if len(row) > 3 else 0
             if qty <= 0:
                 continue
-            # Sheet columns (0-indexed): A=Ticker B=Name C=Platform D=Qty
-            # E=Avg Buy F=Current Price G=P&L Today £ H=P&L Today %
-            # I=P&L Week £ J=P&L Month £ K=P&L Year £
-            # L=P&L From Purchase £ M=P&L From Purchase %
-            # N=Score O=Recommendation P=Last Updated
-            price     = parse_float(row[5]) if len(row) > 5 else 0
-            avg_buy   = parse_float(row[4]) if len(row) > 4 else 0
+            # Actual sheet columns (0-indexed):
+            # A=Ticker B=Name C=Platform D=Qty E=Avg Buy £ F=Current Price £
+            # G=Current Value £  H=Initially Invested £
+            # I=Tracking 26 Started Value £  J=Tracking 26 P&L £  K=Tracking 26 P&L %
+            # L=Total P&L £  M=Total P&L %
+            # N=Score  O=Recommendation  P=Last Updated
             positions.append({
-                'ticker':       ticker,
-                'name':         row[1].strip() if len(row) > 1 else '',
-                'platform':     row[2].strip() if len(row) > 2 else '',
-                'qty':          qty,
-                'avg_buy':      avg_buy,
-                'price':        price,
-                'value':        round(qty * price, 2),
-                'today_pnl':    parse_float(row[6])  if len(row) > 6  else 0,
-                'today_pct':    parse_float(row[7])  if len(row) > 7  else 0,
-                'total_pnl':    parse_float(row[11]) if len(row) > 11 else 0,
-                'total_pnl_pct':parse_float(row[12]) if len(row) > 12 else 0,
+                'ticker':      ticker,
+                'name':        row[1].strip() if len(row) > 1 else '',
+                'platform':    row[2].strip() if len(row) > 2 else '',
+                'qty':         qty,
+                'avg_buy':     parse_float(row[4]) if len(row) > 4 else 0,
+                'price':       parse_float(row[5]) if len(row) > 5 else 0,
+                'value':       parse_float(row[6]) if len(row) > 6 else 0,
+                'tracking_pnl':    parse_float(row[9])  if len(row) > 9  else 0,
+                'tracking_pct':    parse_float(row[10]) if len(row) > 10 else 0,
+                'total_pnl':   parse_float(row[11]) if len(row) > 11 else 0,
+                'total_pnl_pct': parse_float(row[12]) if len(row) > 12 else 0,
             })
     except Exception as e:
         print(f"  Could not read summary rows: {e}")
@@ -289,18 +288,19 @@ def update_notion_snapshot(sh, results):
     # Individual positions table
     if positions:
         blocks.append(_heading2('Stock Positions'))
-        pos_rows = [['Ticker', 'Name', 'Platform', 'Value £', 'Today %', 'P&L Total £', 'P&L Total %']]
-        for p in sorted(positions, key=lambda x: x['today_pct'], reverse=True):
-            t_sign = '+' if p['today_pct'] >= 0 else ''
-            p_sign = '+' if p['total_pnl'] >= 0 else ''
+        pos_rows = [['Ticker', 'Name', 'Platform', 'Value £', 'Since Apr 13 £', 'Since Apr 13 %', 'Total P&L £', 'Total P&L %']]
+        for p in sorted(positions, key=lambda x: x['tracking_pct'], reverse=True):
+            ts = '+' if p['tracking_pnl'] >= 0 else ''
+            tp = '+' if p['total_pnl'] >= 0 else ''
             pos_rows.append([
                 p['ticker'],
                 p['name'],
                 p['platform'],
                 f"£{p['value']:,.2f}",
-                f"{t_sign}{p['today_pct']:.2f}%",
-                f"{p_sign}£{p['total_pnl']:,.2f}",
-                f"{p_sign}{p['total_pnl_pct']:.1f}%",
+                f"{ts}£{p['tracking_pnl']:,.2f}",
+                f"{ts}{p['tracking_pct']:.1f}%",
+                f"{tp}£{p['total_pnl']:,.2f}",
+                f"{tp}{p['total_pnl_pct']:.1f}%",
             ])
         blocks.append(_table(pos_rows))
         blocks.append(_divider())
