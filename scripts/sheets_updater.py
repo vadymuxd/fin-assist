@@ -214,29 +214,57 @@ def update_notion_snapshot(sh, results):
         row11 = ws.row_values(11)
         row28 = ws.row_values(28)
 
-        grand_total   = parse_float(row7[6])  if len(row7)  > 6  else 0
-        cash          = parse_float(row9[6])  if len(row9)  > 6  else 0
-        stocks_total  = parse_float(row11[6]) if len(row11) > 6  else 0
-        stocks_pnl    = parse_float(row11[11]) if len(row11) > 11 else 0
+        grand_total    = parse_float(row7[6])   if len(row7)  > 6  else 0
+        cash           = parse_float(row9[6])   if len(row9)  > 6  else 0
+        stocks_total   = parse_float(row11[6])  if len(row11) > 6  else 0
+        stocks_pnl     = parse_float(row11[11]) if len(row11) > 11 else 0
         stocks_pnl_pct = parse_float(row11[12]) if len(row11) > 12 else 0
-        managed_total = parse_float(row28[6]) if len(row28) > 6  else 0
+        managed_total  = parse_float(row28[6])  if len(row28) > 6  else 0
+
+        # Read individual stock positions (col A=Ticker, B=Name, C=Platform,
+        # D=Qty, E=Avg Buy, F=Current Price, G=Current Value, L=P&L£, M=P&L%)
+        all_rows = ws.get_all_values()
+        positions = []
+        for row in all_rows:
+            if len(row) < 7:
+                continue
+            ticker = row[0].strip()
+            if not ticker or ticker.startswith('=') or ticker.lower() in (
+                'ticker', 'name', 'total', 'stocks', 'cash', 'managed', 'grand',
+                'benchmark', 's&p', 'ftse', 'nasdaq', 'msci', 'gold', '',
+            ):
+                continue
+            qty = parse_float(row[3]) if len(row) > 3 else 0
+            if qty <= 0:
+                continue
+            positions.append({
+                'ticker':   ticker,
+                'name':     row[1].strip() if len(row) > 1 else '',
+                'platform': row[2].strip() if len(row) > 2 else '',
+                'qty':      qty,
+                'avg_buy':  parse_float(row[4]) if len(row) > 4 else 0,
+                'price':    parse_float(row[5]) if len(row) > 5 else 0,
+                'value':    parse_float(row[6]) if len(row) > 6 else 0,
+                'pnl':      parse_float(row[11]) if len(row) > 11 else 0,
+                'pnl_pct':  parse_float(row[12]) if len(row) > 12 else 0,
+            })
     except Exception as e:
         print(f"  Could not read summary rows: {e}")
         grand_total = cash = stocks_total = stocks_pnl = stocks_pnl_pct = managed_total = 0
+        positions = []
 
     pnl_sign = '+' if stocks_pnl >= 0 else ''
 
     # --- Build page blocks ---
     blocks = []
 
-    # Header callout-style paragraph
+    # Header
     blocks.append(_paragraph(f'⚠️ Auto-updated by sheets_updater.py — {run_time}'))
     blocks.append(_paragraph('Source of truth: Google Sheet Inv26 - Summary'))
     blocks.append(_divider())
 
     # Summary table
     blocks.append(_heading2('Summary'))
-    # stocks_pnl_pct from sheet is already a percentage string like "28%" — parse_float strips % → 28.0
     pnl_pct_str = f'{pnl_sign}{stocks_pnl_pct:.1f}%' if stocks_pnl_pct else 'n/a'
     blocks.append(_table([
         ['Metric', 'Value'],
@@ -249,6 +277,25 @@ def update_notion_snapshot(sh, results):
     ]))
     blocks.append(_divider())
 
+    # Individual positions table
+    if positions:
+        blocks.append(_heading2('Stock Positions'))
+        pos_rows = [['Ticker', 'Name', 'Platform', 'Qty', 'Avg Buy £', 'Price £', 'Value £', 'P&L £']]
+        for p in positions:
+            sign = '+' if p['pnl'] >= 0 else ''
+            pos_rows.append([
+                p['ticker'],
+                p['name'],
+                p['platform'],
+                f"{p['qty']:.4f}",
+                f"£{p['avg_buy']:.4f}",
+                f"£{p['price']:.4f}",
+                f"£{p['value']:,.2f}",
+                f"{sign}£{p['pnl']:,.2f}",
+            ])
+        blocks.append(_table(pos_rows))
+        blocks.append(_divider())
+
     # FAS Scores table (if results available)
     if results:
         blocks.append(_heading2('FAS Scores (latest run)'))
@@ -259,15 +306,13 @@ def update_notion_snapshot(sh, results):
                 str(r.get('score', '')),
                 r.get('recommendation', ''),
                 r.get('confidence', ''),
-                (r.get('reason', '') or '')[:120],  # truncate for table width
+                (r.get('reason', '') or '')[:120],
             ])
         blocks.append(_table(score_rows))
         blocks.append(_divider())
 
     # Footer
-    blocks.append(_paragraph(
-        'Stock positions, managed funds, benchmarks: see full sheet or previous snapshot for detail.'
-    ))
+    blocks.append(_paragraph('Source of truth: Google Sheet Inv26 - Summary'))
 
     # --- Write to Notion ---
     print(f"  Archiving existing page blocks...")
