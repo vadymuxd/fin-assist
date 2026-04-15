@@ -5,3 +5,5 @@ __pycache__/
 *.pyc
 .DS_Store
 data/
+worker/node_modules/
+!worker/package.json

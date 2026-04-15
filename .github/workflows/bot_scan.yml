@@ -1,0 +1,36 @@
+name: Bot — Scan
+
+on:
+  workflow_dispatch:  # Triggered by Cloudflare Worker on /scan command
+
+jobs:
+  scan:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write service account credentials
+        run: |
+          mkdir -p config
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
+
+      - name: Run prospect scan (bot mode — sends scores to Telegram)
+        env:
+          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/prospect_scanner.py --bot

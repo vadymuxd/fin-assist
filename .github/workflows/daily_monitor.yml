@@ -1,0 +1,77 @@
+name: Daily Monitor
+
+on:
+  schedule:
+    # 3× daily weekdays: 09:30, 13:00, 16:30 BST (= 08:30, 12:00, 15:30 UTC)
+    - cron: '30 8 * * 1-5'   # Morning  — 09:30 BST
+    - cron: '0 12 * * 1-5'   # Midday   — 13:00 BST
+    - cron: '30 15 * * 1-5'  # Close    — 16:30 BST
+  workflow_dispatch:          # Manual trigger from GitHub UI
+
+jobs:
+  monitor:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write service account credentials
+        run: |
+          mkdir -p config
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
+
+      - name: Run analyst scoring
+        env:
+          FINNHUB_API_KEY:               ${{ secrets.FINNHUB_API_KEY }}
+          CLAUDE_API_KEY:                ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:            ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+        run: python3 scripts/claude_analyst.py
+
+      - name: Send alerts
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/alert_sender.py
+
+      - name: Update sheet scores
+        # Only run --snapshot on the close run (15:30 UTC / 16:30 BST)
+        env:
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          NOTION_API_KEY:                 ${{ secrets.NOTION_API_KEY }}
+        run: |
+          HOUR=$(date -u +"%H")
+          MINUTE=$(date -u +"%M")
+          if [ "$HOUR" = "15" ] && [ "$MINUTE" = "30" ]; then
+            python3 scripts/sheets_updater.py --snapshot
+          else
+            python3 scripts/sheets_updater.py
+          fi
+
+      - name: Scan prospects (close run only)
+        # Prospect scanning runs once daily — only at the close run to save API calls
+        env:
+          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: |
+          HOUR=$(date -u +"%H")
+          if [ "$HOUR" = "15" ]; then
+            python3 scripts/prospect_scanner.py
+          else
+            echo "Not the close run — skipping prospect scan"
+          fi

@@ -1,0 +1,35 @@
+name: Bot — Snapshot
+
+on:
+  workflow_dispatch:  # Triggered by Cloudflare Worker on /snapshot command
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write service account credentials
+        run: |
+          mkdir -p config
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
+
+      - name: Refresh Notion portfolio snapshot (bot mode — sends confirmation to Telegram)
+        env:
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          NOTION_API_KEY:                 ${{ secrets.NOTION_API_KEY }}
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/sheets_updater.py --snapshot --bot

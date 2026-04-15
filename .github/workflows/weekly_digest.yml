@@ -1,0 +1,39 @@
+name: Weekly Digest
+
+on:
+  schedule:
+    # Sunday 09:00 BST = 08:00 UTC
+    - cron: '0 8 * * 0'
+  workflow_dispatch:    # Manual trigger from GitHub UI
+
+jobs:
+  digest:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write service account credentials
+        run: |
+          mkdir -p config
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
+
+      - name: Run weekly digest
+        env:
+          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/weekly_digest.py
