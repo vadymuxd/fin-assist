@@ -317,7 +317,8 @@ def format_bot_reply(evaluated):
     lines = [f'🔍 <b>DISCOVERY SCAN</b> — {now_str}', '']
 
     if not evaluated:
-        lines.append('Nothing surfaced above the mention threshold today.')
+        lines.append('No tickers surfaced from Reddit / Finnhub news / Yahoo trending right now.')
+        lines.append('Try again later — sources refresh continuously.')
         return '\n'.join(lines)
 
     ranked = sorted(evaluated, key=lambda r: -r.get('score', 0))
@@ -345,6 +346,12 @@ def format_bot_reply(evaluated):
 def main(mode):
     is_bot = (mode == 'bot')
     filters = load_filters()
+
+    # Manual /discover should always surface something — relax the mention
+    # threshold so single-source candidates still reach Claude scoring.
+    if is_bot:
+        filters = dict(filters)
+        filters['min_source_mentions'] = 1
 
     print("Loading ticker universe (Finnhub)...")
     universe = fetch_ticker_universe()

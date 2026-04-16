@@ -221,7 +221,7 @@ async function callClaude(userMessage, context, env) {
         'Content-Type':      'application/json',
       },
       body: JSON.stringify({
-        model:      'claude-haiku-4-5-20251001',
+        model:      'claude-opus-4-7',
         max_tokens: 1024,
         system:     systemPrompt,
         messages:   [{ role: 'user', content: userMessage }],
