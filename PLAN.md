@@ -37,7 +37,7 @@ Cloud-hosted automation pipeline running on **GitHub Actions** (no Mac required 
 - [x] Google Cloud project `fin-assist` created
 - [x] Google Sheets API enabled
 - [x] Service account created + JSON key saved to `config/service_account.json`
-- [x] `price_monitor.py` written and tested (placeholder tickers — needs real holdings)
+- [x] ~~`price_monitor.py`~~ (deprecated in Phase 5C — event-driven monitoring replaced threshold-based alerts)
 
 ---
 
@@ -146,21 +146,130 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 
 ### Task list (9 tasks)
 
-- [ ] **5.1** Patch `build_portfolio_sheet.py` — rename worksheet lookup `'Inv26'` → `'Inv26 - Summary'`
-- [ ] **5.2** Patch `update_manual_prices.py` — same rename
-- [ ] **5.3** Build `claude_analyst.py` — fetch Finnhub/yfinance data (news + sentiment + analyst upgrades + fundamentals), call Claude API for FAS score per stock. Claude called once per stock for final score, not per headline.
-- [ ] **5.4** Build `alert_sender.py` — 4-tier Telegram alerts (🔴 CRITICAL / 🟠 HIGH / 🟡 MEDIUM / 🟢 LOW) with 6h per-ticker dedup
-- [ ] **5.5** Build `sheets_updater.py` — write Analysis Log rows to sheet + daily Notion Portfolio Snapshot update after 15:30 UTC run
-- [ ] **5.6** Build `prospect_scanner.py` — score watchlist tickers + screener for new candidates
-- [ ] **5.7** Build `snapshot_trend.py` — append monthly row to `Inv26 - Trend`. Reads Grand Total + all 5 benchmark values from `Inv26 - Summary`. GitHub Actions cron: `0 16 28-31 * 1-5` (covers last few days of month, weekdays); script checks if it's actually the last weekday before running, exits silently if not. Manual dispatch always available.
-- [ ] **5.8** Build `weekly_digest.py` — Sunday Telegram summary (portfolio performance, top signals, fundamental snapshot)
-- [ ] **5.9** Update GitHub Actions workflows:
+- [x] **5.1** Patch `build_portfolio_sheet.py` — rename worksheet lookup `'Inv26'` → `'Inv26 - Summary'`
+- [x] **5.2** Patch `update_manual_prices.py` — same rename
+- [x] **5.3** ~~Build `claude_analyst.py`~~ — superseded by `holdings_monitor.py` in Phase 5C
+- [x] **5.4** ~~Build `alert_sender.py`~~ — superseded by event-driven alerts in Phase 5C (consolidated brief replaced)
+- [x] **5.5** Build `sheets_updater.py` — write Analysis Log rows to sheet + daily Notion Portfolio Snapshot update after 15:30 UTC run
+- [x] **5.6** ~~Build `prospect_scanner.py`~~ — superseded by `prospect_discovery.py` in Phase 5C (static watchlist replaced with dynamic discovery)
+- [x] **5.7** Build `snapshot_trend.py` — append monthly row to `Inv26 - Trend`. Reads Grand Total + all 5 benchmark values from `Inv26 - Summary`. GitHub Actions cron: `0 16 28-31 * 1-5` (covers last few days of month, weekdays); script checks if it's actually the last weekday before running, exits silently if not. Manual dispatch always available.
+- [x] **5.8** Build `weekly_digest.py` — Sunday Telegram summary (portfolio performance, top signals, fundamental snapshot)
+- [x] **5.9** GitHub Actions workflows created:
   - `daily_monitor.yml` — 3× daily cron: `30 8 * * 1-5`, `0 12 * * 1-5`, `30 15 * * 1-5`
   - `weekly_digest.yml` — Sunday: `0 8 * * 0`
   - `monthly_trend.yml` — last weekday of month: `0 16 28-31 * 1-5`
-- [ ] **5.10** Create sheet tabs: `Analysis Log`, `Watchlist`, `Alerts Config` (with real per-stock thresholds)
+- [x] **5.10** Sheet tabs created: `Analysis Log` (headers + ready), `Watchlist` (headers, add tickers), `Alerts Config` (all 17 held tickers pre-populated with 5%/5% thresholds)
 - [ ] Add all secrets to GitHub repo (Settings → Secrets)
 - [ ] End-to-end test: trigger workflow manually, confirm Telegram message received
+
+---
+
+## Phase 5B — Telegram Bot Interactive Layer ⏳ PLANNED
+
+> Extends the bot from output-only (alerts + digests) to interactive: send commands or questions, get Claude-powered replies.
+> Design decisions locked in conversation — April 2026. Build after Phase 5 end-to-end test passes.
+
+### Architecture
+
+```
+You → Telegram message
+         ↓
+   Cloudflare Worker (webhook receiver, free tier, ~instant)
+         ↓
+   /command? ──yes──→ GitHub Actions workflow_dispatch
+                             ↓ runs script (Finnhub + Sheets + Claude API)
+                             ↓ posts result to Telegram
+         ↓
+   free text? ──yes──→ Claude API (your credits)
+                         context: Notion memory system (Agent Config + Memory Index
+                         + User Profile + Sessions DB + latest portfolio snapshot)
+                         ↓ posts reply to Telegram
+```
+
+### Commands
+
+| Command | Script triggered via GHA | Response |
+|---------|--------------------------|----------|
+| `/holdings` (alias `/analyse`) | `holdings_monitor.py --bot` | Full status per holding + 24h event detection |
+| `/discover` (alias `/scan`) | `prospect_discovery.py --bot` | Today's top discoveries ranked + rationale |
+| `/digest` | `weekly_digest.py --bot` | Weekly summary on demand |
+| `/snapshot` | `sheets_updater.py --snapshot` | Refreshes Notion portfolio snapshot |
+
+### Conversational mode
+
+Free-text messages go directly to Claude API (no GHA needed). The Cloudflare Worker fetches fresh context from Notion before each call:
+- **Agent Config** — identity, rules, current phase
+- **Memory Index** — full decision log
+- **User Profile** — investment style, goals, risk profile
+- **Latest portfolio snapshot** — from Sessions DB (written by `sheets_updater.py` after each run)
+- **Recent Analysis Log entries** — signals fired, FAS scores
+
+This makes Claude fully context-aware across sessions, identical to how it operates in Claude Code and the claude.ai Project — one memory system, all surfaces.
+
+### Task list
+
+- [ ] **5B.1** Create Cloudflare Worker — receives Telegram webhook, routes commands vs free text
+- [ ] **5B.2** Command dispatcher — calls GitHub API `workflow_dispatch` for each `/command`, returns "Running…" acknowledgement immediately
+- [ ] **5B.3** Conversational handler — fetches Notion context pages, calls Claude API, posts reply
+- [ ] **5B.4** Extend each script (5.3–5.8) to post its own formatted Telegram reply when triggered via bot (vs scheduled run)
+- [ ] **5B.5** Register Cloudflare Worker URL as Telegram webhook (`setWebhook`)
+- [ ] **5B.6** Add new secrets: `NOTION_API_KEY` (Worker env), `GH_PAT` (for workflow_dispatch), `CF_WORKER_URL`
+- [ ] **5B.7** End-to-end test: send each command + a free-text question, confirm correct responses
+
+### Key decisions
+
+| Decision | Choice | Reason |
+|----------|--------|--------|
+| Webhook receiver | Cloudflare Worker (free tier) | No always-on server; 100k req/day free; ~instant response |
+| Conversational context | Notion memory system | Already the memory backbone for Claude Code + claude.ai; always fresh; no KV cache to maintain |
+| Heavy scripts | GitHub Actions (workflow_dispatch) | Scripts need Finnhub + Sheets credentials + Python deps — GHA already has all of these |
+| Light responses | Claude API direct from Worker | No need to spin up GHA for a text question; faster and cheaper |
+| New secrets | `NOTION_API_KEY`, `GH_PAT`, `CF_WORKER_URL` | Worker needs Notion read access + ability to trigger GHA |
+
+---
+
+## Phase 5C — Insights Engine Redesign ✅ COMPLETE (April 2026)
+
+> Motivation: 3× daily consolidated briefs were noise — identical messages, score-based not event-based, no actionable insights. User redirected: don't send unless genuinely worth acting on, and insights must come from real market events + trader signal sources, not abstract scores.
+
+### Architecture change
+
+**Before (Phase 5):** `claude_analyst.py` → `alert_sender.py` → consolidated brief every run, regardless of signal strength. Static manual `Watchlist` tab.
+
+**After (Phase 5C):** Two event-driven scripts, each with `--auto` (silent unless actionable) and `--bot` (always replies) modes. Discovery is dynamic — no manual watchlist upkeep.
+
+### New scripts
+
+| Script | Purpose |
+|--------|---------|
+| `scripts/lib/market_sources.py` | Shared library: Reddit/Finnhub news/Yahoo trending fetchers, ticker extractor with Finnhub-cached symbol universe for validation |
+| `scripts/holdings_monitor.py` | Scans last 24h news per holding, Claude identifies concrete events (earnings, regulatory, leadership, macro), classifies `NONE/WATCH/ACT`. `--auto`: silent unless `ACT`. `--bot`: full status table. Writes `data/holdings_alerts.json` + legacy-format `data/analysis_results.json` for sheet score updates. |
+| `scripts/prospect_discovery.py` | Dynamic discovery: aggregates ticker mentions across Reddit (r/wallstreetbets, r/stocks, r/investing, r/ValueInvesting), Finnhub market news, Yahoo trending. Applies exclusion filters, ranks by mention count, scores top candidates via Claude (exploratory tone). Journals every discovery to `Watchlist` tab. `--auto`: silent unless new BUY (score ≥ 6). `--bot`: full scan reply. |
+
+### Config
+
+`config/discovery_filters.json` — exclude keywords (crypto, SPAC, meme), tickers (GME, AMC), country codes (CN, HK, KY), min market cap, min source mentions, Reddit subs, ticker stopwords. Editable without code changes.
+
+### Watchlist tab (new schema — auto-migrated on first run)
+
+Journal of every discovery: `Date Added | Ticker | Name | Exchange | Source(s) | First Score | Latest Score | Recommendation | Rationale | Status`. Status values: `Active / Purchased / Ignored / Stale`. Existing rows update Latest Score + Rationale; new tickers append.
+
+### Alerting rules
+
+| Mode | Holdings | Discovery |
+|------|---------|-----------|
+| `--auto` (cron) | Silent unless ≥1 ACT-level event | Silent unless ≥1 new BUY (score ≥ 6, not previously on Watchlist) |
+| `--bot` (Telegram) | Always replies with full holdings status ranked by alert level | Always replies with full scan results ranked by score |
+
+### Deprecated (deleted)
+
+`scripts/alert_sender.py`, `scripts/prospect_scanner.py`, `scripts/claude_analyst.py`, `scripts/price_monitor.py`.
+
+### Telegram commands
+
+`/holdings` (alias `/analyse`) → `holdings_monitor.py --bot`
+`/discover` (alias `/scan`) → `prospect_discovery.py --bot`
+Legacy commands kept as aliases so existing muscle memory works.
 
 ---
 

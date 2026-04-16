@@ -134,7 +134,7 @@ def read_portfolio_summary(sh):
 # Fundamental refresh (weekly cadence)
 # ---------------------------------------------------------------------------
 
-# Same ticker config as claude_analyst.py — yf symbols for all held positions
+# Ticker config mirrors holdings_monitor.py — yf symbols for all held positions
 YF_SYMBOLS = {
     'NVDA':   'NVDA',
     'RTX':    'RTX',

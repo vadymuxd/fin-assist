@@ -3,7 +3,7 @@
 update_manual_prices.py
 
 Fetches prices for tickers not available via GOOGLEFINANCE
-and writes them directly to the Inv26 tab in Google Sheets.
+and writes them directly to the Inv26 - Summary tab in Google Sheets.
 
 Currently handles:
   - SGLN (iShares Physical Gold ETC) via Yahoo Finance (SGLN.L)
@@ -13,11 +13,11 @@ Add more tickers to MANUAL_TICKERS as needed.
 Run from repo root:
     python3 scripts/update_manual_prices.py
 
-Can be added to GitHub Actions alongside price_monitor.py.
+Can be added to GitHub Actions alongside holdings_monitor.py.
 """
 
 import os
-from datetime import datetime
+from datetime import datetime, timezone
 import yfinance as yf
 from dotenv import load_dotenv
 import gspread
@@ -53,9 +53,9 @@ def update_inv26(sh, prices):
     and timestamp to column M (Last Updated by Script).
     Uses dynamic row lookup so it's safe if row order ever changes.
     """
-    ws = sh.worksheet('Inv26')
+    ws = sh.worksheet('Inv26 - Summary')
     col_a = ws.col_values(1)  # All values in column A
-    now = datetime.now(datetime.UTC).strftime('%Y-%m-%d %H:%M UTC')
+    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
     for sheet_ticker, price_gbp in prices.items():
         try:
@@ -89,7 +89,7 @@ def main():
         print("  Nothing to update.")
         return
 
-    print("\nWriting to Inv26...")
+    print("\nWriting to Inv26 - Summary...")
     update_inv26(sh, prices)
 
     print("\nDone.")

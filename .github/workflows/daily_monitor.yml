@@ -6,12 +6,12 @@ on:
     - cron: '30 8 * * 1-5'   # Morning  — 09:30 BST
     - cron: '0 12 * * 1-5'   # Midday   — 13:00 BST
     - cron: '30 15 * * 1-5'  # Close    — 16:30 BST
-  workflow_dispatch:          # Manual trigger from GitHub UI
+  workflow_dispatch:
 
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 20
 
     steps:
       - uses: actions/checkout@v4
@@ -30,22 +30,30 @@ jobs:
           mkdir -p config
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
 
-      - name: Run analyst scoring
+      # Event-driven holdings check — silent unless a concrete event triggers an ACT alert
+      - name: Holdings monitor (auto)
         env:
-          FINNHUB_API_KEY:               ${{ secrets.FINNHUB_API_KEY }}
-          CLAUDE_API_KEY:                ${{ secrets.CLAUDE_API_KEY }}
-          PORTFOLIO_SHEET_ID:            ${{ secrets.PORTFOLIO_SHEET_ID }}
+          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
-        run: python3 scripts/claude_analyst.py
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/holdings_monitor.py --auto
 
-      - name: Send alerts
+      # Dynamic prospect discovery — silent unless a new BUY emerges
+      - name: Prospect discovery (auto)
         env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python3 scripts/alert_sender.py
+          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/prospect_discovery.py --auto
 
-      - name: Update sheet scores
-        # Only run --snapshot on the close run (15:30 UTC / 16:30 BST)
+      # Close-run only: refresh sheet scores + Notion portfolio snapshot
+      - name: Sheet scores + Notion snapshot (close run only)
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
@@ -57,21 +65,4 @@ jobs:
             python3 scripts/sheets_updater.py --snapshot
           else
             python3 scripts/sheets_updater.py
-          fi
-
-      - name: Scan prospects (close run only)
-        # Prospect scanning runs once daily — only at the close run to save API calls
-        env:
-          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
-          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
-          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
-          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          HOUR=$(date -u +"%H")
-          if [ "$HOUR" = "15" ]; then
-            python3 scripts/prospect_scanner.py
-          else
-            echo "Not the close run — skipping prospect scan"
           fi

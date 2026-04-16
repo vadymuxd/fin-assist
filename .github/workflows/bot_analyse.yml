@@ -1,10 +1,10 @@
-name: Bot — Analyse
+name: Bot — Holdings
 
 on:
-  workflow_dispatch:  # Triggered by Cloudflare Worker on /analyse command
+  workflow_dispatch:  # Triggered by Cloudflare Worker on /holdings (legacy /analyse) command
 
 jobs:
-  analyse:
+  holdings:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
@@ -25,7 +25,7 @@ jobs:
           mkdir -p config
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
 
-      - name: Run analysis (bot mode — sends FAS scores to Telegram)
+      - name: Holdings monitor (bot mode — full status reply)
         env:
           FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
           CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
@@ -33,7 +33,7 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python3 scripts/claude_analyst.py --bot
+        run: python3 scripts/holdings_monitor.py --bot
 
       - name: Update sheet scores + Notion snapshot
         env:

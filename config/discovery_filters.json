@@ -1,0 +1,49 @@
+{
+  "exclude_keywords": [
+    "crypto",
+    "bitcoin",
+    "ethereum",
+    "dogecoin",
+    "shiba",
+    "spac",
+    "meme",
+    "pump",
+    "dump",
+    "nft"
+  ],
+  "exclude_tickers": [
+    "GME",
+    "AMC",
+    "BBBY",
+    "MULN",
+    "ATER",
+    "SPRT"
+  ],
+  "exclude_country_codes": [
+    "CN",
+    "HK",
+    "KY"
+  ],
+  "exclude_exchanges": [
+    "OTC",
+    "PINK"
+  ],
+  "min_market_cap_usd": 500000000,
+  "min_source_mentions": 2,
+  "max_candidates_per_run": 8,
+  "reddit_subs": [
+    "wallstreetbets",
+    "stocks",
+    "investing",
+    "ValueInvesting"
+  ],
+  "reddit_posts_per_sub": 25,
+  "ticker_stopwords": [
+    "CEO","CFO","CTO","COO","IPO","SEC","USA","GDP","ETF","API","ATH","ATL",
+    "EPS","PE","PB","PS","DCF","EBIT","GAAP","FED","FOMC","FY","Q1","Q2","Q3","Q4",
+    "YOLO","FOMO","DD","TLDR","IMO","IMHO","EOD","EOW","EOM","EOY","AH","PM",
+    "USD","EUR","GBP","JPY","CNY","HKD",
+    "NYSE","NASDAQ","AMEX","LSE","TSX",
+    "TLDR","OP","MOD","ELI5","TIL","WSB","AI","ML","NLP","AR","VR","US","UK","EU","UAE"
+  ]
+}

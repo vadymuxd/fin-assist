@@ -473,8 +473,8 @@ def main():
     ws_tx = get_or_create_worksheet(sh, 'InvTransactions')
     write_inv_transactions(ws_tx, all_txs)
 
-    print("\nWriting Inv26...")
-    ws_inv = get_or_create_worksheet(sh, 'Inv26')
+    print("\nWriting Inv26 - Summary...")
+    ws_inv = get_or_create_worksheet(sh, 'Inv26 - Summary')
     write_inv26(sh, ws_inv, positions)
 
     print("\nDone.")

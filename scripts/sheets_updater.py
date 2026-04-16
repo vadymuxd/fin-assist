@@ -2,7 +2,7 @@
 """
 sheets_updater.py
 
-Reads data/analysis_results.json (written by claude_analyst.py) and:
+Reads data/analysis_results.json (written by holdings_monitor.py) and:
   1. Writes Score (col K), Recommendation (col L), Last Updated (col M)
      to matching rows in Inv26 - Summary
   2. Appends a row to Analysis Log for each scored ticker
@@ -384,7 +384,7 @@ def main():
             print(f"No results file at {RESULTS_PATH} — skipping score write, doing snapshot only")
             results = {}
         else:
-            print(f"No results file at {RESULTS_PATH} — run claude_analyst.py first")
+            print(f"No results file at {RESULTS_PATH} — run holdings_monitor.py first")
             sys.exit(1)
     else:
         with open(RESULTS_PATH) as f:

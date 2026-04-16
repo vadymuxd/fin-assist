@@ -2,11 +2,12 @@
  * fin-assist-bot — Cloudflare Worker
  *
  * Receives Telegram webhook updates and routes them:
- *   /analyse  → triggers bot_analyse.yml  (GHA workflow_dispatch)
- *   /digest   → triggers bot_digest.yml
- *   /snapshot → triggers bot_snapshot.yml
- *   /scan     → triggers bot_scan.yml
- *   free text → fetches Notion context, calls Claude API, replies inline
+ *   /holdings  → triggers bot_analyse.yml  — event-driven holdings check with full status
+ *   /discover  → triggers bot_scan.yml     — dynamic prospect discovery from Reddit/news/trending
+ *   /digest    → triggers bot_digest.yml   — weekly digest
+ *   /snapshot  → triggers bot_snapshot.yml — Notion portfolio snapshot refresh
+ *   (legacy /analyse + /scan still route to the same workflows as aliases)
+ *   free text  → fetches Notion context, calls Claude API, replies inline
  *
  * Required secrets (set via `wrangler secret put`):
  *   TELEGRAM_BOT_TOKEN  — bot token from @BotFather
@@ -24,15 +25,21 @@
 // ---------------------------------------------------------------------------
 
 const COMMANDS = {
-  '/analyse':  { workflow: 'bot_analyse.yml',  label: 'Analysis'           },
+  '/holdings': { workflow: 'bot_analyse.yml',  label: 'Holdings check'     },
+  '/discover': { workflow: 'bot_scan.yml',     label: 'Prospect discovery' },
   '/digest':   { workflow: 'bot_digest.yml',   label: 'Weekly digest'      },
   '/snapshot': { workflow: 'bot_snapshot.yml', label: 'Portfolio snapshot' },
-  '/scan':     { workflow: 'bot_scan.yml',     label: 'Prospect scan'      },
+  // Legacy aliases — keep old commands working
+  '/analyse':  { workflow: 'bot_analyse.yml',  label: 'Holdings check'     },
+  '/scan':     { workflow: 'bot_scan.yml',     label: 'Prospect discovery' },
 };
 
-// Notion page IDs for context (Agent Config + Memory Index)
-const NOTION_AGENT_CONFIG_ID  = '33f416f2-7566-811a-a994-e1a3561adac7';
-const NOTION_MEMORY_INDEX_ID  = '33f416f2-7566-812a-8b25-fea944567cab';
+// Notion page IDs for context
+const NOTION_AGENT_CONFIG_ID    = '33f416f2-7566-811a-a994-e1a3561adac7';
+const NOTION_MEMORY_INDEX_ID    = '33f416f2-7566-812a-8b25-fea944567cab';
+const NOTION_SNAPSHOT_PAGE_ID   = '33f416f2-7566-81ce-b7e8-dd7b68101342';
+const NOTION_USER_PROFILE_ID    = '33f416f2-7566-81f4-b5f7-dc7bbfb7e626';
+const NOTION_SHEET_STRUCTURE_ID = '33f416f2-7566-81b0-82c3-cfddebca3d9f';
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -136,12 +143,21 @@ async function handleConversation(text, chatId, env) {
 // ---------------------------------------------------------------------------
 
 async function fetchNotionContext(env) {
-  const [agentConfig, memoryIndex] = await Promise.all([
+  const [agentConfig, memoryIndex, snapshot, userProfile, sheetStructure] = await Promise.all([
     fetchNotionPage(NOTION_AGENT_CONFIG_ID, env.NOTION_API_KEY),
     fetchNotionPage(NOTION_MEMORY_INDEX_ID, env.NOTION_API_KEY),
+    fetchNotionPage(NOTION_SNAPSHOT_PAGE_ID, env.NOTION_API_KEY),
+    fetchNotionPage(NOTION_USER_PROFILE_ID, env.NOTION_API_KEY),
+    fetchNotionPage(NOTION_SHEET_STRUCTURE_ID, env.NOTION_API_KEY),
   ]);
 
-  return `=== AGENT CONFIG ===\n${agentConfig}\n\n=== MEMORY INDEX ===\n${memoryIndex}`;
+  return [
+    '=== AGENT CONFIG ===', agentConfig,
+    '\n=== USER PROFILE ===', userProfile,
+    '\n=== GOOGLE SHEET STRUCTURE ===', sheetStructure,
+    '\n=== PORTFOLIO SNAPSHOT (latest /snapshot run) ===', snapshot || '(not yet populated — user must run /snapshot first)',
+    '\n=== MEMORY INDEX ===', memoryIndex,
+  ].join('\n');
 }
 
 async function fetchNotionPage(pageId, notionKey) {
