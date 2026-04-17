@@ -320,30 +320,38 @@ def format_auto_alert(buys):
 
 
 def format_bot_reply(evaluated):
-    """Bot-mode: full summary of today's scan, ranked."""
+    """
+    Bot-mode: show top 5 candidates scored ≥6, ranked by score.
+    All evaluated candidates are still written to the Watchlist regardless.
+    """
     now_str = datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')
     lines = [f'🔍 <b>DISCOVERY SCAN</b> — {now_str}', '']
 
     if not evaluated:
-        lines.append('No tickers surfaced from Reddit / Finnhub news / Yahoo trending right now.')
+        lines.append('No tickers surfaced from any source right now.')
         lines.append('Try again later — sources refresh continuously.')
         return '\n'.join(lines)
 
+    # Rank by score, take top 5 with score ≥ 6
     ranked = sorted(evaluated, key=lambda r: -r.get('score', 0))
-    for r in ranked:
+    shortlisted = [r for r in ranked if r.get('score', 0) >= 6][:5]
+    total = len(evaluated)
+
+    if not shortlisted:
+        lines.append(f'Scanned {total} candidates — none scored 6+ today.')
+        lines.append('All added to Watchlist. Try again tomorrow.')
+        return '\n'.join(lines)
+
+    lines.append(f'Top picks from {total} candidates scanned:\n')
+    for r in shortlisted:
         score = r['score']
-        if score >= 8:
-            emoji = '🟢'
-        elif score >= 6:
-            emoji = '🟡'
-        elif score <= 3:
-            emoji = '🔴'
-        else:
-            emoji = '⚪'
+        emoji = '🟢' if score >= 8 else '🟡'
         lines.append(f'{emoji} <b>{escape_html(r["ticker"])}</b> {escape_html(r.get("name",""))} | {score}/10 {escape_html(r["recommendation"])} ({escape_html(r["confidence"])})')
         lines.append(f'   Sources: {escape_html(", ".join(r.get("sources", [])))}')
         lines.append(f'   {escape_html(r["thesis"])}')
         lines.append('')
+
+    lines.append(f'Full list ({total} tickers) saved to Watchlist tab.')
     return '\n'.join(lines).strip()
 
 
