@@ -39,7 +39,7 @@ from google.oauth2.service_account import Credentials
 from lib.market_sources import (
     load_filters,
     fetch_ticker_universe,
-    fetch_stocktwits_trending,
+    fetch_alphavantage_most_active,
     fetch_finnhub_market_news,
     fetch_yahoo_trending,
     aggregate_candidates,
@@ -285,21 +285,25 @@ def escape_html(text):
 
 
 def send_telegram(text):
+    """Send message, splitting into chunks if it exceeds Telegram's 4096-char limit."""
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("  Telegram credentials not set — printing instead:")
         print(text)
         return False
-    try:
-        resp = requests.post(
-            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
-            json={'chat_id': TELEGRAM_CHAT_ID, 'text': text, 'parse_mode': 'HTML'},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        return True
-    except Exception as e:
-        print(f"  Telegram error: {e}")
-        return False
+    chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
+    ok = True
+    for chunk in chunks:
+        try:
+            resp = requests.post(
+                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
+                json={'chat_id': TELEGRAM_CHAT_ID, 'text': chunk, 'parse_mode': 'HTML'},
+                timeout=10,
+            )
+            resp.raise_for_status()
+        except Exception as e:
+            print(f"  Telegram error: {e}")
+            ok = False
+    return ok
 
 
 def format_auto_alert(buys):
@@ -372,9 +376,8 @@ def main(mode):
     excluded_tickers = set(filters.get('exclude_tickers', []))
     excluded = holdings | excluded_tickers
 
-    print("\nFetching StockTwits trending...")
-    stocktwits = fetch_stocktwits_trending(stopwords, limit=30)
-    print(f"  Found {len(stocktwits)} unique tickers")
+    print("\nFetching Alpha Vantage most-active...")
+    stocktwits = fetch_alphavantage_most_active(stopwords, limit=30)
 
     print("\nScanning Finnhub market news...")
     finnhub = fetch_finnhub_market_news(stopwords)

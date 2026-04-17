@@ -136,65 +136,47 @@ def extract_tickers(text, universe, stopwords):
 
 
 # ---------------------------------------------------------------------------
-# StockTwits trending (replaces Reddit — no auth, works from datacenter IPs)
+# Alpha Vantage most-active (replaces Reddit/StockTwits — works from any IP)
 # ---------------------------------------------------------------------------
 
-STOCKTWITS_TRENDING_URL = 'https://api.stocktwits.com/api/2/trending/symbols.json'
-STOCKTWITS_STREAM_URL   = 'https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json'
-
-
-def fetch_stocktwits_trending(stopwords, limit=30):
+def fetch_alphavantage_most_active(stopwords, limit=30):
     """
-    Fetch currently trending tickers on StockTwits.
-    Returns {ticker: [('stocktwits-trending', snippet), ...]}
-    No auth required. Works from GitHub Actions datacenter IPs.
+    Fetch most actively traded US stocks from Alpha Vantage TOP_GAINERS_LOSERS.
+    Uses the same ALPHAVANTAGE_API_KEY already in use for sentiment.
+    Returns {ticker: [('alphavantage-active', snippet), ...]}
+    Free tier: counts against the 500 calls/day quota.
     """
+    if not ALPHAVANTAGE_KEY:
+        print("    Alpha Vantage key not set — skipping most-active fetch")
+        return {}
+
     mentions = {}
     try:
         resp = requests.get(
-            STOCKTWITS_TRENDING_URL,
+            ALPHAVANTAGE_BASE,
+            params={'function': 'TOP_GAINERS_LOSERS', 'apikey': ALPHAVANTAGE_KEY},
             headers={'User-Agent': USER_AGENT},
             timeout=15,
         )
         resp.raise_for_status()
-        symbols = resp.json().get('symbols', [])
-        for item in symbols[:limit]:
-            ticker = (item.get('symbol') or '').upper()
-            title  = item.get('title') or item.get('symbol', '')
-            if not ticker or ticker in stopwords:
+        data = resp.json()
+
+        if 'Note' in data or 'Information' in data:
+            print("    Alpha Vantage rate limit hit for most-active")
+            return {}
+
+        active = data.get('most_actively_traded', [])
+        for item in active[:limit]:
+            ticker = (item.get('ticker') or '').upper()
+            if not ticker or ticker in stopwords or '-' in ticker:
                 continue
-            mentions.setdefault(ticker, []).append(('stocktwits-trending', title[:120]))
-        print(f"  StockTwits trending: {len(mentions)} tickers")
+            snippet = f"Most active: volume {item.get('volume', 'N/A')}"
+            mentions.setdefault(ticker, []).append(('alphavantage-active', snippet))
+
+        print(f"  Alpha Vantage most-active: {len(mentions)} tickers")
     except Exception as e:
-        print(f"    StockTwits trending error: {e}")
+        print(f"    Alpha Vantage most-active error: {e}")
     return mentions
-
-
-def fetch_stocktwits_symbol_sentiment(ticker):
-    """
-    Fetch recent message stream for a specific ticker and compute bull/bear ratio.
-    Returns {'bullish': N, 'bearish': N, 'total': N} or {} on failure.
-    Free tier: ~200 req/hour unauthenticated.
-    """
-    try:
-        resp = requests.get(
-            STOCKTWITS_STREAM_URL.format(symbol=ticker),
-            headers={'User-Agent': USER_AGENT},
-            timeout=10,
-        )
-        resp.raise_for_status()
-        messages = resp.json().get('messages', [])
-        counts = {'bullish': 0, 'bearish': 0, 'total': len(messages)}
-        for msg in messages:
-            sentiment = (msg.get('entities', {}).get('sentiment') or {}).get('basic', '')
-            if sentiment == 'Bullish':
-                counts['bullish'] += 1
-            elif sentiment == 'Bearish':
-                counts['bearish'] += 1
-        return counts
-    except Exception as e:
-        print(f"    StockTwits stream error ({ticker}): {e}")
-        return {}
 
 
 # ---------------------------------------------------------------------------
