@@ -3,16 +3,16 @@ market_sources.py
 
 Unified data fetchers for holdings_monitor.py and prospect_discovery.py.
 
-Sources:
-  - StockTwits trending             — most active tickers on StockTwits (replaces Reddit)
-  - Finnhub general market news     — tickers mentioned in real news
-  - Yahoo Finance trending          — most-watched tickers today
-  - Finnhub company-news + sentiment + analyst (per-ticker)
-  - Alpha Vantage NEWS_SENTIMENT    — free-tier sentiment fallback when Finnhub 403s
-  - yfinance news + analyst info (LSE/EU + fallback)
+Discovery sources (prospect_discovery.py):
+  - Alpha Vantage TOP_GAINERS_LOSERS — most actively traded US stocks
+  - Yahoo Finance trending           — most-watched tickers today
 
-Plus: a ticker extractor that mines free-form text for $TICKER mentions and
-validates against a cached Finnhub symbol universe to eliminate false positives.
+Per-ticker scoring (both scripts):
+  - Finnhub company-news             — recent headlines per ticker (free tier)
+  - Alpha Vantage NEWS_SENTIMENT     — sentiment fallback when Finnhub 403s
+  - yfinance                         — analyst info, price targets, LSE/EU news
+
+Ticker universe: Finnhub /stock/symbol (US exchange, free tier)
 """
 
 import os
@@ -180,39 +180,6 @@ def fetch_alphavantage_most_active(stopwords, limit=30):
 
 
 # ---------------------------------------------------------------------------
-# Finnhub general market news
-# ---------------------------------------------------------------------------
-
-def fetch_finnhub_market_news(stopwords):
-    """
-    Pull general market news. Each article has a 'related' field with
-    comma-separated tickers. Returns {ticker: [(source, headline), ...]}.
-    """
-    if not FINNHUB_KEY:
-        return {}
-
-    mentions = {}
-    try:
-        resp = requests.get(
-            f'{FINNHUB_BASE}/news',
-            params={'category': 'general', 'token': FINNHUB_KEY},
-            timeout=15,
-        )
-        resp.raise_for_status()
-        for item in resp.json() or []:
-            related = (item.get('related') or '').split(',')
-            headline = item.get('headline', '') or ''
-            source   = item.get('source', 'Finnhub')
-            for t in related:
-                t = t.strip().upper()
-                if t and t not in stopwords:
-                    mentions.setdefault(t, []).append((source, headline[:120]))
-    except Exception as e:
-        print(f"    Finnhub market-news error: {e}")
-    return mentions
-
-
-# ---------------------------------------------------------------------------
 # Yahoo Finance trending
 # ---------------------------------------------------------------------------
 
@@ -241,13 +208,13 @@ def fetch_yahoo_trending(region='US'):
 # Aggregate candidate ranking
 # ---------------------------------------------------------------------------
 
-def aggregate_candidates(stocktwits_mentions, finnhub_mentions, yahoo_trending, filters, excluded):
+def aggregate_candidates(active_mentions, yahoo_trending, filters, excluded):
     """
-    Combine all three sources into a ranked list of candidate dicts.
+    Combine discovery sources into a ranked list of candidate dicts.
 
     Each candidate: {ticker, score, sources, evidence}
       - score: total mention count across sources
-      - sources: list of source labels (e.g. ['stocktwits-trending', 'finnhub-news', 'yahoo-trending'])
+      - sources: list of source labels (e.g. ['alphavantage-active', 'yahoo-trending'])
       - evidence: up to 5 snippet strings for rationale context
 
     Candidates with score < min_source_mentions are dropped.
@@ -257,17 +224,11 @@ def aggregate_candidates(stocktwits_mentions, finnhub_mentions, yahoo_trending, 
     sources  = {}
     evidence = {}
 
-    for ticker, items in stocktwits_mentions.items():
+    for ticker, items in active_mentions.items():
         combined[ticker] += len(items)
         for source, snippet in items[:3]:
             sources.setdefault(ticker, set()).add(source)
-            evidence.setdefault(ticker, []).append(f'StockTwits: {snippet}')
-
-    for ticker, items in finnhub_mentions.items():
-        combined[ticker] += len(items)
-        for source, headline in items[:3]:
-            sources.setdefault(ticker, set()).add('finnhub-news')
-            evidence.setdefault(ticker, []).append(f'{source}: {headline}')
+            evidence.setdefault(ticker, []).append(snippet)
 
     for ticker in yahoo_trending:
         combined[ticker] += 1

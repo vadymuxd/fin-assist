@@ -40,7 +40,6 @@ from lib.market_sources import (
     load_filters,
     fetch_ticker_universe,
     fetch_alphavantage_most_active,
-    fetch_finnhub_market_news,
     fetch_yahoo_trending,
     aggregate_candidates,
     fetch_ticker_context,
@@ -385,17 +384,13 @@ def main(mode):
     excluded = holdings | excluded_tickers
 
     print("\nFetching Alpha Vantage most-active...")
-    stocktwits = fetch_alphavantage_most_active(stopwords, limit=30)
-
-    print("\nScanning Finnhub market news...")
-    finnhub = fetch_finnhub_market_news(stopwords)
-    print(f"  Found {len(finnhub)} unique tickers in news")
+    active = fetch_alphavantage_most_active(stopwords, limit=30)
 
     print("\nFetching Yahoo Finance trending...")
     yahoo = fetch_yahoo_trending('US')
     print(f"  {len(yahoo)} trending tickers")
 
-    candidates = aggregate_candidates(stocktwits, finnhub, yahoo, filters, excluded)
+    candidates = aggregate_candidates(active, yahoo, filters, excluded)
     print(f"\n{len(candidates)} candidate(s) after filters + thresholds")
 
     # Drop candidates whose evidence contains excluded keywords (e.g. "crypto")
