@@ -39,7 +39,8 @@ from google.oauth2.service_account import Credentials
 from lib.market_sources import (
     load_filters,
     fetch_ticker_universe,
-    fetch_alphavantage_most_active,
+    fetch_av_market_sentiment,
+    fetch_marketaux_news,
     fetch_yahoo_trending,
     aggregate_candidates,
     fetch_ticker_context,
@@ -383,14 +384,17 @@ def main(mode):
     excluded_tickers = set(filters.get('exclude_tickers', []))
     excluded = holdings | excluded_tickers
 
-    print("\nFetching Alpha Vantage most-active...")
-    active = fetch_alphavantage_most_active(stopwords, limit=30)
+    print("\nFetching Alpha Vantage market news sentiment...")
+    av_mentions = fetch_av_market_sentiment(stopwords, limit=50)
+
+    print("\nFetching Marketaux news sentiment...")
+    marketaux_mentions = fetch_marketaux_news(stopwords, limit=3)
 
     print("\nFetching Yahoo Finance trending...")
     yahoo = fetch_yahoo_trending('US')
     print(f"  {len(yahoo)} trending tickers")
 
-    candidates = aggregate_candidates(active, yahoo, filters, excluded)
+    candidates = aggregate_candidates(av_mentions, marketaux_mentions, yahoo, filters, excluded)
     print(f"\n{len(candidates)} candidate(s) after filters + thresholds")
 
     # Drop candidates whose evidence contains excluded keywords (e.g. "crypto")

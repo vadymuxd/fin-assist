@@ -3,13 +3,14 @@ market_sources.py
 
 Unified data fetchers for holdings_monitor.py and prospect_discovery.py.
 
-Discovery sources (prospect_discovery.py):
-  - Alpha Vantage TOP_GAINERS_LOSERS — most actively traded US stocks
-  - Yahoo Finance trending           — most-watched tickers today
+Discovery sources (prospect_discovery.py) — weighted aggregate scoring:
+  - Alpha Vantage NEWS_SENTIMENT market scan  — news articles with built-in sentiment (weight 3)
+  - Marketaux news scan                       — independent sentiment + entity extraction (weight 2)
+  - Yahoo Finance trending                    — volume/attention signal (weight 1)
 
 Per-ticker scoring (both scripts):
   - Finnhub company-news             — recent headlines per ticker (free tier)
-  - Alpha Vantage NEWS_SENTIMENT     — sentiment fallback when Finnhub 403s
+  - Alpha Vantage NEWS_SENTIMENT     — per-ticker sentiment when Finnhub 403s
   - yfinance                         — analyst info, price targets, LSE/EU news
 
 Ticker universe: Finnhub /stock/symbol (US exchange, free tier)
@@ -28,6 +29,8 @@ FINNHUB_KEY      = os.getenv('FINNHUB_API_KEY', '')
 FINNHUB_BASE     = 'https://finnhub.io/api/v1'
 ALPHAVANTAGE_KEY = os.getenv('ALPHAVANTAGE_API_KEY', '')
 ALPHAVANTAGE_BASE = 'https://www.alphavantage.co/query'
+MARKETAUX_KEY    = os.getenv('MARKETAUX_API_KEY', '')
+MARKETAUX_BASE   = 'https://api.marketaux.com/v1/news/all'
 USER_AGENT   = 'fin-assist/1.0 (+https://github.com/vadymuxd/fin-assist)'
 UNIVERSE_CACHE_PATH = 'data/ticker_universe.json'
 UNIVERSE_TTL_HOURS  = 24 * 7  # refresh weekly
@@ -136,46 +139,123 @@ def extract_tickers(text, universe, stopwords):
 
 
 # ---------------------------------------------------------------------------
-# Alpha Vantage most-active (replaces Reddit/StockTwits — works from any IP)
+# Alpha Vantage market-wide news sentiment scan (discovery source, weight 3)
 # ---------------------------------------------------------------------------
 
-def fetch_alphavantage_most_active(stopwords, limit=30):
+def fetch_av_market_sentiment(stopwords, limit=50):
     """
-    Fetch most actively traded US stocks from Alpha Vantage TOP_GAINERS_LOSERS.
-    Uses the same ALPHAVANTAGE_API_KEY already in use for sentiment.
-    Returns {ticker: [('alphavantage-active', snippet), ...]}
-    Free tier: counts against the 500 calls/day quota.
+    Scan Alpha Vantage NEWS_SENTIMENT without a specific ticker — returns up to
+    `limit` recent market news articles, each with per-ticker sentiment scores.
+
+    Returns {ticker: [(score, snippet), ...]} where score is the weighted
+    sentiment signal (relevance × sentiment, positive only).
+    Free tier: 1 call, counts against 500/day quota.
     """
     if not ALPHAVANTAGE_KEY:
-        print("    Alpha Vantage key not set — skipping most-active fetch")
+        print("    Alpha Vantage key not set — skipping market news scan")
         return {}
 
     mentions = {}
     try:
         resp = requests.get(
             ALPHAVANTAGE_BASE,
-            params={'function': 'TOP_GAINERS_LOSERS', 'apikey': ALPHAVANTAGE_KEY},
+            params={
+                'function': 'NEWS_SENTIMENT',
+                'topics':   'technology,earnings,ipo,financial_markets,retail_wholesale',
+                'sort':     'RELEVANCE',
+                'limit':    limit,
+                'apikey':   ALPHAVANTAGE_KEY,
+            },
+            headers={'User-Agent': USER_AGENT},
+            timeout=20,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        if 'Note' in data or 'Information' in data:
+            print("    Alpha Vantage rate limit hit for market news scan")
+            return {}
+
+        articles = data.get('feed', [])
+        for article in articles:
+            title = article.get('title', '')
+            for ts in article.get('ticker_sentiment', []):
+                ticker = (ts.get('ticker') or '').upper()
+                if not ticker or ticker in stopwords or '.' in ticker:
+                    continue
+                try:
+                    relevance = float(ts.get('relevance_score', 0))
+                    sentiment = float(ts.get('ticker_sentiment_score', 0))
+                except (ValueError, TypeError):
+                    continue
+                # Only positive sentiment contributes to discovery
+                if sentiment <= 0.1 or relevance < 0.3:
+                    continue
+                weighted = round(relevance * sentiment, 3)
+                label = ts.get('ticker_sentiment_label', '')
+                snippet = f"AV news: {label} ({weighted:.2f}) — {title[:80]}"
+                mentions.setdefault(ticker, []).append((weighted, snippet))
+
+        print(f"  AV market news scan: {len(mentions)} tickers with positive sentiment ({len(articles)} articles)")
+    except Exception as e:
+        print(f"    AV market news scan error: {e}")
+    return mentions
+
+
+# ---------------------------------------------------------------------------
+# Marketaux news sentiment scan (discovery source, weight 2)
+# ---------------------------------------------------------------------------
+
+def fetch_marketaux_news(stopwords, limit=3):
+    """
+    Scan Marketaux for recent financial news with entity-level sentiment.
+    Free tier: 100 req/day. limit=3 keeps usage minimal (each page = 10 articles).
+    Returns {ticker: [(score, snippet), ...]} for tickers with positive sentiment.
+    """
+    if not MARKETAUX_KEY:
+        print("    Marketaux key not set — skipping")
+        return {}
+
+    mentions = {}
+    try:
+        resp = requests.get(
+            MARKETAUX_BASE,
+            params={
+                'filter_entities': 'true',
+                'language':        'en',
+                'limit':           limit,
+                'api_token':       MARKETAUX_KEY,
+            },
             headers={'User-Agent': USER_AGENT},
             timeout=15,
         )
         resp.raise_for_status()
         data = resp.json()
 
-        if 'Note' in data or 'Information' in data:
-            print("    Alpha Vantage rate limit hit for most-active")
+        # Graceful handling of quota errors
+        if data.get('error'):
+            print(f"    Marketaux error: {data['error'].get('message', 'unknown')}")
             return {}
 
-        active = data.get('most_actively_traded', [])
-        for item in active[:limit]:
-            ticker = (item.get('ticker') or '').upper()
-            if not ticker or ticker in stopwords or '-' in ticker:
-                continue
-            snippet = f"Most active: volume {item.get('volume', 'N/A')}"
-            mentions.setdefault(ticker, []).append(('alphavantage-active', snippet))
+        articles = data.get('data', [])
+        for article in articles:
+            title = article.get('title', '')
+            for entity in article.get('entities', []):
+                ticker = (entity.get('symbol') or '').upper()
+                if not ticker or ticker in stopwords:
+                    continue
+                try:
+                    score = float(entity.get('sentiment_score', 0))
+                except (ValueError, TypeError):
+                    continue
+                if score <= 0.1:
+                    continue
+                snippet = f"Marketaux: positive ({score:.2f}) — {title[:80]}"
+                mentions.setdefault(ticker, []).append((score, snippet))
 
-        print(f"  Alpha Vantage most-active: {len(mentions)} tickers")
+        print(f"  Marketaux news scan: {len(mentions)} tickers with positive sentiment ({len(articles)} articles)")
     except Exception as e:
-        print(f"    Alpha Vantage most-active error: {e}")
+        print(f"    Marketaux news scan error: {e}")
     return mentions
 
 
@@ -208,45 +288,58 @@ def fetch_yahoo_trending(region='US'):
 # Aggregate candidate ranking
 # ---------------------------------------------------------------------------
 
-def aggregate_candidates(active_mentions, yahoo_trending, filters, excluded):
+def aggregate_candidates(av_mentions, marketaux_mentions, yahoo_trending, filters, excluded):
     """
-    Combine discovery sources into a ranked list of candidate dicts.
+    Combine weighted discovery sources into a ranked list of candidate dicts.
 
-    Each candidate: {ticker, score, sources, evidence}
-      - score: total mention count across sources
-      - sources: list of source labels (e.g. ['alphavantage-active', 'yahoo-trending'])
-      - evidence: up to 5 snippet strings for rationale context
+    Weights: Alpha Vantage sentiment=3, Marketaux=2, Yahoo trending=1
+    score = sum of (source_weight × sentiment_scores) per ticker
 
-    Candidates with score < min_source_mentions are dropped.
+    Candidates must appear in ≥ min_source_mentions distinct sources.
     Candidates in `excluded` (holdings + user excludes) are dropped.
     """
-    combined = Counter()
-    sources  = {}
-    evidence = {}
+    scores       = {}
+    sources      = {}
+    evidence     = {}
+    source_count = Counter()
 
-    for ticker, items in active_mentions.items():
-        combined[ticker] += len(items)
-        for source, snippet in items[:3]:
-            sources.setdefault(ticker, set()).add(source)
+    # Alpha Vantage market news sentiment (weight 3)
+    for ticker, items in av_mentions.items():
+        total = sum(s for s, _ in items)
+        scores[ticker]  = scores.get(ticker, 0) + 3 * total
+        sources.setdefault(ticker, set()).add('av-news-sentiment')
+        source_count[ticker] += 1
+        for _, snippet in items[:3]:
             evidence.setdefault(ticker, []).append(snippet)
 
+    # Marketaux entity sentiment (weight 2)
+    for ticker, items in marketaux_mentions.items():
+        total = sum(s for s, _ in items)
+        scores[ticker]  = scores.get(ticker, 0) + 2 * total
+        sources.setdefault(ticker, set()).add('marketaux')
+        source_count[ticker] += 1
+        for _, snippet in items[:2]:
+            evidence.setdefault(ticker, []).append(snippet)
+
+    # Yahoo trending — attention signal (weight 1)
     for ticker in yahoo_trending:
-        combined[ticker] += 1
+        scores[ticker] = scores.get(ticker, 0) + 1
         sources.setdefault(ticker, set()).add('yahoo-trending')
+        source_count[ticker] += 1
         evidence.setdefault(ticker, []).append('Yahoo: currently trending')
 
-    min_mentions = filters.get('min_source_mentions', 2)
+    min_mentions   = filters.get('min_source_mentions', 2)
     max_candidates = filters.get('max_candidates_per_run', 8)
 
     candidates = []
-    for ticker, count in combined.most_common():
+    for ticker, total_score in sorted(scores.items(), key=lambda x: -x[1]):
         if ticker in excluded:
             continue
-        if count < min_mentions:
+        if source_count[ticker] < min_mentions:
             continue
         candidates.append({
             'ticker':   ticker,
-            'score':    count,
+            'score':    round(total_score, 3),
             'sources':  sorted(sources.get(ticker, [])),
             'evidence': evidence.get(ticker, [])[:5],
         })
