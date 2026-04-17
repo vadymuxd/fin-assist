@@ -202,6 +202,10 @@ def call_claude(client, prompt, ticker):
 # Telegram
 # ---------------------------------------------------------------------------
 
+def escape_html(text):
+    return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
 def send_telegram(text):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("  Telegram credentials not set — printing instead:")
@@ -226,9 +230,9 @@ def format_alert_message(alerts):
     lines = [f'⚠️ <b>HOLDINGS ALERT</b> — {now_str}', '']
     for r in alerts:
         emoji = '🔴' if r['suggested_action'] in ('TRIM', 'EXIT') else '🟡'
-        lines.append(f'{emoji} <b>{r["ticker"]}</b> — {r["event"] or "event detected"}')
-        lines.append(f'   Action: <b>{r["suggested_action"]}</b> | Score {r["score"]}/10')
-        lines.append(f'   {r["rationale"]}')
+        lines.append(f'{emoji} <b>{escape_html(r["ticker"])}</b> — {escape_html(r["event"] or "event detected")}')
+        lines.append(f'   Action: <b>{escape_html(r["suggested_action"])}</b> | Score {r["score"]}/10')
+        lines.append(f'   {escape_html(r["rationale"])}')
         lines.append('')
     return '\n'.join(lines).strip()
 
@@ -245,12 +249,12 @@ def format_full_status(results):
     for r in sorted_items:
         level = r.get('alert_level', 'NONE')
         emoji = {'ACT': '🔴', 'WATCH': '🟡', 'NONE': '⚪'}.get(level, '⚪')
-        head = f'{emoji} <b>{r["ticker"]}</b> {r["score"]}/10 — {r["suggested_action"]}'
+        head = f'{emoji} <b>{escape_html(r["ticker"])}</b> {r["score"]}/10 — {escape_html(r["suggested_action"])}'
         if r.get('event'):
-            head += f' | {r["event"]}'
+            head += f' | {escape_html(r["event"])}'
         lines.append(head)
         if level in ('ACT', 'WATCH') and r.get('rationale'):
-            lines.append(f'   {r["rationale"]}')
+            lines.append(f'   {escape_html(r["rationale"])}')
             any_act = True
 
     if not any_act:

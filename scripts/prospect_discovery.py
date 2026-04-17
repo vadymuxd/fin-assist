@@ -280,6 +280,10 @@ def upsert_watchlist(ws, evaluated):
 # Telegram
 # ---------------------------------------------------------------------------
 
+def escape_html(text):
+    return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
 def send_telegram(text):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("  Telegram credentials not set — printing instead:")
@@ -303,9 +307,9 @@ def format_auto_alert(buys):
     now_str = datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')
     lines = [f'🔭 <b>NEW PROSPECT</b> — {now_str}', '']
     for r in buys:
-        lines.append(f'🟢 <b>{r["ticker"]}</b> {r.get("name","")} | {r["score"]}/10 {r["recommendation"]} ({r["confidence"]})')
-        lines.append(f'   Sources: {", ".join(r.get("sources", []))}')
-        lines.append(f'   {r["thesis"]}')
+        lines.append(f'🟢 <b>{escape_html(r["ticker"])}</b> {escape_html(r.get("name",""))} | {r["score"]}/10 {escape_html(r["recommendation"])} ({escape_html(r["confidence"])})')
+        lines.append(f'   Sources: {escape_html(", ".join(r.get("sources", [])))}')
+        lines.append(f'   {escape_html(r["thesis"])}')
         lines.append('')
     lines.append('Added to Watchlist tab.')
     return '\n'.join(lines).strip()
@@ -332,9 +336,9 @@ def format_bot_reply(evaluated):
             emoji = '🔴'
         else:
             emoji = '⚪'
-        lines.append(f'{emoji} <b>{r["ticker"]}</b> {r.get("name","")} | {score}/10 {r["recommendation"]} ({r["confidence"]})')
-        lines.append(f'   Sources: {", ".join(r.get("sources", []))}')
-        lines.append(f'   {r["thesis"]}')
+        lines.append(f'{emoji} <b>{escape_html(r["ticker"])}</b> {escape_html(r.get("name",""))} | {score}/10 {escape_html(r["recommendation"])} ({escape_html(r["confidence"])})')
+        lines.append(f'   Sources: {escape_html(", ".join(r.get("sources", [])))}')
+        lines.append(f'   {escape_html(r["thesis"])}')
         lines.append('')
     return '\n'.join(lines).strip()
 
