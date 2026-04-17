@@ -39,7 +39,7 @@ from google.oauth2.service_account import Credentials
 from lib.market_sources import (
     load_filters,
     fetch_ticker_universe,
-    fetch_reddit_mentions,
+    fetch_stocktwits_trending,
     fetch_finnhub_market_news,
     fetch_yahoo_trending,
     aggregate_candidates,
@@ -372,14 +372,9 @@ def main(mode):
     excluded_tickers = set(filters.get('exclude_tickers', []))
     excluded = holdings | excluded_tickers
 
-    print(f"\nScanning Reddit ({len(filters.get('reddit_subs', []))} subs)...")
-    reddit = fetch_reddit_mentions(
-        filters.get('reddit_subs', []),
-        filters.get('reddit_posts_per_sub', 25),
-        universe,
-        stopwords,
-    )
-    print(f"  Found {len(reddit)} unique tickers mentioned")
+    print("\nFetching StockTwits trending...")
+    stocktwits = fetch_stocktwits_trending(stopwords, limit=30)
+    print(f"  Found {len(stocktwits)} unique tickers")
 
     print("\nScanning Finnhub market news...")
     finnhub = fetch_finnhub_market_news(stopwords)
@@ -389,7 +384,7 @@ def main(mode):
     yahoo = fetch_yahoo_trending('US')
     print(f"  {len(yahoo)} trending tickers")
 
-    candidates = aggregate_candidates(reddit, finnhub, yahoo, filters, excluded)
+    candidates = aggregate_candidates(stocktwits, finnhub, yahoo, filters, excluded)
     print(f"\n{len(candidates)} candidate(s) after filters + thresholds")
 
     # Drop candidates whose evidence contains excluded keywords (e.g. "crypto")

@@ -4,10 +4,11 @@ market_sources.py
 Unified data fetchers for holdings_monitor.py and prospect_discovery.py.
 
 Sources:
-  - Reddit (public JSON, no auth)  — r/wallstreetbets, r/stocks, r/investing, r/ValueInvesting
+  - StockTwits trending             — most active tickers on StockTwits (replaces Reddit)
   - Finnhub general market news     — tickers mentioned in real news
   - Yahoo Finance trending          — most-watched tickers today
   - Finnhub company-news + sentiment + analyst (per-ticker)
+  - Alpha Vantage NEWS_SENTIMENT    — free-tier sentiment fallback when Finnhub 403s
   - yfinance news + analyst info (LSE/EU + fallback)
 
 Plus: a ticker extractor that mines free-form text for $TICKER mentions and
@@ -135,36 +136,65 @@ def extract_tickers(text, universe, stopwords):
 
 
 # ---------------------------------------------------------------------------
-# Reddit fetcher (public JSON, no auth)
+# StockTwits trending (replaces Reddit — no auth, works from datacenter IPs)
 # ---------------------------------------------------------------------------
 
-def fetch_reddit_mentions(subs, limit, universe, stopwords):
+STOCKTWITS_TRENDING_URL = 'https://api.stocktwits.com/api/2/trending/symbols.json'
+STOCKTWITS_STREAM_URL   = 'https://api.stocktwits.com/api/2/streams/symbol/{symbol}.json'
+
+
+def fetch_stocktwits_trending(stopwords, limit=30):
     """
-    Scrape hot posts from each sub and count ticker mentions.
-    Returns {ticker: [(sub, post_title_snippet), ...]} — mentions with context.
+    Fetch currently trending tickers on StockTwits.
+    Returns {ticker: [('stocktwits-trending', snippet), ...]}
+    No auth required. Works from GitHub Actions datacenter IPs.
     """
     mentions = {}
-    for sub in subs:
-        try:
-            resp = requests.get(
-                f'https://www.reddit.com/r/{sub}/hot.json',
-                headers={'User-Agent': USER_AGENT},
-                params={'limit': limit},
-                timeout=15,
-            )
-            resp.raise_for_status()
-            posts = resp.json().get('data', {}).get('children', [])
-            for post in posts:
-                data  = post.get('data', {})
-                title = data.get('title', '') or ''
-                body  = data.get('selftext', '') or ''
-                text  = f'{title}\n{body}'
-                for ticker in extract_tickers(text, universe, stopwords):
-                    mentions.setdefault(ticker, []).append((sub, title[:120]))
-            time.sleep(1)  # respect Reddit rate limits
-        except Exception as e:
-            print(f"    Reddit error (r/{sub}): {e}")
+    try:
+        resp = requests.get(
+            STOCKTWITS_TRENDING_URL,
+            headers={'User-Agent': USER_AGENT},
+            timeout=15,
+        )
+        resp.raise_for_status()
+        symbols = resp.json().get('symbols', [])
+        for item in symbols[:limit]:
+            ticker = (item.get('symbol') or '').upper()
+            title  = item.get('title') or item.get('symbol', '')
+            if not ticker or ticker in stopwords:
+                continue
+            mentions.setdefault(ticker, []).append(('stocktwits-trending', title[:120]))
+        print(f"  StockTwits trending: {len(mentions)} tickers")
+    except Exception as e:
+        print(f"    StockTwits trending error: {e}")
     return mentions
+
+
+def fetch_stocktwits_symbol_sentiment(ticker):
+    """
+    Fetch recent message stream for a specific ticker and compute bull/bear ratio.
+    Returns {'bullish': N, 'bearish': N, 'total': N} or {} on failure.
+    Free tier: ~200 req/hour unauthenticated.
+    """
+    try:
+        resp = requests.get(
+            STOCKTWITS_STREAM_URL.format(symbol=ticker),
+            headers={'User-Agent': USER_AGENT},
+            timeout=10,
+        )
+        resp.raise_for_status()
+        messages = resp.json().get('messages', [])
+        counts = {'bullish': 0, 'bearish': 0, 'total': len(messages)}
+        for msg in messages:
+            sentiment = (msg.get('entities', {}).get('sentiment') or {}).get('basic', '')
+            if sentiment == 'Bullish':
+                counts['bullish'] += 1
+            elif sentiment == 'Bearish':
+                counts['bearish'] += 1
+        return counts
+    except Exception as e:
+        print(f"    StockTwits stream error ({ticker}): {e}")
+        return {}
 
 
 # ---------------------------------------------------------------------------
@@ -229,13 +259,13 @@ def fetch_yahoo_trending(region='US'):
 # Aggregate candidate ranking
 # ---------------------------------------------------------------------------
 
-def aggregate_candidates(reddit_mentions, finnhub_mentions, yahoo_trending, filters, excluded):
+def aggregate_candidates(stocktwits_mentions, finnhub_mentions, yahoo_trending, filters, excluded):
     """
     Combine all three sources into a ranked list of candidate dicts.
 
     Each candidate: {ticker, score, sources, evidence}
-      - score: total mention count across sources (Reddit posts + Finnhub articles + Yahoo trending boost)
-      - sources: list of source labels (e.g. ['reddit:wallstreetbets', 'finnhub-news', 'yahoo-trending'])
+      - score: total mention count across sources
+      - sources: list of source labels (e.g. ['stocktwits-trending', 'finnhub-news', 'yahoo-trending'])
       - evidence: up to 5 snippet strings for rationale context
 
     Candidates with score < min_source_mentions are dropped.
@@ -245,20 +275,19 @@ def aggregate_candidates(reddit_mentions, finnhub_mentions, yahoo_trending, filt
     sources  = {}
     evidence = {}
 
-    for ticker, items in reddit_mentions.items():
+    for ticker, items in stocktwits_mentions.items():
         combined[ticker] += len(items)
-        for sub, snippet in items[:3]:
-            sources.setdefault(ticker, set()).add(f'reddit:{sub}')
-            evidence.setdefault(ticker, []).append(f'r/{sub}: {snippet}')
+        for source, snippet in items[:3]:
+            sources.setdefault(ticker, set()).add(source)
+            evidence.setdefault(ticker, []).append(f'StockTwits: {snippet}')
 
     for ticker, items in finnhub_mentions.items():
         combined[ticker] += len(items)
         for source, headline in items[:3]:
-            sources.setdefault(ticker, set()).add(f'finnhub-news')
+            sources.setdefault(ticker, set()).add('finnhub-news')
             evidence.setdefault(ticker, []).append(f'{source}: {headline}')
 
     for ticker in yahoo_trending:
-        # Trending is a weaker signal than a news mention — count it as 1
         combined[ticker] += 1
         sources.setdefault(ticker, set()).add('yahoo-trending')
         evidence.setdefault(ticker, []).append('Yahoo: currently trending')

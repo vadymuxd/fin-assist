@@ -31,13 +31,7 @@
   "min_market_cap_usd": 500000000,
   "min_source_mentions": 2,
   "max_candidates_per_run": 8,
-  "reddit_subs": [
-    "wallstreetbets",
-    "stocks",
-    "investing",
-    "ValueInvesting"
-  ],
-  "reddit_posts_per_sub": 25,
+  "stocktwits_trending_limit": 30,
   "ticker_stopwords": [
     "CEO","CFO","CTO","COO","IPO","SEC","USA","GDP","ETF","API","ATH","ATL",
     "EPS","PE","PB","PS","DCF","EBIT","GAAP","FED","FOMC","FY","Q1","Q2","Q3","Q4",
