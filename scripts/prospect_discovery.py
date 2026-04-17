@@ -394,7 +394,7 @@ def main(mode):
     yahoo = fetch_yahoo_trending('US')
     print(f"  {len(yahoo)} trending tickers")
 
-    candidates = aggregate_candidates(av_mentions, marketaux_mentions, yahoo, filters, excluded)
+    candidates = aggregate_candidates(av_mentions, marketaux_mentions, yahoo, filters, excluded, universe)
     print(f"\n{len(candidates)} candidate(s) after filters + thresholds")
 
     # Drop candidates whose evidence contains excluded keywords (e.g. "crypto")
@@ -431,6 +431,13 @@ def main(mode):
         if not context.get('headlines'):
             context['headlines'] = yf_data.get('headlines', [])
         context['analyst_info'] = yf_data.get('analyst_info', {})
+
+        # Country filter (e.g. exclude CN, HK, KY ADRs listed on US exchanges)
+        country = yf_data.get('country', '')
+        excluded_cc = set(filters.get('exclude_country_codes', []))
+        if excluded_cc and country and country in excluded_cc:
+            print(f"    Skip — country {country} excluded")
+            continue
 
         # Market cap filter
         mcap = yf_data.get('analyst_info', {}).get('marketCap') or 0

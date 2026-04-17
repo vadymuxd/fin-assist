@@ -20,9 +20,9 @@
     "SPRT"
   ],
   "exclude_country_codes": [
-    "CN",
-    "HK",
-    "KY"
+    "China",
+    "Hong Kong",
+    "Cayman Islands"
   ],
   "exclude_exchanges": [
     "OTC",

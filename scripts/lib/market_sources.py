@@ -206,10 +206,10 @@ def fetch_av_market_sentiment(stopwords, limit=50):
 # Marketaux news sentiment scan (discovery source, weight 2)
 # ---------------------------------------------------------------------------
 
-def fetch_marketaux_news(stopwords, limit=3):
+def fetch_marketaux_news(stopwords, limit=50):
     """
     Scan Marketaux for recent financial news with entity-level sentiment.
-    Free tier: 100 req/day. limit=3 keeps usage minimal (each page = 10 articles).
+    Free tier: 100 req/day. limit=50 articles per call (one request).
     Returns {ticker: [(score, snippet), ...]} for tickers with positive sentiment.
     """
     if not MARKETAUX_KEY:
@@ -288,7 +288,7 @@ def fetch_yahoo_trending(region='US'):
 # Aggregate candidate ranking
 # ---------------------------------------------------------------------------
 
-def aggregate_candidates(av_mentions, marketaux_mentions, yahoo_trending, filters, excluded):
+def aggregate_candidates(av_mentions, marketaux_mentions, yahoo_trending, filters, excluded, universe=None):
     """
     Combine weighted discovery sources into a ranked list of candidate dicts.
 
@@ -297,7 +297,9 @@ def aggregate_candidates(av_mentions, marketaux_mentions, yahoo_trending, filter
 
     Candidates must appear in ≥ min_source_mentions distinct sources.
     Candidates in `excluded` (holdings + user excludes) are dropped.
+    Country filtering happens later in prospect_discovery.py via yfinance data.
     """
+
     scores       = {}
     sources      = {}
     evidence     = {}
@@ -509,6 +511,7 @@ def fetch_yfinance_context(symbol):
             }
             price    = info.get('currentPrice') or info.get('regularMarketPrice')
             currency = info.get('currency', 'USD')
+            country  = info.get('country', '')
         except Exception:
             pass
 
@@ -517,10 +520,11 @@ def fetch_yfinance_context(symbol):
             'analyst_info': analyst_info,
             'price':        price,
             'currency':     currency,
+            'country':      country,
         }
     except Exception as e:
         print(f"    yfinance error ({symbol}): {e}")
-        return {'headlines': [], 'analyst_info': {}, 'price': None, 'currency': 'USD'}
+        return {'headlines': [], 'analyst_info': {}, 'price': None, 'currency': 'USD', 'country': ''}
 
 
 # ---------------------------------------------------------------------------
