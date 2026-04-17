@@ -34,6 +34,7 @@ jobs:
       - name: Holdings monitor (auto)
         env:
           FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          ALPHAVANTAGE_API_KEY:           ${{ secrets.ALPHAVANTAGE_API_KEY }}
           CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
@@ -45,6 +46,7 @@ jobs:
       - name: Prospect discovery (auto)
         env:
           FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          ALPHAVANTAGE_API_KEY:           ${{ secrets.ALPHAVANTAGE_API_KEY }}
           CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json

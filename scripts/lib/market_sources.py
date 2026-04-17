@@ -23,8 +23,10 @@ import yfinance as yf
 from datetime import datetime, timezone, timedelta
 from collections import Counter
 
-FINNHUB_KEY  = os.getenv('FINNHUB_API_KEY', '')
-FINNHUB_BASE = 'https://finnhub.io/api/v1'
+FINNHUB_KEY      = os.getenv('FINNHUB_API_KEY', '')
+FINNHUB_BASE     = 'https://finnhub.io/api/v1'
+ALPHAVANTAGE_KEY = os.getenv('ALPHAVANTAGE_API_KEY', '')
+ALPHAVANTAGE_BASE = 'https://www.alphavantage.co/query'
 USER_AGENT   = 'fin-assist/1.0 (+https://github.com/vadymuxd/fin-assist)'
 UNIVERSE_CACHE_PATH = 'data/ticker_universe.json'
 UNIVERSE_TTL_HOURS  = 24 * 7  # refresh weekly
@@ -301,10 +303,84 @@ def finnhub_get(endpoint, params):
         return {}
 
 
+def fetch_alpha_vantage_sentiment(symbol):
+    """
+    Fetch news sentiment from Alpha Vantage (free tier: 500 calls/day).
+    Returns a dict matching Finnhub's news-sentiment structure:
+      {'sentiment': {'bullishPercent': 0.65, 'bearishPercent': 0.15}}
+    Returns {} if key not set or request fails.
+    """
+    if not ALPHAVANTAGE_KEY:
+        return {}
+    try:
+        resp = requests.get(
+            ALPHAVANTAGE_BASE,
+            params={
+                'function': 'NEWS_SENTIMENT',
+                'tickers':  symbol,
+                'apikey':   ALPHAVANTAGE_KEY,
+                'limit':    50,
+            },
+            timeout=15,
+        )
+        resp.raise_for_status()
+        data = resp.json()
+
+        # Gracefully handle rate-limit / info messages from Alpha Vantage
+        if 'Note' in data or 'Information' in data:
+            print(f"    Alpha Vantage rate limit hit for {symbol}")
+            return {}
+
+        feed = data.get('feed', [])
+        if not feed:
+            return {}
+
+        # Average the ticker-specific sentiment scores across all articles
+        scores = []
+        for article in feed:
+            for ts in article.get('ticker_sentiment', []):
+                if ts.get('ticker', '').upper() == symbol.upper():
+                    try:
+                        scores.append(float(ts['ticker_sentiment_score']))
+                    except (ValueError, KeyError):
+                        pass
+
+        if not scores:
+            # Fall back to overall article sentiment
+            for article in feed:
+                try:
+                    scores.append(float(article.get('overall_sentiment_score', 0)))
+                except (ValueError, TypeError):
+                    pass
+
+        if not scores:
+            return {}
+
+        avg = sum(scores) / len(scores)
+        # Map [-1, 1] → bullish/bearish percentages (neutral absorbs the middle)
+        bullish = max(0.0, avg)
+        bearish = max(0.0, -avg)
+        neutral = 1.0 - bullish - bearish
+
+        print(f"    Alpha Vantage sentiment ({symbol}): avg={avg:.3f} bull={bullish:.0%} bear={bearish:.0%} ({len(scores)} articles)")
+        return {
+            'sentiment': {
+                'bullishPercent': round(bullish, 3),
+                'bearishPercent': round(bearish, 3),
+                'neutralPercent': round(neutral, 3),
+                'articlesInLastWeek': len(feed),
+            }
+        }
+    except Exception as e:
+        print(f"    Alpha Vantage error ({symbol}): {e}")
+        return {}
+
+
 def fetch_ticker_context(symbol, hours=24):
     """
     Fetch recent news + sentiment + analyst consensus + price target.
     `hours` controls the news window (24 for holdings event-check, 168 for prospect scan).
+    Sentiment: Finnhub first (paid tier), falls back to Alpha Vantage (free tier).
     """
     now       = datetime.now(timezone.utc)
     date_to   = now.strftime('%Y-%m-%d')
@@ -322,6 +398,10 @@ def fetch_ticker_context(symbol, hours=24):
     ]
 
     sentiment    = finnhub_get('news-sentiment', {'symbol': symbol})
+    # Alpha Vantage fallback when Finnhub sentiment is blocked (free tier)
+    if not sentiment:
+        sentiment = fetch_alpha_vantage_sentiment(symbol)
+
     rec_raw      = finnhub_get('stock/recommendation', {'symbol': symbol})
     price_target = finnhub_get('stock/price-target', {'symbol': symbol})
 
