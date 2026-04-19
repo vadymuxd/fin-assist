@@ -124,8 +124,8 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 |----------|---------|
 | **Q1 — News & data source** | Finnhub free tier (primary) — 60 req/min, 60+ exchanges, news with sentiment built-in, analyst upgrades/price targets. yfinance as fallback for tickers Finnhub doesn't fully cover on free tier (some LSE). Script routes by `Exchange` field. |
 | **Q2 — Market universe** | Global — any market, gated by: (1) T212 UK can buy it, (2) live price fetchable. Practical scope: LSE, NYSE, NASDAQ, XETRA, Euronext. Asian markets deprioritised (generally not on T212 UK). |
-| **Q3 — Run frequency** | 3× daily weekdays: 09:30 / 13:00 / 16:30 BST. Mirrors market structure (open, mid, power hour close). Sunday 09:00 BST digest + full fundamental refresh. Alert dedup: same ticker can't re-alert within 6 hours. |
-| **Q4 — Fundamental data** | Weekly only (Sunday). P/E, revenue/EPS trend, analyst price targets — quarterly data, no point refreshing daily. Exception: if Finnhub news detects an earnings release, that ticker gets an ad-hoc fundamental refresh on the next run. |
+| **Q3 — Run frequency** | 3× daily weekdays: 09:30 / 13:00 / 16:30 BST. Mirrors market structure (open, mid, power hour close). Monday 08:00 BST weekly digest. Alert dedup: same ticker can't re-alert within 6 hours. |
+| **Q4 — Fundamental data** | Rolled into weekly digest via `holdings_monitor.py` (Finnhub + AV sentiment, bullish/bearish%) and yfinance-based 7-day returns. Analyst targets surface through holdings_monitor's per-ticker context. |
 | **Q5 — Portfolio Snapshot** | Daily update after close run (16:30 BST). `sheets_updater.py` writes to Notion. Token cost ~$0.02/day. For portfolio changes: `build_portfolio_sheet.py --update-snapshot` triggers immediate refresh. No always-on worker needed. |
 
 ### Run schedule detail
@@ -135,7 +135,7 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 | Morning | 08:30 | 09:30 BST | Just after LSE opens — overnight news, pre-market gaps |
 | Midday | 12:00 | 13:00 BST | US pre-market live, EU mid-session |
 | Close | 15:30 | 16:30 BST | Just after LSE closes — end-of-day signal confirmation |
-| Sunday digest | 08:00 | 09:00 BST | Weekly summary + full fundamental refresh |
+| Monday digest | 07:00 | 08:00 BST | Weekly summary — portfolio WoW, benchmarks (yfinance 7d), holdings grouped 🚀 BUY MORE / ⚠️ CONSIDER SELL / 👀 WATCH, sector ETFs, discovery top 3, Sonnet 4.6 recommendation |
 
 ---
 
@@ -153,10 +153,10 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 - [x] **5.5** Build `sheets_updater.py` — write Analysis Log rows to sheet + daily Notion Portfolio Snapshot update after 15:30 UTC run
 - [x] **5.6** ~~Build `prospect_scanner.py`~~ — superseded by `prospect_discovery.py` in Phase 5C (static watchlist replaced with dynamic discovery)
 - [x] **5.7** Build `snapshot_trend.py` — append monthly row to `Inv26 - Trend`. Reads Grand Total + all 5 benchmark values from `Inv26 - Summary`. GitHub Actions cron: `0 16 28-31 * 1-5` (covers last few days of month, weekdays); script checks if it's actually the last weekday before running, exits silently if not. Manual dispatch always available.
-- [x] **5.8** Build `weekly_digest.py` — Sunday Telegram summary (portfolio performance, top signals, fundamental snapshot)
+- [x] **5.8** Build `weekly_digest.py` — Monday 08:00 BST Telegram summary. v2 (Apr 2026): portfolio WoW (yfinance-weighted), 7d benchmarks with beat markers, holdings grouped 🚀/⚠️/👀 with bullish/bearish% badges, sector ETFs + concentration warn, discovery top 3, Sonnet 4.6 recommendation paragraph
 - [x] **5.9** GitHub Actions workflows created:
   - `daily_monitor.yml` — 3× daily cron: `30 8 * * 1-5`, `0 12 * * 1-5`, `30 15 * * 1-5`
-  - `weekly_digest.yml` — Sunday: `0 8 * * 0`
+  - `weekly_digest.yml` — Monday: `0 7 * * 1` (runs holdings_monitor + prospect_discovery first)
   - `monthly_trend.yml` — last weekday of month: `0 16 28-31 * 1-5`
 - [x] **5.10** Sheet tabs created: `Analysis Log` (headers + ready), `Watchlist` (headers, add tickers), `Alerts Config` (all 17 held tickers pre-populated with 5%/5% thresholds)
 - [ ] Add all secrets to GitHub repo (Settings → Secrets)

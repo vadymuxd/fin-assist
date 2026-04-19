@@ -317,6 +317,12 @@ def main(mode):
         print(f"    Claude ({len(data.get('headlines', []))} headlines)...")
         scored = call_claude(client, prompt, ticker)
 
+        # Extract sentiment figures (Finnhub first, AV fallback already applied in fetch_ticker_context)
+        s_block      = (data.get('sentiment') or {}).get('sentiment') or {}
+        bullish_pct  = round(float(s_block.get('bullishPercent', 0) or 0) * 100, 0) if s_block else None
+        bearish_pct  = round(float(s_block.get('bearishPercent', 0) or 0) * 100, 0) if s_block else None
+        news_count   = len(data.get('headlines') or [])
+
         results.append({
             'ticker':           ticker,
             'name':             pos['name'],
@@ -328,6 +334,9 @@ def main(mode):
             'event':            scored.get('event', ''),
             'rationale':        scored.get('rationale', ''),
             'suggested_action': scored.get('suggested_action', 'HOLD'),
+            'bullish_pct':      bullish_pct,
+            'bearish_pct':      bearish_pct,
+            'news_count':       news_count,
             'run_time':         run_time,
         })
         print(f"    → {scored.get('alert_level')} | {scored.get('suggested_action')} | {scored.get('event') or '(no event)'}")

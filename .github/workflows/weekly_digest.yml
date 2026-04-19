@@ -2,14 +2,14 @@ name: Weekly Digest
 
 on:
   schedule:
-    # Sunday 09:00 BST = 08:00 UTC
-    - cron: '0 8 * * 0'
+    # Monday 08:00 BST = 07:00 UTC
+    - cron: '0 7 * * 1'
   workflow_dispatch:    # Manual trigger from GitHub UI
 
 jobs:
   digest:
     runs-on: ubuntu-latest
-    timeout-minutes: 15
+    timeout-minutes: 30
 
     steps:
       - uses: actions/checkout@v4
@@ -28,9 +28,31 @@ jobs:
           mkdir -p config
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
 
-      - name: Run weekly digest
+      - name: Refresh holdings alerts (data/holdings_alerts.json)
         env:
           FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          TELEGRAM_BOT_TOKEN:             ''
+          TELEGRAM_CHAT_ID:               ''
+        run: python3 scripts/holdings_monitor.py --auto
+
+      - name: Refresh prospect discoveries (data/prospect_results.json)
+        env:
+          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
+          ALPHA_VANTAGE_API_KEY:          ${{ secrets.ALPHA_VANTAGE_API_KEY }}
+          MARKETAUX_API_KEY:              ${{ secrets.MARKETAUX_API_KEY }}
+          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          TELEGRAM_BOT_TOKEN:             ''
+          TELEGRAM_CHAT_ID:               ''
+        run: python3 scripts/prospect_discovery.py --auto
+        continue-on-error: true
+
+      - name: Send weekly digest
+        env:
           CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
