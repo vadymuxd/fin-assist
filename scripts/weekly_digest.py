@@ -114,6 +114,16 @@ def pct_str(val, decimals=1):
     return f'{sign}{abs(val):.{decimals}f}%'
 
 
+def coerce_score(val, default=5):
+    """Claude JSON occasionally returns score as a string — coerce to float."""
+    if val is None or val == '':
+        return default
+    try:
+        return float(val)
+    except (TypeError, ValueError):
+        return default
+
+
 def escape_html(text):
     return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
 
@@ -163,24 +173,59 @@ def send_telegram_chunks(message):
 # yfinance helpers
 # ---------------------------------------------------------------------------
 
+_RETURN_CACHE = {}
+
+
+def prefetch_returns(symbols):
+    """
+    Batched 7-day return fetch. Fills _RETURN_CACHE with {symbol: pct or None}.
+    One yf.download() call covers all symbols to avoid 429 rate-limits.
+    """
+    todo = sorted({s for s in symbols if s and s not in _RETURN_CACHE})
+    if not todo:
+        return
+    try:
+        data = yf.download(
+            todo,
+            period='10d',
+            auto_adjust=True,
+            progress=False,
+            threads=False,
+            group_by='ticker',
+        )
+    except Exception as e:
+        print(f"    yf.download batch failed: {e}")
+        data = None
+
+    for sym in todo:
+        pct = None
+        try:
+            if data is None or data.empty:
+                closes = None
+            elif len(todo) == 1:
+                closes = data['Close'].dropna() if 'Close' in data else None
+            else:
+                # MultiIndex columns: (ticker, field)
+                try:
+                    closes = data[sym]['Close'].dropna()
+                except Exception:
+                    closes = None
+            if closes is not None and len(closes) >= 2:
+                first = float(closes.iloc[0])
+                last  = float(closes.iloc[-1])
+                if first != 0:
+                    pct = (last - first) / first * 100
+        except Exception as e:
+            print(f"    7d return parse failed for {sym}: {e}")
+        _RETURN_CACHE[sym] = pct
+
+
 def seven_day_return_pct(symbol):
     """Return the 7-calendar-day return as a percentage. None on failure."""
-    try:
-        t    = yf.Ticker(symbol)
-        hist = t.history(period='10d', auto_adjust=True)
-        if hist is None or hist.empty or len(hist) < 2:
-            return None
-        closes = hist['Close'].dropna()
-        if len(closes) < 2:
-            return None
-        first = float(closes.iloc[0])
-        last  = float(closes.iloc[-1])
-        if first == 0:
-            return None
-        return (last - first) / first * 100
-    except Exception as e:
-        print(f"    7d return fetch failed for {symbol}: {e}")
-        return None
+    if symbol in _RETURN_CACHE:
+        return _RETURN_CACHE[symbol]
+    prefetch_returns([symbol])
+    return _RETURN_CACHE.get(symbol)
 
 
 # ---------------------------------------------------------------------------
@@ -275,7 +320,7 @@ def classify_holding(h):
     Returns (label, icon, note) or (None, None, None) for STEADY (suppressed).
     """
     level  = h.get('alert_level', 'NONE')
-    score  = h.get('score', 5)
+    score  = coerce_score(h.get('score'), 5)
     event  = (h.get('event') or '').strip()
     badge  = sentiment_badge(h)
 
@@ -362,7 +407,7 @@ def build_holdings_section(holdings):
         if label is None:
             steady_count += 1
             continue
-        buckets[label].append((h['ticker'], h.get('score', 5), icon, note))
+        buckets[label].append((h['ticker'], coerce_score(h.get('score'), 5), icon, note))
 
     # Sort each bucket by score (desc for BUY_MORE, asc for CONSIDER_SELL)
     buckets['BUY_MORE'].sort(key=lambda x: -x[1])
@@ -377,7 +422,7 @@ def build_holdings_section(holdings):
         block = [f'\n{title}', '<pre>']
         for ticker, score, icon, note in rows:
             t    = ticker.ljust(6)
-            s    = f'{score:.1f}' if isinstance(score, float) else f'{score}'
+            s    = f'{score:.0f}' if float(score).is_integer() else f'{score:.1f}'
             note_trunc = note[:42] if note else ''
             block.append(f'{t} {s:>3}  {icon} {note_trunc}')
         block.append('</pre>')
@@ -452,17 +497,18 @@ def build_discovery_section(prospect_results):
     if not prospect_results:
         return ''
     # Sort by score, take top 3
-    items = sorted(prospect_results.items(), key=lambda kv: -kv[1].get('score', 0))
-    top3  = [(t, r) for t, r in items if r.get('score', 0) >= 6][:3]
+    items = sorted(prospect_results.items(), key=lambda kv: -coerce_score(kv[1].get('score'), 0))
+    top3  = [(t, r) for t, r in items if coerce_score(r.get('score'), 0) >= 6][:3]
     if not top3:
         return ''
 
     lines = ['━━━ <b>DISCOVERY (top 3)</b> ━━━', '<pre>']
     for i, (ticker, r) in enumerate(top3, 1):
-        score = r.get('score', 0)
+        score = coerce_score(r.get('score'), 0)
         notes = r.get('notes', '') or r.get('reason', '')[:40]
         notes_trunc = notes[:38]
-        lines.append(f'{i}. {ticker:<6}{score:>3}  {notes_trunc}')
+        score_str = f'{score:.0f}' if float(score).is_integer() else f'{score:.1f}'
+        lines.append(f'{i}. {ticker:<6}{score_str:>3}  {notes_trunc}')
     lines.append('</pre>')
     return '\n'.join(lines)
 
@@ -488,7 +534,7 @@ def build_recommendation(summary, portfolio_7d, bench_returns, holdings, prospec
     bench_lines = [f"{n}: {pct_str(p)}" for n, p in bench_returns if p is not None]
     prospect_lines = []
     if prospects:
-        top = sorted(prospects.items(), key=lambda kv: -kv[1].get('score', 0))[:3]
+        top = sorted(prospects.items(), key=lambda kv: -coerce_score(kv[1].get('score'), 0))[:3]
         for t, r in top:
             prospect_lines.append(f"{t} (score {r.get('score')}): {r.get('notes', '')[:60]}")
 
@@ -580,6 +626,18 @@ def main():
     print("\nLoading prospect_results.json...")
     prospects = load_prospects()
     print(f"  {len(prospects)} prospects loaded")
+
+    print("\nBatch-fetching yfinance 7-day returns...")
+    all_symbols = [sym for _, sym in BENCHMARKS]
+    for h in holdings:
+        t = h.get('ticker')
+        if t in TICKER_META:
+            all_symbols.append(TICKER_META[t][0])
+    for sector, (etf, _) in SECTOR_ETF.items():
+        if etf:
+            all_symbols.append(etf)
+    prefetch_returns(all_symbols)
+    print(f"  cached {len(_RETURN_CACHE)} symbols")
 
     print("\nComputing portfolio 7-day return (weighted by market value)...")
     portfolio_7d = compute_portfolio_7d_return(holdings)

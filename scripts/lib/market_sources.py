@@ -498,6 +498,7 @@ def fetch_yfinance_context(symbol):
         analyst_info = {}
         price = None
         currency = 'USD'
+        country = ''
         try:
             info = t.info
             analyst_info = {
