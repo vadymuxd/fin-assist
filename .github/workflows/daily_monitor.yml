@@ -30,6 +30,13 @@ jobs:
           mkdir -p config
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
 
+      # Refresh manual prices (tickers not covered by GOOGLEFINANCE, e.g. SGLN)
+      - name: Refresh manual prices
+        env:
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+        run: python3 scripts/update_manual_prices.py
+
       # Event-driven holdings check — silent unless a concrete event triggers an ACT alert
       - name: Holdings monitor (auto)
         env:

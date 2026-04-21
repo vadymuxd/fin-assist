@@ -163,13 +163,20 @@ def build_prompt(ticker, name, qty, avg_buy, current_price, data):
         '  "score": <integer 1-10>,',
         '  "event": "<short phrase describing the specific event, or empty string if none>",',
         '  "rationale": "<1-2 sentences: what happened and why it matters for this holder>",',
-        '  "suggested_action": "<HOLD|REVIEW|TRIM|EXIT>"',
+        '  "suggested_action": "<HOLD|REVIEW|BUY|TRIM|EXIT>"',
         '}',
         "",
         "alert_level rules:",
         "  NONE  = nothing concrete, business as usual — keep holding",
         "  WATCH = something worth noting, not urgent (mild guidance shift, sector chop, soft data)",
         "  ACT   = concrete bad event OR concrete good event reversing prior thesis — user should read this",
+        "",
+        "suggested_action rules:",
+        "  HOLD   = do nothing",
+        "  REVIEW = user should look, decision unclear",
+        "  BUY    = add to position (use only when ACT + concrete positive catalyst AND score >= 8)",
+        "  TRIM   = reduce position",
+        "  EXIT   = close position",
         "",
         "Be strict with ACT. Only escalate if a real, specific event happened. Score 1-10 is context:",
         "  8-10=strong keep/add, 6-7=comfortable hold, 5=neutral, 3-4=concerns building, 1-2=exit-worthy.",
@@ -233,7 +240,12 @@ def format_alert_message(alerts):
     now_str = datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')
     lines = [f'⚠️ <b>HOLDINGS ALERT</b> — {now_str}', '']
     for r in alerts:
-        emoji = '🔴' if r['suggested_action'] in ('TRIM', 'EXIT') else '🟡'
+        if r['suggested_action'] in ('TRIM', 'EXIT'):
+            emoji = '🔴'
+        elif r['suggested_action'] == 'BUY':
+            emoji = '🟢'
+        else:
+            emoji = '🟡'
         lines.append(f'{emoji} <b>{escape_html(r["ticker"])}</b> — {escape_html(r["event"] or "event detected")}')
         lines.append(f'   Action: <b>{escape_html(r["suggested_action"])}</b> | Score {r["score"]}/10')
         lines.append(f'   {escape_html(r["rationale"])}')
@@ -352,9 +364,11 @@ def main(mode):
     for r in results:
         level = r['alert_level']
         rec_map = {
-            ('ACT', 'EXIT'):   'SELL',
-            ('ACT', 'TRIM'):   'SELL',
-            ('ACT', 'REVIEW'): 'WATCH',
+            ('ACT',   'EXIT'):   'SELL',
+            ('ACT',   'TRIM'):   'SELL',
+            ('ACT',   'BUY'):    'BUY',
+            ('ACT',   'REVIEW'): 'WATCH',
+            ('WATCH', 'BUY'):    'BUY',
             ('WATCH', 'REVIEW'): 'WATCH',
         }
         rec = rec_map.get((level, r['suggested_action']), 'HOLD')
