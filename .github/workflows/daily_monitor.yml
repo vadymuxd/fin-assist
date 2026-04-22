@@ -70,8 +70,7 @@ jobs:
           NOTION_API_KEY:                 ${{ secrets.NOTION_API_KEY }}
         run: |
           HOUR=$(date -u +"%H")
-          MINUTE=$(date -u +"%M")
-          if [ "$HOUR" = "15" ] && [ "$MINUTE" = "30" ]; then
+          if [ "$HOUR" -ge "15" ]; then
             python3 scripts/sheets_updater.py --snapshot
           else
             python3 scripts/sheets_updater.py
