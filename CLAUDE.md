@@ -10,6 +10,10 @@
 
 Agent Config tells you when to fetch reference pages (User Profile, Architecture, Credentials, Sheet Structure, Sessions) — only load those when the topic requires it.
 
+## Local roadmap document
+
+`PLAN.md` in repo root is the phase-by-phase build plan (versioned with the code). Read it when the user asks about the roadmap, phases, scope, or "what's next." Not synced to Notion — it mutates with every phase, so the local file is authoritative.
+
 ## After every meaningful decision or outcome
 
 Add a detailed summary to the Sessions DB in Notion, then add a one-liner entry to Memory Index pointing to it. Update Agent Config if anything structural changed. Full instructions are in Agent Config.

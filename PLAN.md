@@ -139,7 +139,7 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 
 ---
 
-## Phase 5 — Scripts & Automation ⏳ NEXT
+## Phase 5 — Scripts & Automation ✅ COMPLETE
 
 > Build order below. All design decisions are locked (see Phase 4).
 > Reference Notion Sessions 012–014 for full spec.
@@ -159,12 +159,12 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
   - `weekly_digest.yml` — Monday: `0 7 * * 1` (runs holdings_monitor + prospect_discovery first)
   - `monthly_trend.yml` — last weekday of month: `0 16 28-31 * 1-5`
 - [x] **5.10** Sheet tabs created: `Analysis Log` (headers + ready), `Watchlist` (headers, add tickers), `Alerts Config` (all 17 held tickers pre-populated with 5%/5% thresholds)
-- [ ] Add all secrets to GitHub repo (Settings → Secrets)
-- [ ] End-to-end test: trigger workflow manually, confirm Telegram message received
+- [x] Add all secrets to GitHub repo (Settings → Secrets) — 8 secrets set incl. MARKETAUX_API_KEY
+- [x] End-to-end test: trigger workflow manually, confirm Telegram message received
 
 ---
 
-## Phase 5B — Telegram Bot Interactive Layer ⏳ PLANNED
+## Phase 5B — Telegram Bot Interactive Layer ✅ COMPLETE
 
 > Extends the bot from output-only (alerts + digests) to interactive: send commands or questions, get Claude-powered replies.
 > Design decisions locked in conversation — April 2026. Build after Phase 5 end-to-end test passes.
@@ -190,8 +190,8 @@ You → Telegram message
 
 | Command | Script triggered via GHA | Response |
 |---------|--------------------------|----------|
-| `/holdings` (alias `/analyse`) | `holdings_monitor.py --bot` | Full status per holding + 24h event detection |
-| `/discover` (alias `/scan`) | `prospect_discovery.py --bot` | Today's top discoveries ranked + rationale |
+| `/holdings` | `holdings_monitor.py --bot` | Full status per holding + 24h event detection |
+| `/discover` | `prospect_discovery.py --bot` | Today's top discoveries ranked + rationale |
 | `/digest` | `weekly_digest.py --bot` | Weekly summary on demand |
 | `/snapshot` | `sheets_updater.py --snapshot` | Refreshes Notion portfolio snapshot |
 
@@ -208,13 +208,13 @@ This makes Claude fully context-aware across sessions, identical to how it opera
 
 ### Task list
 
-- [ ] **5B.1** Create Cloudflare Worker — receives Telegram webhook, routes commands vs free text
-- [ ] **5B.2** Command dispatcher — calls GitHub API `workflow_dispatch` for each `/command`, returns "Running…" acknowledgement immediately
-- [ ] **5B.3** Conversational handler — fetches Notion context pages, calls Claude API, posts reply
-- [ ] **5B.4** Extend each script (5.3–5.8) to post its own formatted Telegram reply when triggered via bot (vs scheduled run)
-- [ ] **5B.5** Register Cloudflare Worker URL as Telegram webhook (`setWebhook`)
-- [ ] **5B.6** Add new secrets: `NOTION_API_KEY` (Worker env), `GH_PAT` (for workflow_dispatch), `CF_WORKER_URL`
-- [ ] **5B.7** End-to-end test: send each command + a free-text question, confirm correct responses
+- [x] **5B.1** Cloudflare Worker live at `fin-assist-bot.vadym-uxd.workers.dev` — routes commands vs free text
+- [x] **5B.2** Command dispatcher — calls GitHub API `workflow_dispatch` for each `/command`
+- [x] **5B.3** Conversational handler — fetches Notion context, calls Claude Opus 4.7, posts reply
+- [x] **5B.4** Each script has `--bot` flag that posts its own formatted Telegram reply
+- [x] **5B.5** Cloudflare Worker URL registered as Telegram webhook
+- [x] **5B.6** All 5 Worker secrets set: `NOTION_API_KEY`, `CLAUDE_API_KEY`, `GH_PAT`, `TELEGRAM_BOT_TOKEN`, `TELEGRAM_CHAT_ID`
+- [x] **5B.7** End-to-end tested — all commands + free-text replies working
 
 ### Key decisions
 
@@ -273,15 +273,94 @@ Legacy commands kept as aliases so existing muscle memory works.
 
 ---
 
-## Phase 6 — App & UI
+## Phase 6 — App & UI ⏳ READY TO BUILD
 
-Before building: define why a dedicated app or UI is needed on top of Telegram + Claude Project. Design session should answer:
-- What does the UI do that Telegram and claude.ai don't?
-- Who is it for — personal only, or shareable?
-- Native mobile app vs web app vs Telegram mini-app?
-- What data does it surface, and how is it organised?
+> Design session complete (Sessions 026–027). Two-tab responsive web app on Vercel, no auth, data via Supabase, Android via Expo later.
 
-Then build based on those answers.
+### Design decisions (locked)
+
+| Q | Decision |
+|---|---------|
+| **Q1 — UI scope** | Two tabs. Tab 1 Portfolio Dashboard (bird's-eye, charts, breakdowns by sector/stock/market, trend lines D/W/M, benchmark overlays). Tab 2 Insights Feed (discoveries including filtered-out with emphasis, news with images grouped by date, visual Analysis Log + Watchlist, historical browse). |
+| **Q2 — Audience** | Personal only. No PII / account credentials shown — only analytics. No auth needed. |
+| **Q3 — Platform** | Next.js on Vercel, responsive mobile + desktop. Android via Expo WebView wrapper later. No iOS, no Telegram mini-app. |
+| **Q4a — Data source** | Supabase (user already has account). Scripts dual-write to Supabase alongside Sheets. |
+| **Q4b — Value scope** | All values including absolute £ are OK to display on the public URL. |
+| **Repo layout** | Monorepo — `web/` alongside `scripts/` + `worker/`. |
+| **Charts** | Tremor (`@tremor/react`). |
+| **Supabase access** | Public read, service-role write. Anon SELECT allowed on all tables; INSERT/UPDATE/DELETE require service-role key (stored in GitHub Secrets). |
+
+### 6A — Data foundation (Supabase)
+
+> Supabase becomes the read source for the web app. Existing Python scripts dual-write to Supabase alongside Sheets. Sheets remains source of truth for humans.
+
+- [ ] **6A.1** Create Supabase project (free tier). Add `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` to `.env`, GitHub Actions secrets, and Vercel env.
+- [ ] **6A.2** Schema migration `supabase/migrations/0001_init.sql`:
+  - `holdings` — current positions (ticker, name, platform, qty, avg_buy, current_price, pnl_abs, pnl_pct, sector, market, last_updated)
+  - `portfolio_snapshots` — daily row (date, grand_total, self_managed, managed, cash, net_deposits, benchmark values SPX/FTSE/NDX/MSCI/Gold)
+  - `trend_snapshots` — monthly copy of `Inv26 - Trend`
+  - `discoveries` — every run writes one row per candidate (run_id, run_time, ticker, score, recommendation, sources, rationale, filtered_reason, surfaced_to_telegram)
+  - `holdings_alerts` — every run writes one row per ticker (run_id, run_time, ticker, alert_level, score, event, rationale)
+  - `news_items` — id, published_at, tickers[], source, title, url, image_url, snippet, sentiment
+  - `sectors` — lookup (ticker → sector, market)
+- [ ] **6A.3** Build `scripts/lib/supabase_sink.py` — shared client + writer helpers. Fails open: logs on error, never breaks the Sheets pipeline.
+- [ ] **6A.4** Dual-write wiring:
+  - `sheets_updater.py` → `holdings` + `holdings_alerts`
+  - `prospect_discovery.py` → `discoveries` (incl. filtered-out candidates with `filtered_reason`)
+  - `holdings_monitor.py` → `holdings_alerts`
+  - `snapshot_trend.py` → `trend_snapshots`
+- [ ] **6A.5** New `scripts/daily_portfolio_snapshot.py` + `.github/workflows/daily_snapshot.yml` (cron `30 15 * * 1-5` after close run). Reads Inv26 - Summary totals + benchmarks, inserts one row into `portfolio_snapshots`. Feeds the D/W/M line chart.
+- [ ] **6A.6** Extend `scripts/lib/market_sources.py` — capture `image_url` from Marketaux (`image_url`) and Alpha Vantage (`banner_image`). Persist to `news_items` at discovery/monitor time.
+
+### 6B — Next.js scaffolding
+
+- [ ] **6B.1** Create `web/` subdir. Bootstrap Next.js 15 App Router + TypeScript + Tailwind (`pnpm create next-app@latest web`).
+- [ ] **6B.2** Install `@supabase/supabase-js`, create `web/lib/supabase.ts` (read-only anon client). RLS policies: public SELECT, service-role-only writes.
+- [ ] **6B.3** Deploy to Vercel — connect repo, build root `web/`, add Supabase env vars. Confirm skeleton loads.
+- [ ] **6B.4** Shared layout — top nav with Dashboard / Insights tabs, mobile hamburger, dark/light theme, Tailwind design tokens.
+- [ ] **6B.5** Install `@tremor/react`.
+
+### 6C — Tab 1: Portfolio Dashboard
+
+- [ ] **6C.1** Headline strip — 4 KPI cards: Grand Total (£), WoW %, MoM %, YTD %. Source: latest `portfolio_snapshots` + baseline.
+- [ ] **6C.2** Portfolio value line chart — D/W/M toggle, benchmark overlays (SPX/FTSE/NDX/MSCI/Gold toggleable). Normalised to 100 at 2026-04-13 baseline.
+- [ ] **6C.3** Allocation breakdown — donut + treemap, toggle: sector / market / platform. Source: `holdings` joined to `sectors`.
+- [ ] **6C.4** Holdings table — sortable: current price, P&L £/%, 24h change, sentiment badge, last updated. Row click → drill-down.
+- [ ] **6C.5** Per-holding drill-down — modal or `/holdings/[ticker]`: mini price chart, recent news from `news_items`, latest FAS score, rationale.
+
+### 6D — Tab 2: Insights Feed
+
+- [ ] **6D.1** "Today's Discoveries" — latest run ranked by score. Emphasis marker on items that hit Telegram; muted styling on filtered-out.
+- [ ] **6D.2** "Recent Holdings Alerts" — latest ACT/WATCH events; each card links to triggering article(s).
+- [ ] **6D.3** Sector news stream — `news_items` grouped by day, image thumbnails, ticker/sector chip tags.
+- [ ] **6D.4** Historical browse — date picker; past day's discoveries + alerts + news.
+- [ ] **6D.5** Empty state + error handling — friendly message if Supabase returns nothing or fails.
+
+### 6E — Testing & validation (web)
+
+> Gate 6F on a green 6E. No Android build until the web product is proven good.
+
+- [ ] **6E.1** Data freshness — run each dual-write script; confirm Supabase rows + live Vercel URL reflect latest run.
+- [ ] **6E.2** E2E smoke per tab — click through every component on prod URL, no console errors.
+- [ ] **6E.3** Responsive on real devices — iOS Safari, Android Chrome, desktop Chrome/Safari. Screenshots at 375/768/1440.
+- [ ] **6E.4** Chart interactions — D/W/M toggle, benchmark overlays, drill-downs (touch + mouse).
+- [ ] **6E.5** News image rendering + sector icon fallback.
+- [ ] **6E.6** Supabase RLS test — anon INSERT must fail; SELECT must succeed.
+- [ ] **6E.7** Performance budget — Lighthouse LCP < 2.5s, CLS < 0.1, interaction < 200ms on mobile.
+- [ ] **6E.8** Empty-state + error path — force-fail a Supabase call; UI shows friendly state.
+- [ ] **6E.9** One-week dogfood — use the app for a week. If Telegram + web is enough, skip 6F entirely.
+
+### 6F — Android app (via Expo)
+
+> User already has Expo accounts. Default path: WebView wrapper of the Vercel URL.
+
+- [ ] **6F.1** Pick approach:
+  - **6F.1a (default)** Expo WebView wrapper — single screen `react-native-webview` pointing at Vercel URL. ~1 day work.
+  - **6F.1b** react-native-web shared codebase — rebuild as Expo app sharing components. Only if 6E surfaces UX the web can't deliver (native notifications, biometric unlock, offline mode).
+- [ ] **6F.2** Scaffold Expo app in `mobile/` subdir — `npx create-expo-app mobile`, strip to single WebView screen.
+- [ ] **6F.3** Icon + splash + app name via `app.json`.
+- [ ] **6F.4** Build APK/AAB via EAS Build. Install on personal Android for dogfooding.
+- [ ] **6F.5** Distribution — sideload APK (simplest) or EAS Submit to Play Store.
 
 ---
 
@@ -322,6 +401,6 @@ Full budgeting layer: income, fixed costs, discretionary spending, joint vs pers
 
 ## Immediate Next Steps
 
-1. **Phase 5** — Build all 9 tasks in order (see Phase 5 task list above). Start with patches 5.1 + 5.2, then core scripts.
-2. **Ongoing** — Run `update_manual_prices.py` manually until added to GitHub Actions schedule
-3. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`
+1. **Phase 6A** — start with Supabase project creation + schema migration, then dual-write wiring. Build order: 6A → 6B → 6C → 6D → 6E → 6F.
+2. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`
+3. **Ongoing** — Validate first Monday 08:00 BST weekly digest v2 production run.
