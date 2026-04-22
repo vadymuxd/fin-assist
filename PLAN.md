@@ -273,9 +273,19 @@ Legacy commands kept as aliases so existing muscle memory works.
 
 ---
 
+## Pre-Phase-6 — Housekeeping ⏳ DO FIRST
+
+> Two cleanup items to finish before starting Phase 6A. Blockers / data hygiene.
+
+- [ ] **PH.1 Telegram dedup audit** — same insights currently re-fire across 3×-daily runs. Audit `holdings_monitor.py` (ACT alerts) and `prospect_discovery.py` (discovery announcements) for dedup. Phase 4 design specified "same ticker can't re-alert within 6 hours" but behaviour in production suggests this isn't actually suppressing. Investigate: (a) is the dedup state persisted between runs (GHA is stateless — needs Sheets, gist, or soon-to-exist Supabase table as the cache)? (b) is the dedup key correct — should be `(ticker, event_type)` not just `ticker`? Fix so the same insight doesn't hit Telegram twice in a row. Record decisions in Session notes.
+- [ ] **PH.2 Record Rheinmetall (RHM / RHMd) transaction** — pending update to portfolio. Append the correct row(s) to `InvTransactions` (Date, Ticker, Action, Qty, Price Per Share £, Total £, Platform, Notes) and confirm `Inv26 - Summary` reflects the new qty + avg buy. User to supply transaction details at build time.
+
+---
+
 ## Phase 6 — App & UI ⏳ READY TO BUILD
 
 > Design session complete (Sessions 026–027). Two-tab responsive web app on Vercel, no auth, data via Supabase, Android via Expo later.
+> **Gated on Pre-Phase-6 housekeeping (PH.1 + PH.2) completing first.**
 
 ### Design decisions (locked)
 
@@ -401,6 +411,7 @@ Full budgeting layer: income, fixed costs, discretionary spending, joint vs pers
 
 ## Immediate Next Steps
 
-1. **Phase 6A** — start with Supabase project creation + schema migration, then dual-write wiring. Build order: 6A → 6B → 6C → 6D → 6E → 6F.
-2. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`
-3. **Ongoing** — Validate first Monday 08:00 BST weekly digest v2 production run.
+1. **Pre-Phase-6 housekeeping** — (PH.1) Telegram dedup audit + fix, (PH.2) record Rheinmetall transaction. Do before starting 6A.
+2. **Phase 6A** — Supabase project + schema migration + dual-write wiring. Build order: 6A → 6B → 6C → 6D → 6E → 6F.
+3. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`
+4. **Ongoing** — Validate first Monday 08:00 BST weekly digest v2 production run.
