@@ -2,6 +2,8 @@
 *.json
 !config/thresholds.json
 !config/discovery_filters.json
+!web/vercel.json
+!web/package.json
 __pycache__/
 *.pyc
 .DS_Store
