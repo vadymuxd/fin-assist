@@ -26,9 +26,11 @@ Run:
 import os
 import sys
 import json
+import hashlib
 import requests
 import anthropic
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
+from zoneinfo import ZoneInfo
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
@@ -44,6 +46,10 @@ RESULTS_PATH = 'data/holdings_alerts.json'
 
 TELEGRAM_TOKEN   = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
+
+ALERTS_LOG_TAB = 'Alerts Log'
+ALERTS_LOG_HEADERS = ['Date (Europe/London)', 'Ticker', 'Action', 'Score', 'Event', 'Headlines Hash', 'Run Time (UTC)']
+LONDON_TZ = ZoneInfo('Europe/London')
 
 # Per-ticker routing mirrors claude_analyst.py
 TICKER_CONFIG = {
@@ -102,6 +108,65 @@ def read_positions(sh):
             'current_price': parse_float(row[5]),
         })
     return positions
+
+
+# ---------------------------------------------------------------------------
+# Alert dedup (Google Sheets-backed, since GHA runs are stateless)
+# ---------------------------------------------------------------------------
+
+def london_today():
+    return datetime.now(LONDON_TZ).strftime('%Y-%m-%d')
+
+
+def headlines_hash(headlines):
+    """Stable hash of the 24h headline set. Same news → same hash across runs."""
+    titles = []
+    for h in headlines or []:
+        title = h.get('headline') if isinstance(h, dict) else h
+        if not title:
+            continue
+        titles.append(' '.join(str(title).lower().split()))
+    if not titles:
+        return ''
+    joined = '\n'.join(sorted(set(titles)))
+    return hashlib.sha1(joined.encode('utf-8')).hexdigest()[:12]
+
+
+def get_or_create_alerts_log(sh):
+    try:
+        ws = sh.worksheet(ALERTS_LOG_TAB)
+    except gspread.exceptions.WorksheetNotFound:
+        ws = sh.add_worksheet(title=ALERTS_LOG_TAB, rows=1000, cols=len(ALERTS_LOG_HEADERS))
+        ws.update(values=[ALERTS_LOG_HEADERS], range_name='A1')
+        return ws
+    first_row = ws.row_values(1)
+    if first_row[:len(ALERTS_LOG_HEADERS)] != ALERTS_LOG_HEADERS:
+        ws.clear()
+        ws.update(values=[ALERTS_LOG_HEADERS], range_name='A1')
+    return ws
+
+
+def read_sent_recent(ws, hours=6):
+    """Return set of tickers alerted within the last `hours` hours."""
+    sent = set()
+    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
+    for row in ws.get_all_values()[1:]:
+        if len(row) < 7:
+            continue
+        run_time_str = row[6].strip().replace(' UTC', '')
+        try:
+            run_time = datetime.strptime(run_time_str, '%Y-%m-%d %H:%M').replace(tzinfo=timezone.utc)
+        except ValueError:
+            continue
+        if run_time >= cutoff:
+            sent.add(row[1].strip())
+    return sent
+
+
+def append_sent(ws, entries):
+    if not entries:
+        return
+    ws.append_rows(entries, value_input_option='USER_ENTERED')
 
 
 # ---------------------------------------------------------------------------
@@ -349,6 +414,7 @@ def main(mode):
             'bullish_pct':      bullish_pct,
             'bearish_pct':      bearish_pct,
             'news_count':       news_count,
+            'headlines_hash':   headlines_hash(data.get('headlines')),
             'run_time':         run_time,
         })
         print(f"    → {scored.get('alert_level')} | {scored.get('suggested_action')} | {scored.get('event') or '(no event)'}")
@@ -392,12 +458,36 @@ def main(mode):
     if is_bot:
         send_telegram(format_full_status(results))
         print(f"\n[bot] Full status sent. {len(alerts)} ACT-level event(s).")
+        return
+
+    if not alerts:
+        print("\n[auto] No ACT-level events — staying silent.")
+        return
+
+    log_ws = get_or_create_alerts_log(sh)
+    day = london_today()
+    already_sent = read_sent_recent(log_ws, hours=6)
+
+    new_alerts, suppressed = [], []
+    for r in alerts:
+        (suppressed if r['ticker'] in already_sent else new_alerts).append(r)
+
+    for r in suppressed:
+        print(f"  [dedup] {r['ticker']} — already alerted within 6h; skipping")
+
+    if not new_alerts:
+        print(f"\n[auto] {len(alerts)} ACT event(s), all already alerted today — staying silent.")
+        return
+
+    sent_ok = send_telegram(format_alert_message(new_alerts))
+    if sent_ok:
+        append_sent(log_ws, [
+            [day, r['ticker'], r['suggested_action'], r['score'], r['event'], r['headlines_hash'], r['run_time']]
+            for r in new_alerts
+        ])
+        print(f"\n[auto] {len(new_alerts)} new alert(s) sent; {len(suppressed)} deduped.")
     else:
-        if alerts:
-            send_telegram(format_alert_message(alerts))
-            print(f"\n[auto] {len(alerts)} alert(s) sent.")
-        else:
-            print("\n[auto] No ACT-level events — staying silent.")
+        print(f"\n[auto] Telegram send failed — not logging, so next run can retry. ({len(new_alerts)} alerts, {len(suppressed)} deduped)")
 
 
 if __name__ == '__main__':

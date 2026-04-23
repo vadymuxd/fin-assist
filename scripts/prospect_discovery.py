@@ -474,27 +474,20 @@ def main(mode):
         json.dump(evaluated, f, indent=2)
     print(f"\nResults saved → {RESULTS_PATH}")
 
+    # Snapshot BEFORE upsert — determines what's genuinely new this run
+    pre_run_watchlist = read_watchlist_rows(ws)
+
     # Journal everything to Watchlist
     if evaluated:
         upsert_watchlist(ws, evaluated)
 
-    # Figure out what's NEW (score ≥ threshold AND not already on Watchlist before this run)
-    # We need the pre-run watchlist snapshot — read again post-write would be wrong.
-    # Use the fact that newly-appended rows have today's date + existing didn't.
-    # Simpler: a "new BUY" is recommendation==BUY AND score ≥ BUY_THRESHOLD AND was not
-    # previously in the Watchlist with a BUY recommendation.
-    pre_existing = read_watchlist_rows(ws)  # after upsert, but existing rows kept original date
-    today = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-    new_buys = []
-    for r in evaluated:
-        if r['score'] < BUY_THRESHOLD:
-            continue
-        if r['recommendation'] != 'BUY':
-            continue
-        meta = pre_existing.get(r['ticker'], {})
-        # "new" = date_added is today (just appended this run)
-        if meta.get('date_added') == today:
-            new_buys.append(r)
+    # A "new BUY" is a ticker that wasn't in the Watchlist at all before this run
+    new_buys = [
+        r for r in evaluated
+        if r['score'] >= BUY_THRESHOLD
+        and r['recommendation'] == 'BUY'
+        and r['ticker'] not in pre_run_watchlist
+    ]
 
     if is_bot:
         send_telegram(format_bot_reply(evaluated))
