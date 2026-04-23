@@ -14,9 +14,6 @@ from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 
-SUPABASE_URL = os.getenv('SUPABASE_URL', '')
-SUPABASE_SERVICE_ROLE_KEY = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
-
 _client: Client | None = None
 
 
@@ -24,11 +21,13 @@ def _get_client() -> Client | None:
     global _client
     if _client is not None:
         return _client
-    if not SUPABASE_URL or not SUPABASE_SERVICE_ROLE_KEY:
+    url = os.getenv('SUPABASE_URL', '')
+    key = os.getenv('SUPABASE_SERVICE_ROLE_KEY', '')
+    if not url or not key:
         logger.warning('Supabase env vars not set — skipping sink')
         return None
     try:
-        _client = create_client(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY)
+        _client = create_client(url, key)
         return _client
     except Exception as e:
         logger.warning(f'Supabase client init failed: {e}')
