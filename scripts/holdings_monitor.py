@@ -36,6 +36,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from lib.market_sources import fetch_ticker_context, fetch_yfinance_context
+from lib.supabase_sink import write_holdings_alerts
 
 load_dotenv()
 
@@ -452,6 +453,9 @@ def main(mode):
         }
     with open('data/analysis_results.json', 'w') as f:
         json.dump(legacy, f, indent=2)
+
+    run_id = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    write_holdings_alerts(run_id, datetime.now(timezone.utc), results)
 
     alerts = [r for r in results if r['alert_level'] == 'ACT']
 

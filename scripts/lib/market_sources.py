@@ -20,10 +20,13 @@ import os
 import re
 import json
 import time
+import hashlib
 import requests
 import yfinance as yf
 from datetime import datetime, timezone, timedelta
 from collections import Counter
+
+from lib.supabase_sink import write_news_items
 
 FINNHUB_KEY      = os.getenv('FINNHUB_API_KEY', '')
 FINNHUB_BASE     = 'https://finnhub.io/api/v1'
@@ -177,8 +180,41 @@ def fetch_av_market_sentiment(stopwords, limit=50):
             return {}
 
         articles = data.get('feed', [])
+        news_rows = []
         for article in articles:
-            title = article.get('title', '')
+            title     = article.get('title', '')
+            url       = article.get('url', '')
+            image_url = article.get('banner_image') or None
+            snippet   = (article.get('summary') or '')[:500]
+            overall_label = (article.get('overall_sentiment_label') or '').lower()
+            sentiment_str = 'bullish' if 'bullish' in overall_label else 'bearish' if 'bearish' in overall_label else 'neutral'
+
+            # Parse published time: "20260423T143000" → ISO
+            published_raw = article.get('time_published', '')
+            try:
+                pub_dt = datetime.strptime(published_raw, '%Y%m%dT%H%M%S').replace(tzinfo=timezone.utc)
+                published_at = pub_dt.isoformat()
+            except (ValueError, TypeError):
+                published_at = None
+
+            article_tickers = [
+                ts.get('ticker', '').upper()
+                for ts in article.get('ticker_sentiment', [])
+                if ts.get('ticker')
+            ]
+            if url:
+                news_rows.append({
+                    'id':           hashlib.sha1(url.encode()).hexdigest()[:16],
+                    'published_at': published_at,
+                    'tickers':      article_tickers,
+                    'source':       'alphavantage',
+                    'title':        title,
+                    'url':          url,
+                    'image_url':    image_url,
+                    'snippet':      snippet,
+                    'sentiment':    sentiment_str,
+                })
+
             for ts in article.get('ticker_sentiment', []):
                 ticker = (ts.get('ticker') or '').upper()
                 if not ticker or ticker in stopwords or '.' in ticker:
@@ -193,9 +229,11 @@ def fetch_av_market_sentiment(stopwords, limit=50):
                     continue
                 weighted = round(relevance * sentiment, 3)
                 label = ts.get('ticker_sentiment_label', '')
-                snippet = f"AV news: {label} ({weighted:.2f}) — {title[:80]}"
-                mentions.setdefault(ticker, []).append((weighted, snippet))
+                snippet_str = f"AV news: {label} ({weighted:.2f}) — {title[:80]}"
+                mentions.setdefault(ticker, []).append((weighted, snippet_str))
 
+        if news_rows:
+            write_news_items(news_rows)
         print(f"  AV market news scan: {len(mentions)} tickers with positive sentiment ({len(articles)} articles)")
     except Exception as e:
         print(f"    AV market news scan error: {e}")
@@ -238,8 +276,38 @@ def fetch_marketaux_news(stopwords, limit=50):
             return {}
 
         articles = data.get('data', [])
+        news_rows = []
         for article in articles:
-            title = article.get('title', '')
+            title     = article.get('title', '')
+            url       = article.get('url', '')
+            image_url = article.get('image_url') or None
+            snippet   = (article.get('description') or '')[:500]
+            pub_raw   = article.get('published_at', '')
+            try:
+                pub_dt = datetime.fromisoformat(pub_raw.replace('Z', '+00:00'))
+                published_at = pub_dt.isoformat()
+            except (ValueError, TypeError, AttributeError):
+                published_at = None
+
+            article_tickers = [
+                (e.get('symbol') or '').upper()
+                for e in article.get('entities', [])
+                if e.get('symbol')
+            ]
+            if url:
+                article_id = article.get('uuid') or hashlib.sha1(url.encode()).hexdigest()[:16]
+                news_rows.append({
+                    'id':           article_id,
+                    'published_at': published_at,
+                    'tickers':      article_tickers,
+                    'source':       'marketaux',
+                    'title':        title,
+                    'url':          url,
+                    'image_url':    image_url,
+                    'snippet':      snippet,
+                    'sentiment':    None,
+                })
+
             for entity in article.get('entities', []):
                 ticker = (entity.get('symbol') or '').upper()
                 if not ticker or ticker in stopwords:
@@ -250,9 +318,11 @@ def fetch_marketaux_news(stopwords, limit=50):
                     continue
                 if score <= 0.1:
                     continue
-                snippet = f"Marketaux: positive ({score:.2f}) — {title[:80]}"
-                mentions.setdefault(ticker, []).append((score, snippet))
+                snippet_str = f"Marketaux: positive ({score:.2f}) — {title[:80]}"
+                mentions.setdefault(ticker, []).append((score, snippet_str))
 
+        if news_rows:
+            write_news_items(news_rows)
         print(f"  Marketaux news scan: {len(mentions)} tickers with positive sentiment ({len(articles)} articles)")
     except Exception as e:
         print(f"    Marketaux news scan error: {e}")

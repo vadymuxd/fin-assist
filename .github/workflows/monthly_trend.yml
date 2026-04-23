@@ -34,6 +34,8 @@ jobs:
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           # Use --force when triggered manually so it always appends
           if [ "${{ github.event_name }}" = "workflow_dispatch" ]; then

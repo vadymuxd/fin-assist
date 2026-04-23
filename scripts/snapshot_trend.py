@@ -32,6 +32,7 @@ from datetime import datetime, timezone, date
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
+from lib.supabase_sink import write_trend_snapshot
 
 load_dotenv()
 
@@ -265,6 +266,19 @@ def main():
 
     print("\nAppending to Inv26 - Trend...")
     append_trend_row(sh, values, net_deposits, label)
+
+    write_trend_snapshot(today.isoformat(), {
+        'grand_total':    values['grand_total'],
+        'self_managed':   values['stocks_total'],
+        'managed':        values['managed_total'],
+        'net_deposits':   net_deposits,
+        'spx':            values['sp500'],
+        'ftse':           values['ftse100'],
+        'ndx':            values['nasdaq100'],
+        'msci':           values['msci_world'],
+        'gold':           values['gold'],
+    })
+    print("  Supabase trend_snapshots: 1 row upserted")
 
     print("\nDone.")
 

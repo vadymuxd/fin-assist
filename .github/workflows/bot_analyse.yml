@@ -34,6 +34,8 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/holdings_monitor.py --bot
 
       - name: Update sheet scores + Notion snapshot
@@ -41,4 +43,6 @@ jobs:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           NOTION_API_KEY:                 ${{ secrets.NOTION_API_KEY }}
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/sheets_updater.py --snapshot

@@ -36,6 +36,7 @@ from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 
+from lib.supabase_sink import write_discoveries
 from lib.market_sources import (
     load_filters,
     fetch_ticker_universe,
@@ -411,6 +412,7 @@ def main(mode):
     client = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY'))
     min_mcap = filters.get('min_market_cap_usd', 0)
     evaluated = []
+    filtered_out = []
 
     for c in candidates:
         ticker = c['ticker']
@@ -437,12 +439,14 @@ def main(mode):
         excluded_cc = set(filters.get('exclude_country_codes', []))
         if excluded_cc and country and country in excluded_cc:
             print(f"    Skip — country {country} excluded")
+            filtered_out.append({**c, 'filtered_reason': f'country_excluded:{country}', 'exchange_tag': ex_tag})
             continue
 
         # Market cap filter
         mcap = yf_data.get('analyst_info', {}).get('marketCap') or 0
         if min_mcap and mcap and mcap < min_mcap:
             print(f"    Skip — market cap {mcap:,} < min {min_mcap:,}")
+            filtered_out.append({**c, 'filtered_reason': f'market_cap_too_small:{mcap}', 'exchange_tag': ex_tag})
             continue
 
         price_info = {
@@ -489,15 +493,40 @@ def main(mode):
         and r['ticker'] not in pre_run_watchlist
     ]
 
+    surfaced_tickers: set[str] = set()
     if is_bot:
         send_telegram(format_bot_reply(evaluated))
+        surfaced_tickers = {r['ticker'] for r in evaluated if r.get('score', 0) >= BUY_THRESHOLD}
         print(f"\n[bot] Full scan sent. {len(new_buys)} new BUY(s).")
     else:
         if new_buys:
             send_telegram(format_auto_alert(new_buys))
+            surfaced_tickers = {r['ticker'] for r in new_buys}
             print(f"\n[auto] {len(new_buys)} new BUY alert(s) sent.")
         else:
             print("\n[auto] No new BUYs — staying silent.")
+
+    # Supabase dual-write: single write after Telegram so surfaced_to_telegram is correct
+    run_id = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
+    _now = datetime.now(timezone.utc)
+    supabase_rows = [
+        {**r, 'filtered_reason': None, 'surfaced_to_telegram': r['ticker'] in surfaced_tickers}
+        for r in evaluated
+    ] + [
+        {
+            'ticker':               f['ticker'],
+            'name':                 f.get('name', ''),
+            'sources':              f.get('sources', []),
+            'score':                None,
+            'recommendation':       None,
+            'rationale':            None,
+            'filtered_reason':      f['filtered_reason'],
+            'surfaced_to_telegram': False,
+        }
+        for f in filtered_out
+    ]
+    if supabase_rows:
+        write_discoveries(run_id, _now, supabase_rows)
 
 
 if __name__ == '__main__':

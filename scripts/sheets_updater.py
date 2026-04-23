@@ -24,6 +24,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
+from lib.supabase_sink import write_holdings
 
 load_dotenv()
 
@@ -260,6 +261,23 @@ def update_notion_snapshot(sh, results):
         print(f"  Could not read summary rows: {e}")
         grand_total = cash = stocks_total = stocks_pnl = stocks_pnl_pct = managed_total = 0
         positions = []
+
+    if positions:
+        write_holdings([
+            {
+                'ticker':        p['ticker'],
+                'name':          p['name'],
+                'platform':      p['platform'],
+                'qty':           p['qty'],
+                'avg_buy':       p['avg_buy'],
+                'current_price': p['price'],
+                'pnl_abs':       p['total_pnl'],
+                'pnl_pct':       p['total_pnl_pct'],
+                'last_updated':  run_time,
+            }
+            for p in positions
+        ])
+        print(f"  Supabase holdings: {len(positions)} row(s) upserted")
 
     pnl_sign = '+' if stocks_pnl >= 0 else ''
 

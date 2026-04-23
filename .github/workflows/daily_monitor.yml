@@ -47,6 +47,8 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/holdings_monitor.py --auto
 
       # Dynamic prospect discovery — silent unless a new BUY emerges
@@ -60,18 +62,23 @@ jobs:
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: python3 scripts/prospect_discovery.py --auto
 
-      # Close-run only: refresh sheet scores + Notion portfolio snapshot
+      # Close-run only: refresh sheet scores + Notion portfolio snapshot + Supabase snapshot
       - name: Sheet scores + Notion snapshot (close run only)
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           NOTION_API_KEY:                 ${{ secrets.NOTION_API_KEY }}
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
         run: |
           HOUR=$(date -u +"%H")
           if [ "$HOUR" -ge "15" ]; then
             python3 scripts/sheets_updater.py --snapshot
+            python3 scripts/daily_portfolio_snapshot.py
           else
             python3 scripts/sheets_updater.py
           fi
