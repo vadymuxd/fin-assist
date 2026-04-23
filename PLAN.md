@@ -302,43 +302,33 @@ Legacy commands kept as aliases so existing muscle memory works.
 | **Charts** | Tremor (`@tremor/react`). |
 | **Supabase access** | Public read, service-role write. Anon SELECT allowed on all tables; INSERT/UPDATE/DELETE require service-role key (stored in GitHub Secrets). |
 
-### 6A — Data foundation (Supabase)
+### 6A — Data foundation (Supabase) ✅ COMPLETE
 
 > Supabase becomes the read source for the web app. Existing Python scripts dual-write to Supabase alongside Sheets. Sheets remains source of truth for humans.
 
-- [ ] **6A.1** Create Supabase project (free tier). Add `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` to `.env`, GitHub Actions secrets, and Vercel env.
-- [ ] **6A.2** Schema migration `supabase/migrations/0001_init.sql`:
-  - `holdings` — current positions (ticker, name, platform, qty, avg_buy, current_price, pnl_abs, pnl_pct, sector, market, last_updated)
-  - `portfolio_snapshots` — daily row (date, grand_total, self_managed, managed, cash, net_deposits, benchmark values SPX/FTSE/NDX/MSCI/Gold)
-  - `trend_snapshots` — monthly copy of `Inv26 - Trend`
-  - `discoveries` — every run writes one row per candidate (run_id, run_time, ticker, score, recommendation, sources, rationale, filtered_reason, surfaced_to_telegram)
-  - `holdings_alerts` — every run writes one row per ticker (run_id, run_time, ticker, alert_level, score, event, rationale)
-  - `news_items` — id, published_at, tickers[], source, title, url, image_url, snippet, sentiment
-  - `sectors` — lookup (ticker → sector, market)
-- [ ] **6A.3** Build `scripts/lib/supabase_sink.py` — shared client + writer helpers. Fails open: logs on error, never breaks the Sheets pipeline.
-- [ ] **6A.4** Dual-write wiring:
-  - `sheets_updater.py` → `holdings` + `holdings_alerts`
-  - `prospect_discovery.py` → `discoveries` (incl. filtered-out candidates with `filtered_reason`)
-  - `holdings_monitor.py` → `holdings_alerts`
-  - `snapshot_trend.py` → `trend_snapshots`
-- [ ] **6A.5** New `scripts/daily_portfolio_snapshot.py` + `.github/workflows/daily_snapshot.yml` (cron `30 15 * * 1-5` after close run). Reads Inv26 - Summary totals + benchmarks, inserts one row into `portfolio_snapshots`. Feeds the D/W/M line chart.
-- [ ] **6A.6** Extend `scripts/lib/market_sources.py` — capture `image_url` from Marketaux (`image_url`) and Alpha Vantage (`banner_image`). Persist to `news_items` at discovery/monitor time.
+- [x] **6A.1** Create Supabase project (free tier). Add `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` to `.env`, GitHub Actions secrets, and Vercel env.
+- [x] **6A.2** Schema migration `supabase/migrations/0001_init.sql` — 7 tables: holdings, portfolio_snapshots, trend_snapshots, discoveries, holdings_alerts, news_items, sectors.
+- [x] **6A.3** Build `scripts/lib/supabase_sink.py` — shared client + writer helpers. Fails open.
+- [x] **6A.4** Dual-write wiring: sheets_updater → holdings, prospect_discovery → discoveries, holdings_monitor → holdings_alerts, snapshot_trend → trend_snapshots, market_sources → news_items.
+- [x] **6A.5** `scripts/daily_portfolio_snapshot.py` — reads Inv26-Summary totals + benchmarks, upserts to `portfolio_snapshots`. Called from `daily_monitor.yml` close run (HOUR ≥ 15).
+- [x] **6A.6** `market_sources.py` extended with `image_url` capture from Marketaux + Alpha Vantage.
+- [x] **Migration 0002** — `holdings.value_gbp` column added (GBP-denominated value from sheet col G). Applied via Supabase CLI. Backfill complete (11 rows).
 
-### 6B — Next.js scaffolding
+### 6B — Next.js scaffolding ✅ COMPLETE
 
-- [ ] **6B.1** Create `web/` subdir. Bootstrap Next.js 15 App Router + TypeScript + Tailwind (`pnpm create next-app@latest web`).
-- [ ] **6B.2** Install `@supabase/supabase-js`, create `web/lib/supabase.ts` (read-only anon client). RLS policies: public SELECT, service-role-only writes.
-- [ ] **6B.3** Deploy to Vercel — connect repo, build root `web/`, add Supabase env vars. Confirm skeleton loads.
-- [ ] **6B.4** Shared layout — top nav with Dashboard / Insights tabs, mobile hamburger, dark/light theme, Tailwind design tokens.
-- [ ] **6B.5** Install `@tremor/react`.
+- [x] **6B.1** Next.js 16 App Router + TypeScript + Tailwind v4 bootstrapped in `web/`.
+- [x] **6B.2** `@supabase/supabase-js` installed, `web/lib/supabase.ts` anon read-only client. RLS: public SELECT, service-role writes only.
+- [x] **6B.3** Vercel project created, GitHub repo connected (Root Dir=`web`, skip-on-no-web-change). Live at https://fin-assist-web.vercel.app. `.npmrc` with `legacy-peer-deps=true` for Tremor/React 19 compat.
+- [x] **6B.4** Shared layout: desktop top nav, mobile bottom tab bar (fixed, `pb-[safe-area-inset-bottom]`).
+- [x] **6B.5** `@tremor/react` installed. Tailwind v4 `@source` directive added for Tremor class scanning.
 
-### 6C — Tab 1: Portfolio Dashboard
+### 6C — Tab 1: Portfolio Dashboard ✅ COMPLETE
 
-- [ ] **6C.1** Headline strip — 4 KPI cards: Grand Total (£), WoW %, MoM %, YTD %. Source: latest `portfolio_snapshots` + baseline.
-- [ ] **6C.2** Portfolio value line chart — D/W/M toggle, benchmark overlays (SPX/FTSE/NDX/MSCI/Gold toggleable). Normalised to 100 at 2026-04-13 baseline.
-- [ ] **6C.3** Allocation breakdown — donut + treemap, toggle: sector / market / platform. Source: `holdings` joined to `sectors`.
-- [ ] **6C.4** Holdings table — sortable: current price, P&L £/%, 24h change, sentiment badge, last updated. Row click → drill-down.
-- [ ] **6C.5** Per-holding drill-down — modal or `/holdings/[ticker]`: mini price chart, recent news from `news_items`, latest FAS score, rationale.
+- [x] **6C.1** KPI cards — Grand Total (£), WoW/MoM/YTD % with adaptive delta logic (shows "—" when not enough history).
+- [x] **6C.2** Portfolio line chart — Tremor AreaChart, D/W/M toggle, 5 benchmark overlays normalised to 100 at baseline (Apr 13).
+- [x] **6C.3** Allocation donut — sector/market/platform toggle, `value_gbp`-based for accurate cross-currency breakdown.
+- [x] **6C.4** Holdings table — sortable on desktop, card list on mobile, links to drill-down.
+- [x] **6C.5** Per-holding drill-down `/holdings/[ticker]` — name/platform/sector/market chips, P&L, latest alert badge + rationale, recent news with images + sentiment.
 
 ### 6D — Tab 2: Insights Feed
 

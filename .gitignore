@@ -4,6 +4,8 @@
 !config/discovery_filters.json
 !web/vercel.json
 !web/package.json
+!web/package-lock.json
+!web/tsconfig.json
 __pycache__/
 *.pyc
 .DS_Store
