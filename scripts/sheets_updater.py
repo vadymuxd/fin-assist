@@ -271,6 +271,7 @@ def update_notion_snapshot(sh, results):
                 'qty':           p['qty'],
                 'avg_buy':       p['avg_buy'],
                 'current_price': p['price'],
+                'value_gbp':     p['value'],
                 'pnl_abs':       p['total_pnl'],
                 'pnl_pct':       p['total_pnl_pct'],
                 'last_updated':  run_time,
