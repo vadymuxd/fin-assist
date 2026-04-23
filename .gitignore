@@ -8,3 +8,5 @@ __pycache__/
 data/
 worker/node_modules/
 !worker/package.json
+supabase/.temp/
+*.docx
