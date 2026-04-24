@@ -1,11 +1,17 @@
 @import "tailwindcss";
 
-@source "../node_modules/@tremor/react/dist/**/*.{js,mjs}";
-
 :root {
   --font-geist: "Geist", sans-serif;
 }
 
 body {
   font-family: var(--font-geist), system-ui, sans-serif;
+}
+
+/* Recharts overrides for dark mode legibility */
+.recharts-default-tooltip {
+  border-radius: 8px !important;
+}
+.recharts-cartesian-axis-tick-value {
+  font-variant-numeric: tabular-nums;
 }

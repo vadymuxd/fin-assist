@@ -1,4 +1,4 @@
-import type { DashboardDeltas } from "@/lib/queries";
+import type { DashboardDeltas, Delta } from "@/lib/queries";
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -6,12 +6,18 @@ const gbp = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 });
 
-function formatPct(pct: number): string {
+const gbpSmall = new Intl.NumberFormat("en-GB", {
+  style: "currency",
+  currency: "GBP",
+  maximumFractionDigits: 0,
+});
+
+function fmtPct(pct: number): string {
   const sign = pct > 0 ? "+" : "";
   return `${sign}${pct.toFixed(2)}%`;
 }
 
-function formatAbs(abs: number): string {
+function fmtAbs(abs: number): string {
   const sign = abs >= 0 ? "+" : "−";
   return `${sign}${gbp.format(Math.abs(abs))}`;
 }
@@ -22,37 +28,64 @@ function deltaColor(pct: number): string {
   return "text-gray-500 dark:text-gray-400";
 }
 
-type DeltaProps = {
-  label: string;
-  delta: { absolute: number; pct: number; fromDate: string } | null;
-  fallbackLabel?: string;
-};
+function deltaBg(pct: number): string {
+  if (pct > 0) return "bg-emerald-50 dark:bg-emerald-500/10";
+  if (pct < 0) return "bg-rose-50 dark:bg-rose-500/10";
+  return "bg-gray-50 dark:bg-gray-800";
+}
 
-function DeltaCard({ label, delta, fallbackLabel }: DeltaProps) {
+function shortDate(iso: string): string {
+  return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "2-digit",
+    month: "short",
+    timeZone: "UTC",
+  });
+}
+
+function DeltaCard({
+  label,
+  delta,
+  baselineDate,
+}: {
+  label: string;
+  delta: Delta | null;
+  baselineDate: string;
+}) {
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-5">
-      <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-        {label}
+    <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
+      <div className="flex items-center justify-between">
+        <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+          {label}
+        </div>
+        {delta && (
+          <span
+            className={`text-[10px] font-semibold px-1.5 py-0.5 rounded ${deltaBg(delta.pct)} ${deltaColor(
+              delta.pct
+            )}`}
+          >
+            {delta.pct >= 0 ? "▲" : "▼"}
+          </span>
+        )}
       </div>
       {delta ? (
         <>
-          <div className={`mt-2 text-2xl sm:text-3xl font-semibold tabular-nums ${deltaColor(delta.pct)}`}>
-            {formatPct(delta.pct)}
+          <div className={`mt-2 text-xl sm:text-2xl font-semibold tabular-nums ${deltaColor(delta.pct)}`}>
+            {fmtPct(delta.pct)}
           </div>
-          <div className={`mt-1 text-sm tabular-nums ${deltaColor(delta.pct)}`}>
-            {formatAbs(delta.absolute)}
+          <div className={`mt-0.5 text-xs tabular-nums ${deltaColor(delta.pct)}`}>
+            {fmtAbs(delta.absolute)}
           </div>
-          <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-            since {delta.fromDate}
+          <div className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">
+            since {shortDate(delta.fromDate)}
           </div>
         </>
       ) : (
         <>
-          <div className="mt-2 text-2xl sm:text-3xl font-semibold tabular-nums text-gray-400 dark:text-gray-600">
+          <div className="mt-2 text-xl sm:text-2xl font-semibold tabular-nums text-gray-300 dark:text-gray-700">
             —
           </div>
-          <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">
-            {fallbackLabel ?? "Not enough history"}
+          <div className="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+            tracking from {shortDate(baselineDate)}
           </div>
         </>
       )}
@@ -60,32 +93,79 @@ function DeltaCard({ label, delta, fallbackLabel }: DeltaProps) {
   );
 }
 
+function BreakdownChip({
+  label,
+  value,
+  total,
+}: {
+  label: string;
+  value: number;
+  total: number;
+}) {
+  const pct = total > 0 ? (value / total) * 100 : 0;
+  return (
+    <div className="flex flex-col">
+      <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</div>
+      <div className="text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
+        {gbpSmall.format(value)}
+      </div>
+      <div className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">{pct.toFixed(0)}%</div>
+    </div>
+  );
+}
+
 export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null }) {
   if (!deltas) {
     return (
-      <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
         No portfolio snapshots yet.
       </div>
     );
   }
 
-  const { latest, sinceBaseline, wow, mom, ytd } = deltas;
+  const { latest, baselineDate, daily, wow, mom, ytd } = deltas;
+  const stocks = latest.self_managed ?? 0;
+  const cash = latest.cash ?? 0;
+  const managed = latest.managed ?? 0;
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 sm:gap-4">
-      <div className="col-span-2 sm:col-span-1 bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-5">
-        <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-          Grand Total
+    <div className="space-y-3 sm:space-y-4">
+      {/* Hero card: Grand Total + breakdown + Daily delta */}
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 p-5 sm:p-6 shadow-sm">
+        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+          <div>
+            <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+              Grand Total
+            </div>
+            <div className="mt-1 text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+              {gbp.format(latest.grand_total)}
+            </div>
+            <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+              <span>as of {shortDate(latest.date)}</span>
+              {daily && (
+                <>
+                  <span className="text-gray-300 dark:text-gray-700">•</span>
+                  <span className={`font-medium tabular-nums ${deltaColor(daily.pct)}`}>
+                    {daily.pct >= 0 ? "▲" : "▼"} {fmtAbs(daily.absolute)} ({fmtPct(daily.pct)}) today
+                  </span>
+                </>
+              )}
+            </div>
+          </div>
+          <div className="grid grid-cols-3 gap-4 sm:gap-6">
+            <BreakdownChip label="Stocks" value={stocks} total={latest.grand_total} />
+            <BreakdownChip label="Cash" value={cash} total={latest.grand_total} />
+            <BreakdownChip label="Managed" value={managed} total={latest.grand_total} />
+          </div>
         </div>
-        <div className="mt-2 text-2xl sm:text-3xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-          {gbp.format(latest.grand_total)}
-        </div>
-        <div className="mt-1 text-xs text-gray-400 dark:text-gray-500">as of {latest.date}</div>
       </div>
 
-      <DeltaCard label="WoW" delta={wow} fallbackLabel={sinceBaseline ? `Since ${sinceBaseline.fromDate}` : undefined} />
-      <DeltaCard label="MoM" delta={mom} fallbackLabel={sinceBaseline ? `Since ${sinceBaseline.fromDate}` : undefined} />
-      <DeltaCard label="YTD" delta={ytd} fallbackLabel={sinceBaseline ? `Since ${sinceBaseline.fromDate}` : undefined} />
+      {/* Delta strip */}
+      <div className="grid grid-cols-3 gap-3 sm:gap-4">
+        <DeltaCard label="WoW" delta={wow} baselineDate={baselineDate} />
+        <DeltaCard label="MoM" delta={mom} baselineDate={baselineDate} />
+        <DeltaCard label="YTD" delta={ytd} baselineDate={baselineDate} />
+      </div>
     </div>
   );
 }

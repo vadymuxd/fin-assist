@@ -22,11 +22,11 @@ export type PortfolioSnapshot = {
   managed: number;
   cash: number;
   net_deposits: number;
-  spx: number;
-  ftse: number;
-  ndx: number;
-  msci: number;
-  gold: number;
+  spx: number | null;
+  ftse: number | null;
+  ndx: number | null;
+  msci: number | null;
+  gold: number | null;
 };
 
 export type SectorLookup = {
@@ -130,6 +130,60 @@ export async function getLatestAlertForTicker(ticker: string): Promise<HoldingsA
   return data;
 }
 
+export type Discovery = {
+  id: number;
+  run_id: string;
+  run_time: string;
+  ticker: string;
+  score: number | null;
+  recommendation: string | null;
+  sources: string[] | null;
+  rationale: string | null;
+  filtered_reason: string | null;
+  surfaced_to_telegram: boolean | null;
+};
+
+export async function getLatestDiscoveries(): Promise<{ run_time: string; items: Discovery[] }> {
+  // find the most recent run_id
+  const { data: latest, error: le } = await supabase
+    .from("discoveries")
+    .select("run_id, run_time")
+    .order("run_time", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (le) throw le;
+  if (!latest) return { run_time: "", items: [] };
+
+  const { data, error } = await supabase
+    .from("discoveries")
+    .select("*")
+    .eq("run_id", latest.run_id)
+    .order("score", { ascending: false });
+  if (error) throw error;
+  return { run_time: latest.run_time, items: data ?? [] };
+}
+
+export async function getRecentAlerts(limit = 20): Promise<HoldingsAlert[]> {
+  const { data, error } = await supabase
+    .from("holdings_alerts")
+    .select("*")
+    .in("alert_level", ["ACT", "WATCH"])
+    .order("run_time", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getRecentNews(limit = 40): Promise<NewsItem[]> {
+  const { data, error } = await supabase
+    .from("news_items")
+    .select("id, published_at, tickers, source, title, url, image_url, snippet, sentiment")
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
 export async function getHoldingsWithSectors(): Promise<Holding[]> {
   const [holdings, sectors] = await Promise.all([getHoldings(), getSectors()]);
   const lookup = new Map(sectors.map((s) => [s.ticker, s]));
@@ -143,12 +197,16 @@ export async function getHoldingsWithSectors(): Promise<Holding[]> {
   });
 }
 
+export type Delta = { absolute: number; pct: number; fromDate: string };
+
 export type DashboardDeltas = {
   latest: PortfolioSnapshot;
-  sinceBaseline: { absolute: number; pct: number; fromDate: string } | null;
-  wow: { absolute: number; pct: number; fromDate: string } | null;
-  mom: { absolute: number; pct: number; fromDate: string } | null;
-  ytd: { absolute: number; pct: number; fromDate: string } | null;
+  baselineDate: string;
+  daily: Delta | null;
+  wow: Delta | null;
+  mom: Delta | null;
+  ytd: Delta | null;
+  sinceBaseline: Delta | null;
 };
 
 function daysAgoISO(days: number): string {
@@ -179,10 +237,12 @@ export function computeDeltas(snapshots: PortfolioSnapshot[]): DashboardDeltas |
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
   const latest = sorted[sorted.length - 1];
   const baseline = sorted[0];
+  const prior = sorted.slice(0, -1);
+  const daily = sorted.length >= 2 ? delta(latest, sorted[sorted.length - 2]) : null;
   const sinceBaseline = baseline.date !== latest.date ? delta(latest, baseline) : null;
-  const wow = delta(latest, findClosestOnOrBefore(sorted.slice(0, -1), daysAgoISO(7)));
-  const mom = delta(latest, findClosestOnOrBefore(sorted.slice(0, -1), daysAgoISO(30)));
+  const wow = delta(latest, findClosestOnOrBefore(prior, daysAgoISO(7)));
+  const mom = delta(latest, findClosestOnOrBefore(prior, daysAgoISO(30)));
   const yearStart = `${new Date().getUTCFullYear()}-01-01`;
-  const ytd = delta(latest, findClosestOnOrBefore(sorted.slice(0, -1), yearStart));
-  return { latest, sinceBaseline, wow, mom, ytd };
+  const ytd = delta(latest, findClosestOnOrBefore(prior, yearStart));
+  return { latest, baselineDate: baseline.date, daily, sinceBaseline, wow, mom, ytd };
 }

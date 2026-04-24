@@ -30,11 +30,11 @@ ROW_GRAND_TOTAL   = 7
 ROW_CASH          = 9
 ROW_STOCKS_TOTAL  = 11
 ROW_MANAGED_TOTAL = 28
-ROW_SP500         = 31
-ROW_FTSE100       = 32
-ROW_NASDAQ100     = 33
-ROW_MSCI_WORLD    = 34
-ROW_GOLD          = 35
+ROW_SP500         = 32
+ROW_FTSE100       = 33
+ROW_NASDAQ100     = 34
+ROW_MSCI_WORLD    = 35
+ROW_GOLD          = 36
 COL_VALUE_IDX     = 6   # 0-based index → col G
 
 
