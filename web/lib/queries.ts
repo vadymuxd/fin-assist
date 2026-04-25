@@ -174,6 +174,24 @@ export async function getRecentAlerts(limit = 20): Promise<HoldingsAlert[]> {
   return data ?? [];
 }
 
+export async function getLatestAlertsRun(): Promise<{ run_time: string; items: HoldingsAlert[] }> {
+  const { data: latest, error: le } = await supabase
+    .from("holdings_alerts")
+    .select("run_id, run_time")
+    .order("run_time", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (le) throw le;
+  if (!latest) return { run_time: "", items: [] };
+  const { data, error } = await supabase
+    .from("holdings_alerts")
+    .select("*")
+    .eq("run_id", latest.run_id)
+    .order("alert_level", { ascending: true });
+  if (error) throw error;
+  return { run_time: latest.run_time, items: data ?? [] };
+}
+
 export async function getRecentNews(limit = 40): Promise<NewsItem[]> {
   const { data, error } = await supabase
     .from("news_items")
