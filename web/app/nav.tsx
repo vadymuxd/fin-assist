@@ -2,52 +2,17 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
+import { LineChart, Sparkles, type LucideIcon } from "lucide-react";
 
 type Tab = {
   label: string;
   href: string;
-  icon: (active: boolean) => React.ReactNode;
+  icon: LucideIcon;
 };
 
 const tabs: Tab[] = [
-  {
-    label: "Dashboard",
-    href: "/",
-    icon: (active) => (
-      <svg
-        className="w-6 h-6"
-        fill={active ? "currentColor" : "none"}
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.8}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M3 13h8V3H3v10zm10 8h8V11h-8v10zM3 21h8v-6H3v6zm10-18v6h8V3h-8z"
-        />
-      </svg>
-    ),
-  },
-  {
-    label: "Insights",
-    href: "/insights",
-    icon: (active) => (
-      <svg
-        className="w-6 h-6"
-        fill={active ? "currentColor" : "none"}
-        viewBox="0 0 24 24"
-        stroke="currentColor"
-        strokeWidth={1.8}
-      >
-        <path
-          strokeLinecap="round"
-          strokeLinejoin="round"
-          d="M11 4a7 7 0 104.95 11.95l3.55 3.55 1.4-1.4-3.55-3.55A7 7 0 0011 4zm0 2a5 5 0 110 10 5 5 0 010-10z"
-        />
-      </svg>
-    ),
-  },
+  { label: "Dashboard", href: "/", icon: LineChart },
+  { label: "Insights", href: "/insights", icon: Sparkles },
 ];
 
 function isActive(href: string, pathname: string) {
@@ -63,22 +28,31 @@ export default function Nav() {
       <header className="hidden sm:block sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800 bg-white/80 dark:bg-gray-950/80 backdrop-blur">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center justify-between gap-4">
-            <span className="font-semibold tracking-tight text-gray-900 dark:text-gray-50">
-              Fin Assist
-            </span>
+            <Link href="/" className="flex items-center gap-2">
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <path d="M3 17l6-6 4 4 8-8" />
+                  <path d="M14 7h7v7" />
+                </svg>
+              </span>
+              <span className="font-semibold tracking-tight text-gray-900 dark:text-gray-50">
+                Fin Assist
+              </span>
+            </Link>
             <nav className="flex items-center gap-1">
-              {tabs.map(({ label, href }) => {
+              {tabs.map(({ label, href, icon: Icon }) => {
                 const active = isActive(href, pathname);
                 return (
                   <Link
                     key={href}
                     href={href}
-                    className={`px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
+                    className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       active
                         ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-50"
                         : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 hover:bg-gray-50 dark:hover:bg-gray-900"
                     }`}
                   >
+                    <Icon size={16} strokeWidth={2} aria-hidden="true" />
                     {label}
                   </Link>
                 );
@@ -88,9 +62,15 @@ export default function Nav() {
         </div>
       </header>
 
-      {/* Mobile top bar — just the logo */}
+      {/* Mobile top bar */}
       <header className="sm:hidden sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-950/90 backdrop-blur">
-        <div className="px-4 h-12 flex items-center">
+        <div className="px-4 h-12 flex items-center gap-2">
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M3 17l6-6 4 4 8-8" />
+              <path d="M14 7h7v7" />
+            </svg>
+          </span>
           <span className="font-semibold tracking-tight text-gray-900 dark:text-gray-50">
             Fin Assist
           </span>
@@ -103,7 +83,7 @@ export default function Nav() {
         aria-label="Primary"
       >
         <div className="flex h-16">
-          {tabs.map(({ label, href, icon }) => {
+          {tabs.map(({ label, href, icon: Icon }) => {
             const active = isActive(href, pathname);
             return (
               <Link
@@ -111,11 +91,15 @@ export default function Nav() {
                 href={href}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
                   active
-                    ? "text-gray-900 dark:text-gray-50"
+                    ? "text-blue-600 dark:text-blue-400"
                     : "text-gray-400 dark:text-gray-500"
                 }`}
               >
-                {icon(active)}
+                <Icon
+                  size={22}
+                  strokeWidth={active ? 2.25 : 1.75}
+                  aria-hidden="true"
+                />
                 <span>{label}</span>
               </Link>
             );

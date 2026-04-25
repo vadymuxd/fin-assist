@@ -1,4 +1,4 @@
-import type { Metadata } from "next";
+import type { Metadata, Viewport } from "next";
 import { Geist } from "next/font/google";
 import "./globals.css";
 import Nav from "./nav";
@@ -6,8 +6,27 @@ import Nav from "./nav";
 const geist = Geist({ subsets: ["latin"], variable: "--font-geist" });
 
 export const metadata: Metadata = {
-  title: "Fin Assist",
-  description: "Personal finance dashboard",
+  title: {
+    default: "Fin Assist",
+    template: "%s · Fin Assist",
+  },
+  description: "Personal portfolio dashboard, alerts, and discovery insights.",
+  applicationName: "Fin Assist",
+  appleWebApp: {
+    capable: true,
+    title: "Fin Assist",
+    statusBarStyle: "black-translucent",
+  },
+};
+
+export const viewport: Viewport = {
+  themeColor: [
+    { media: "(prefers-color-scheme: light)", color: "#ffffff" },
+    { media: "(prefers-color-scheme: dark)", color: "#0a0a0a" },
+  ],
+  width: "device-width",
+  initialScale: 1,
+  viewportFit: "cover",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
