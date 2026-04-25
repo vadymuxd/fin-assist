@@ -1,8 +1,9 @@
 import {
+  getHoldingTickers,
   getLatestAlertsRun,
   getLatestDiscoveries,
+  getNewsForHoldings,
   getRecentAlerts,
-  getRecentNews,
 } from "@/lib/queries";
 import DiscoveriesFeed from "../components/discoveries-feed";
 import AlertsList from "../components/alerts-list";
@@ -11,12 +12,14 @@ import NewsStream from "../components/news-stream";
 export const revalidate = 300;
 
 export default async function InsightsPage() {
-  const [discoveries, activeAlerts, latestAlertsRun, news] = await Promise.all([
+  const [discoveries, activeAlerts, latestAlertsRun, holdingTickers] = await Promise.all([
     getLatestDiscoveries(),
     getRecentAlerts(20),
     getLatestAlertsRun(),
-    getRecentNews(40),
+    getHoldingTickers(),
   ]);
+
+  const news = await getNewsForHoldings(holdingTickers, 40);
 
   return (
     <div className="space-y-4 sm:space-y-6">

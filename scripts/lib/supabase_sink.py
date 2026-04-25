@@ -9,12 +9,32 @@ breaks the Google Sheets pipeline.
 
 import os
 import logging
+import requests as _requests
 from datetime import datetime, timezone
 from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
 
 _client: Client | None = None
+_revalidated: bool = False
+
+
+def _trigger_revalidate() -> None:
+    """Ping the Next.js revalidate endpoint once per process so the frontend
+    picks up fresh data on the next page load, without waiting for ISR expiry."""
+    global _revalidated
+    if _revalidated:
+        return
+    url = os.getenv('APP_REVALIDATE_URL', '')
+    secret = os.getenv('APP_REVALIDATE_SECRET', '')
+    if not url or not secret:
+        return
+    try:
+        _requests.post(url, headers={'x-revalidate-secret': secret}, timeout=5)
+        _revalidated = True
+        logger.info('Frontend revalidated')
+    except Exception as e:
+        logger.debug(f'Revalidate ping failed (non-critical): {e}')
 
 
 def _get_client() -> Client | None:
@@ -65,7 +85,10 @@ def _insert(table: str, rows: list[dict]) -> bool:
 
 def write_holdings(positions: list[dict]) -> bool:
     """Upsert current portfolio positions. Each dict must have 'ticker' key."""
-    return _upsert('holdings', positions, on_conflict='ticker')
+    ok = _upsert('holdings', positions, on_conflict='ticker')
+    if ok:
+        _trigger_revalidate()
+    return ok
 
 
 def write_holdings_alerts(run_id: str, run_time: datetime, alerts: list[dict]) -> bool:
@@ -85,7 +108,10 @@ def write_holdings_alerts(run_id: str, run_time: datetime, alerts: list[dict]) -
         }
         for a in alerts
     ]
-    return _insert('holdings_alerts', rows)
+    ok = _insert('holdings_alerts', rows)
+    if ok:
+        _trigger_revalidate()
+    return ok
 
 
 def write_discoveries(run_id: str, run_time: datetime, candidates: list[dict]) -> bool:
@@ -108,7 +134,10 @@ def write_discoveries(run_id: str, run_time: datetime, candidates: list[dict]) -
         }
         for c in candidates
     ]
-    return _insert('discoveries', rows)
+    ok = _insert('discoveries', rows)
+    if ok:
+        _trigger_revalidate()
+    return ok
 
 
 def write_portfolio_snapshot(date: str, totals: dict) -> bool:
@@ -118,7 +147,10 @@ def write_portfolio_snapshot(date: str, totals: dict) -> bool:
             spx, ftse, ndx, msci, gold
     """
     row = {'date': date, **totals}
-    return _upsert('portfolio_snapshots', [row], on_conflict='date')
+    ok = _upsert('portfolio_snapshots', [row], on_conflict='date')
+    if ok:
+        _trigger_revalidate()
+    return ok
 
 
 def write_trend_snapshot(snapshot_date: str, data: dict) -> bool:
@@ -135,7 +167,10 @@ def write_news_items(items: list[dict]) -> bool:
     Upsert news articles. Each dict must have 'id' and 'url'.
     Silently skips duplicates via upsert on 'id'.
     """
-    return _upsert('news_items', items, on_conflict='id')
+    ok = _upsert('news_items', items, on_conflict='id')
+    if ok:
+        _trigger_revalidate()
+    return ok
 
 
 def write_sectors(entries: list[dict]) -> bool:

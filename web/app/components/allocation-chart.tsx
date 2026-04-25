@@ -55,12 +55,36 @@ function bucket(holdings: Holding[], dim: Dimension): Slice[] {
     .map((s, i) => ({ ...s, color: palette[i % palette.length] }));
 }
 
-export default function AllocationChart({ holdings }: { holdings: Holding[] }) {
+export default function AllocationChart({
+  holdings,
+  managed,
+  cash,
+}: {
+  holdings: Holding[];
+  managed?: number | null;
+  cash?: number | null;
+}) {
   const [dim, setDim] = useState<Dimension>("sector");
 
-  const data = useMemo(() => bucket(holdings, dim), [holdings, dim]);
-  const total = useMemo(() => data.reduce((acc, d) => acc + d.value, 0), [data]);
-  const hasData = data.length > 0 && total > 0;
+  const stockSlices = useMemo(() => bucket(holdings, dim), [holdings, dim]);
+
+  // Combine self-managed stocks with managed account and cash as fixed extra slices
+  const chartData = useMemo((): Slice[] => {
+    const offset = stockSlices.length;
+    const extras: Slice[] = [];
+    if (managed && managed > 0) {
+      extras.push({ name: "JP Morgan Managed", value: managed, pct: 0, color: palette[offset % palette.length] });
+    }
+    if (cash && cash > 0) {
+      extras.push({ name: "Cash", value: cash, pct: 0, color: palette[(offset + extras.length) % palette.length] });
+    }
+    const combined = [...stockSlices, ...extras];
+    const grand = combined.reduce((acc, s) => acc + s.value, 0);
+    return combined.map((s) => ({ ...s, pct: grand > 0 ? (s.value / grand) * 100 : 0 }));
+  }, [stockSlices, managed, cash]);
+
+  const total = useMemo(() => chartData.reduce((acc, d) => acc + d.value, 0), [chartData]);
+  const hasData = chartData.length > 0 && total > 0;
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
@@ -68,7 +92,7 @@ export default function AllocationChart({ holdings }: { holdings: Holding[] }) {
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Allocation</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Self-managed stocks by {dimensionLabels[dim].toLowerCase()}
+            All assets by {dimensionLabels[dim].toLowerCase()}
           </p>
         </div>
         <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 self-start">
@@ -98,7 +122,7 @@ export default function AllocationChart({ holdings }: { holdings: Holding[] }) {
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
-                  data={data}
+                  data={chartData}
                   dataKey="value"
                   nameKey="name"
                   innerRadius="60%"
@@ -107,7 +131,7 @@ export default function AllocationChart({ holdings }: { holdings: Holding[] }) {
                   paddingAngle={1.5}
                   isAnimationActive={false}
                 >
-                  {data.map((d) => (
+                  {chartData.map((d) => (
                     <Cell key={d.name} fill={d.color} />
                   ))}
                 </Pie>
@@ -131,7 +155,7 @@ export default function AllocationChart({ holdings }: { holdings: Holding[] }) {
           </div>
           <div className="sm:col-span-3">
             <ul className="space-y-1.5 max-h-56 overflow-y-auto pr-1">
-              {data.map((d) => (
+              {chartData.map((d) => (
                 <li key={d.name} className="flex items-center justify-between gap-3 text-sm">
                   <div className="flex items-center gap-2 min-w-0">
                     <span

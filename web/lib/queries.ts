@@ -202,6 +202,24 @@ export async function getRecentNews(limit = 40): Promise<NewsItem[]> {
   return data ?? [];
 }
 
+export async function getNewsForHoldings(tickers: string[], limit = 40): Promise<NewsItem[]> {
+  if (tickers.length === 0) return getRecentNews(limit);
+  const { data, error } = await supabase
+    .from("news_items")
+    .select("id, published_at, tickers, source, title, url, image_url, snippet, sentiment")
+    .overlaps("tickers", tickers)
+    .order("published_at", { ascending: false })
+    .limit(limit);
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getHoldingTickers(): Promise<string[]> {
+  const { data, error } = await supabase.from("holdings").select("ticker");
+  if (error) throw error;
+  return (data ?? []).map((h) => h.ticker);
+}
+
 export async function getHoldingsWithSectors(): Promise<Holding[]> {
   const [holdings, sectors] = await Promise.all([getHoldings(), getSectors()]);
   const lookup = new Map(sectors.map((s) => [s.ticker, s]));

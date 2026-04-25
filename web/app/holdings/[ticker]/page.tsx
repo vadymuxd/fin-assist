@@ -6,6 +6,7 @@ import {
   getLatestAlertForTicker,
   getNewsForTicker,
 } from "@/lib/queries";
+import TickerLogo from "@/app/components/ticker-logo";
 
 export const revalidate = 300;
 
@@ -79,7 +80,9 @@ export default async function HoldingDetailPage({
       {/* Header */}
       <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3">
-          <div>
+          <div className="flex items-start gap-4">
+            <TickerLogo ticker={holding.ticker} size={48} />
+            <div>
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-gray-50">{holding.ticker}</h1>
             {holding.name && <div className="text-sm text-gray-500 dark:text-gray-400">{holding.name}</div>}
             <div className="mt-2 flex flex-wrap gap-2 text-xs">
@@ -98,6 +101,7 @@ export default async function HoldingDetailPage({
                   {holding.market}
                 </span>
               )}
+            </div>
             </div>
           </div>
           <div className="text-right">

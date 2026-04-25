@@ -25,7 +25,7 @@ export default async function DashboardPage() {
       </div>
       <KpiCards deltas={deltas} />
       <PortfolioChart snapshots={snapshots} />
-      <AllocationChart holdings={holdings} />
+      <AllocationChart holdings={holdings} managed={deltas?.latest.managed} cash={deltas?.latest.cash} />
       <HoldingsTable holdings={holdings} />
     </div>
   );

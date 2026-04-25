@@ -376,14 +376,14 @@ def main(mode):
         print(f"\n  {ticker} [{exchange}]")
 
         if exchange in ('US', 'CA'):
-            data = fetch_ticker_context(finnhub_sym, hours=24)
+            data = fetch_ticker_context(finnhub_sym, hours=24, holding_ticker=ticker)
             if not data.get('headlines'):
                 print(f"    No Finnhub news — checking yfinance")
-                yf_data = fetch_yfinance_context(yf_sym)
+                yf_data = fetch_yfinance_context(yf_sym, holding_ticker=ticker)
                 data['headlines']    = yf_data.get('headlines', [])
                 data['analyst_info'] = yf_data.get('analyst_info', {})
         else:
-            yf_data = fetch_yfinance_context(yf_sym)
+            yf_data = fetch_yfinance_context(yf_sym, holding_ticker=ticker)
             data = {
                 'headlines':    yf_data.get('headlines', []),
                 'sentiment':    {},

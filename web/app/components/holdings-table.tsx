@@ -3,6 +3,7 @@
 import Link from "next/link";
 import { useMemo, useState } from "react";
 import type { Holding } from "@/lib/queries";
+import TickerLogo from "./ticker-logo";
 
 type SortKey = "ticker" | "platform" | "sector" | "market" | "value_gbp" | "pnl_abs" | "pnl_pct";
 type Dir = "asc" | "desc";
@@ -119,13 +120,16 @@ export default function HoldingsTable({ holdings }: { holdings: Holding[] }) {
                 <td className="px-3 py-2.5">
                   <Link
                     href={`/holdings/${encodeURIComponent(h.ticker)}`}
-                    className="font-medium text-gray-900 dark:text-gray-50 hover:underline"
+                    className="flex items-center gap-2 hover:underline"
                   >
-                    {h.ticker}
+                    <TickerLogo ticker={h.ticker} size={28} />
+                    <div>
+                      <div className="font-medium text-gray-900 dark:text-gray-50">{h.ticker}</div>
+                      {h.name && (
+                        <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[180px]">{h.name}</div>
+                      )}
+                    </div>
                   </Link>
-                  {h.name && (
-                    <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[200px]">{h.name}</div>
-                  )}
                 </td>
                 <td className="px-3 py-2.5 text-sm text-gray-600 dark:text-gray-300">{h.platform ?? "—"}</td>
                 <td className="px-3 py-2.5 text-sm text-gray-600 dark:text-gray-300">{h.sector ?? "—"}</td>
@@ -153,10 +157,13 @@ export default function HoldingsTable({ holdings }: { holdings: Holding[] }) {
               href={`/holdings/${encodeURIComponent(h.ticker)}`}
               className="flex items-center justify-between gap-3 px-4 py-3 active:bg-gray-50 dark:active:bg-gray-800/50"
             >
-              <div className="min-w-0">
-                <div className="font-medium text-gray-900 dark:text-gray-50">{h.ticker}</div>
-                <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
-                  {[h.platform, h.sector].filter(Boolean).join(" · ") || "—"}
+              <div className="flex items-center gap-3 min-w-0">
+                <TickerLogo ticker={h.ticker} size={32} />
+                <div className="min-w-0">
+                  <div className="font-medium text-gray-900 dark:text-gray-50">{h.ticker}</div>
+                  <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
+                    {[h.platform, h.sector].filter(Boolean).join(" · ") || "—"}
+                  </div>
                 </div>
               </div>
               <div className="text-right shrink-0">

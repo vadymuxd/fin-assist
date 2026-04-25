@@ -513,10 +513,11 @@ def fetch_alpha_vantage_sentiment(symbol):
         return {}
 
 
-def fetch_ticker_context(symbol, hours=24):
+def fetch_ticker_context(symbol, hours=24, holding_ticker=None):
     """
     Fetch recent news + sentiment + analyst consensus + price target.
     `hours` controls the news window (24 for holdings event-check, 168 for prospect scan).
+    `holding_ticker` — if set, Finnhub articles are written to news_items tagged with this ticker.
     Sentiment: Finnhub first (paid tier), falls back to Alpha Vantage (free tier).
     """
     now       = datetime.now(timezone.utc)
@@ -534,6 +535,35 @@ def fetch_ticker_context(symbol, hours=24):
         if i.get('headline')
     ]
 
+    # Write per-holding Finnhub articles to news_items so the frontend news feed
+    # can filter to holdings tickers
+    if holding_ticker and news_raw:
+        news_rows = []
+        for item in (news_raw or [])[:15]:
+            url = item.get('url', '')
+            if not url:
+                continue
+            raw_id = item.get('id')
+            item_id = str(raw_id) if raw_id else hashlib.sha1(url.encode()).hexdigest()[:16]
+            pub_ts = item.get('datetime', 0)
+            published_at = (
+                datetime.fromtimestamp(pub_ts, tz=timezone.utc).isoformat()
+                if pub_ts else None
+            )
+            news_rows.append({
+                'id':           item_id,
+                'published_at': published_at,
+                'tickers':      [holding_ticker],
+                'source':       item.get('source', 'finnhub'),
+                'title':        item.get('headline', ''),
+                'url':          url,
+                'image_url':    item.get('image') or None,
+                'snippet':      (item.get('summary') or '')[:500],
+                'sentiment':    None,
+            })
+        if news_rows:
+            write_news_items(news_rows)
+
     sentiment    = finnhub_get('news-sentiment', {'symbol': symbol})
     # Alpha Vantage fallback when Finnhub sentiment is blocked (free tier)
     if not sentiment:
@@ -550,20 +580,52 @@ def fetch_ticker_context(symbol, hours=24):
     }
 
 
-def fetch_yfinance_context(symbol):
-    """yfinance fallback for LSE/EU or when Finnhub is empty. Returns headlines + analyst info + price/currency."""
+def fetch_yfinance_context(symbol, holding_ticker=None):
+    """yfinance fallback for LSE/EU or when Finnhub is empty. Returns headlines + analyst info + price/currency.
+    If `holding_ticker` is set, writes news to news_items tagged with that ticker."""
     try:
         t        = yf.Ticker(symbol)
         raw_news = t.news or []
         headlines = []
+        news_rows = []
         for item in raw_news[:10]:
-            title = (
-                item.get('content', {}).get('title')
-                or item.get('title')
-                or ''
+            content = item.get('content', {}) or {}
+            title = content.get('title') or item.get('title') or ''
+            url = (
+                (content.get('canonicalUrl') or {}).get('url', '')
+                or item.get('link', '')
             )
             if title:
                 headlines.append({'headline': title, 'source': 'yfinance', 'datetime': 0})
+
+            if holding_ticker and url:
+                pub_ts = item.get('providerPublishTime')
+                published_at = (
+                    datetime.fromtimestamp(pub_ts, tz=timezone.utc).isoformat()
+                    if pub_ts else None
+                )
+                thumb = content.get('thumbnail') or item.get('thumbnail') or {}
+                image_url = None
+                resolutions = thumb.get('resolutions', []) or []
+                if resolutions:
+                    image_url = resolutions[-1].get('url')
+                elif thumb.get('originalUrl'):
+                    image_url = thumb['originalUrl']
+                snippet = (content.get('summary') or '')[:500]
+                news_rows.append({
+                    'id':           hashlib.sha1(url.encode()).hexdigest()[:16],
+                    'published_at': published_at,
+                    'tickers':      [holding_ticker],
+                    'source':       item.get('publisher', 'yfinance'),
+                    'title':        title,
+                    'url':          url,
+                    'image_url':    image_url,
+                    'snippet':      snippet,
+                    'sentiment':    None,
+                })
+
+        if news_rows:
+            write_news_items(news_rows)
 
         analyst_info = {}
         price = None
