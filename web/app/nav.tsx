@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, Sparkles, type LucideIcon } from "lucide-react";
+import { LineChart, Compass, type LucideIcon } from "lucide-react";
 
 type Tab = {
   label: string;
@@ -12,7 +12,7 @@ type Tab = {
 
 const tabs: Tab[] = [
   { label: "Dashboard", href: "/", icon: LineChart },
-  { label: "Insights", href: "/insights", icon: Sparkles },
+  { label: "Insights", href: "/insights", icon: Compass },
 ];
 
 function isActive(href: string, pathname: string) {
