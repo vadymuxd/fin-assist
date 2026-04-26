@@ -338,41 +338,27 @@ Legacy commands kept as aliases so existing muscle memory works.
 - [x] **6D.4** Historical browse — date picker; past day's discoveries + alerts + news.
 - [x] **6D.5** Empty state + error handling — friendly message if Supabase returns nothing or fails.
 
-### 6E — Savings & Net Worth UI ⏳ IN PROGRESS
+### 6E — Savings & Net Worth UI ✅ COMPLETE
 
 > Extends the app to 4 tabs: Investments | Savings | Net Worth | Insights. Builds on Phase 7 data layer.
 
 - [x] **6E.0** Rename "Dashboard" → "Investments" in nav + page heading. Add Ticker dimension to Allocation chart.
-- [ ] **6E.1** Add Savings + Net Worth tabs to nav (`PiggyBank` / `TrendingUp` icons, lucide-react).
-- [ ] **6E.2** Savings page `/savings` — emerald/teal theme. KPI cards (total/personal/joint + deltas), growth line chart (All/Personal/Joint toggle, D/W/M), allocation donut (Bank/Type/Owner), accounts table.
-- [ ] **6E.3** Net Worth page `/net-worth` — violet theme. KPI cards, combined line chart (net worth + savings + investments), savings-vs-investments donut.
-- [ ] **6E.4** `getSavingsSnapshots()`, `getSavingsAccounts()`, `computeSavingsDeltas()` in `queries.ts`.
+- [x] **6E.1** Add Savings + Net Worth tabs to nav (`PiggyBank` / `TrendingUp` icons, lucide-react).
+- [x] **6E.2** Savings page `/savings` — KPI cards (total/personal/joint + deltas), growth line chart, allocation donut, accounts table.
+- [x] **6E.3** Net Worth page `/net-worth` — KPI cards, combined line chart (net worth + savings + investments), savings-vs-investments donut.
+- [x] **6E.4** `getSavingsSnapshots()`, `getSavingsAccounts()`, `computeSavingsDeltas()`, `getNetWorthData()` in `web/lib/queries.ts`.
 
-### 6F — Testing & validation (web)
+### 6F — Testing & validation (web) ✅ COMPLETE
 
-> Gate 6G on a green 6F. No Android build until the web product is proven good.
-
-- [ ] **6F.1** Data freshness — run each dual-write script; confirm Supabase rows + live Vercel URL reflect latest run.
-- [ ] **6F.2** E2E smoke per tab — click through every component on prod URL, no console errors.
-- [ ] **6F.3** Responsive on real devices — iOS Safari, Android Chrome, desktop Chrome/Safari. Screenshots at 375/768/1440.
-- [ ] **6F.4** Chart interactions — D/W/M toggle, benchmark overlays, drill-downs (touch + mouse).
-- [ ] **6F.5** News image rendering + sector icon fallback.
-- [ ] **6F.6** Supabase RLS test — anon INSERT must fail; SELECT must succeed.
-- [ ] **6F.7** Performance budget — Lighthouse LCP < 2.5s, CLS < 0.1, interaction < 200ms on mobile.
-- [ ] **6F.8** Empty-state + error path — force-fail a Supabase call; UI shows friendly state.
-- [ ] **6F.9** One-week dogfood — use the app for a week. If Telegram + web is enough, skip 6G entirely.
-
-### 6G — Android app (via Expo)
-
-> User already has Expo accounts. Default path: WebView wrapper of the Vercel URL.
-
-- [ ] **6G.1** Pick approach:
-  - **6G.1a (default)** Expo WebView wrapper — single screen `react-native-webview` pointing at Vercel URL. ~1 day work.
-  - **6G.1b** react-native-web shared codebase — rebuild as Expo app sharing components. Only if 6F surfaces UX the web can't deliver (native notifications, biometric unlock, offline mode).
-- [ ] **6G.2** Scaffold Expo app in `mobile/` subdir — `npx create-expo-app mobile`, strip to single WebView screen.
-- [ ] **6G.3** Icon + splash + app name via `app.json`.
-- [ ] **6G.4** Build APK/AAB via EAS Build. Install on personal Android for dogfooding.
-- [ ] **6G.5** Distribution — sideload APK (simplest) or EAS Submit to Play Store.
+- [x] **6F.1** Data freshness — scripts run, Supabase rows + Vercel URL reflect latest data.
+- [x] **6F.2** E2E smoke per tab — all components verified, no console errors.
+- [x] **6F.3** Responsive on real devices — iOS Safari, Android Chrome, desktop verified.
+- [x] **6F.4** Chart interactions — D/W/M toggle, benchmark overlays, drill-downs working.
+- [x] **6F.5** News image rendering + sector icon fallback verified.
+- [x] **6F.6** Supabase RLS — anon INSERT blocked, SELECT works.
+- [x] **6F.7** Performance budget met.
+- [x] **6F.8** Empty-state + error paths handled.
+- [x] **6F.9** Dogfood complete — web app is sufficient; Android deferred to Phase 11.
 
 ---
 
@@ -384,27 +370,26 @@ Legacy commands kept as aliases so existing muscle memory works.
 - Sheet `Savings Balance` → `savings_snapshot.py` → Supabase (`savings_accounts` + `savings_snapshots`) → web app
 - Mirrors investments pipeline exactly: sheet is source of truth, Supabase is read cache for the web app
 
-### 7A — Notion: Savings Context page ⏳ IN PROGRESS
-- [ ] **7A.1** Create Notion page "Savings Context" with account registry (Bank, Account, Type, Owner, Notes), goal notes, pipeline reference
+### 7A — Notion: Savings Context page ⏳ OPEN
+- [ ] **7A.1** Savings account info currently lives inside Agent Config (wrong place). Create dedicated "Savings Context" reference page (consistent with Portfolio Snapshot). Move account registry there. Clean up Agent Config — keep only actual configs + important facts; remove planning/tracking content.
 
-### 7B — Google Sheet: `Savings Balance` tab (already created by user)
+### 7B — Google Sheet: `Savings Balance` tab ✅ COMPLETE
 - [x] **7B.1** Wide-format tab exists: Bank | Account | Type | Owner | April 2026 Balance | May 2026 Balance | …
-- [ ] **7B.2** Confirm `Owner` column present (Personal / Joint) — needed for Personal/Joint filter in app
 
-### 7C — Supabase: migration `0004_savings.sql`
-- [ ] **7C.1** Create `savings_accounts` table (date, bank, account_name, account_type, owner, balance_gbp) + `savings_snapshots` table (date UNIQUE, total, personal_total, joint_total). RLS: public SELECT.
+### 7C — Supabase: migration `0004_savings.sql` ✅ COMPLETE
+- [x] **7C.1** `savings_accounts` + `savings_snapshots` tables created with RLS. Migration at `supabase/migrations/0004_savings.sql`.
 
-### 7D — Python script: `scripts/savings_snapshot.py`
-- [ ] **7D.1** Reads `Savings Balance` tab, parses month column headers → dates (last day of month), pivots wide-format → per-account-per-date rows
-- [ ] **7D.2** Upserts `savings_accounts` on `(date, bank, account_name)`; aggregates → upserts `savings_snapshots` on `date`
-- [ ] **7D.3** Triggers Vercel ISR revalidation after write
-- [ ] **7D.4** Add to `daily_monitor.yml` or as standalone manual dispatch
+### 7D — Python script: `scripts/savings_snapshot.py` ✅ MOSTLY COMPLETE
+- [x] **7D.1** Reads `Savings Balance` tab, parses month column headers → dates (last day of month), pivots wide-format → per-account-per-date rows
+- [x] **7D.2** Upserts `savings_accounts` on `(date, bank, account_name)`; aggregates → upserts `savings_snapshots` on `date`
+- [x] **7D.3** Triggers Vercel ISR revalidation after write
+- [ ] **7D.4** Wire `savings_snapshot.py` into `daily_monitor.yml` close run (alongside `daily_portfolio_snapshot.py`)
 
-### 7E — `supabase_sink.py` additions
-- [ ] **7E.1** `write_savings_accounts(rows)` and `write_savings_snapshot(date, total, personal, joint)` helpers (fail-open pattern)
+### 7E — `supabase_sink.py` additions ✅ COMPLETE
+- [x] **7E.1** `write_savings_accounts(rows)` and `write_savings_snapshot(date, total, personal, joint)` in `scripts/lib/supabase_sink.py`
 
-### 7F — Live bank API ← DEFERRED (last phase)
-> Open Banking / TrueLayer / Plaid auto-refresh. Not in this phase.
+### 7F — Live bank API ← DEFERRED
+> Revolut Open Banking / TrueLayer / Plaid auto-refresh. No direct personal Revolut API exists — requires Open Banking aggregator (TrueLayer/Plaid), both paid in production. Revisit after Phase 12 natural language update layer is in place.
 
 ---
 
@@ -426,6 +411,59 @@ Full budgeting layer: income, fixed costs, discretionary spending, joint vs pers
 
 ---
 
+## Phase 11 — Natural Language Update Layer
+
+> One consistent pattern across all financial domains: tell Claude Fin Assist (mobile) what changed, it writes a structured entry to the right Notion DB, a sync script picks it up and updates Sheet + Supabase + web app. Works for Savings, Pensions, Mortgage, Expenses — anything that needs on-demand balance/transaction updates.
+
+### Architecture
+
+```
+Mobile (claude.ai Fin Assist Project)
+  ↓ "added £500 to Chase" / "pension contribution £300 this month" / "paid mortgage £1,200"
+Claude identifies domain + parses fields → writes to correct Notion DB
+  ↓
+domain_sync.py (GHA daily close run, no-op if nothing unsynced)
+  reads Synced=false rows → updates Sheet → upserts Supabase → marks Synced
+  ↓
+Web app auto-reflects (reads from Supabase)
+```
+
+### Notion pages & DBs per domain
+
+Each domain gets two things: a **reference page** (static context — accounts, goals, notes) and a **transactions DB** (append-only log of user-entered updates).
+
+| Domain | Reference page | Transactions DB |
+|--------|---------------|-----------------|
+| Investments | Portfolio Snapshot (exists) | Not needed — auto-updated by scripts |
+| Savings | Savings Context (7A.1) | Savings Transactions |
+| Pensions | Pensions Context (Phase 8) | Pension Contributions |
+| Mortgage | Mortgage Context (Phase 9) | Mortgage Payments |
+| Expenses | Expenses Context (Phase 10) | Expense Entries |
+
+**Transactions DB shared schema:** Date | Domain | Account/Category | Amount £ | Type | Notes | Synced
+
+### Tasks
+
+- [ ] **11.1** Create all Notion reference pages not yet existing (Savings Context, Pensions Context, Mortgage Context, Expenses Context) — consistent structure per domain
+- [ ] **11.2** Create Notion "Transactions" DB (single shared DB with Domain field, or per-domain DBs — decide at build time)
+- [ ] **11.3** Update Fin Assist Project system prompt — detect any financial update mention, identify domain, extract fields, write to correct Notion DB, confirm back to user
+- [ ] **11.4** Build `scripts/domain_sync.py` (or per-domain scripts) — queries Notion for unsynced rows, routes by domain, updates Sheet + Supabase, marks Synced, triggers Vercel ISR
+- [ ] **11.5** Add to `daily_monitor.yml` close run — no-op if nothing unsynced
+
+---
+
+## Phase 12 — Android App (via Expo)
+
+> Moved from Phase 6G. Web app proven sufficient during dogfood; build Android when native UX is needed (push notifications, offline, biometric).
+
+- [ ] **12.1** Pick approach: WebView wrapper (default, ~1 day) or react-native-web shared codebase (only if native features needed)
+- [ ] **12.2** Scaffold Expo app in `mobile/` — `npx create-expo-app mobile`, strip to single WebView screen pointing at Vercel URL
+- [ ] **12.3** Icon + splash + app name via `app.json`
+- [ ] **12.4** Build APK/AAB via EAS Build, install on personal Android
+- [ ] **12.5** Distribution — sideload APK or EAS Submit to Play Store
+
+---
+
 ## Credentials & Config (current state)
 
 | Item | Status |
@@ -439,7 +477,10 @@ Full budgeting layer: income, fixed costs, discretionary spending, joint vs pers
 
 ## Immediate Next Steps
 
-1. **Pre-Phase-6 housekeeping** — (PH.1) Telegram dedup audit + fix, (PH.2) record Rheinmetall transaction. Do before starting 6A.
-2. **Phase 6A** — Supabase project + schema migration + dual-write wiring. Build order: 6A → 6B → 6C → 6D → 6E → 6F.
-3. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`
-4. **Ongoing** — Validate first Monday 08:00 BST weekly digest v2 production run.
+1. **7D.4** — Wire `savings_snapshot.py` into `daily_monitor.yml` close run
+2. **7A.1** — Create "Savings Context" Notion reference page, move savings info out of Agent Config, clean Config page
+3. **Phase 8** — Pensions tracking
+4. **Phase 9** — Mortgage tracking
+5. **Phase 10** — Budgeting & Expenses
+6. **Phase 11** — Natural language update layer (Claude mobile → Notion → sync across all domains)
+7. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`
