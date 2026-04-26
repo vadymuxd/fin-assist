@@ -2,30 +2,30 @@
 
 import { useMemo, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
-import type { Holding } from "@/lib/queries";
+import { JOINT_SHARE, type SavingsAccount } from "@/lib/queries";
 
-type Dimension = "sector" | "market" | "platform" | "ticker";
+type Dimension = "account_name" | "bank" | "owner";
 
 const dimensionLabels: Record<Dimension, string> = {
-  sector: "Sector",
-  market: "Market",
-  platform: "Platform",
-  ticker: "Ticker",
+  account_name: "Account",
+  bank: "Bank",
+  owner: "Owner",
 };
 
+// Distinct palette — not all one hue
 const palette = [
-  "#2563eb",
-  "#10b981",
-  "#f59e0b",
-  "#8b5cf6",
-  "#f43f5e",
-  "#06b6d4",
-  "#6366f1",
-  "#d946ef",
-  "#14b8a6",
-  "#f97316",
-  "#84cc16",
-  "#0ea5e9",
+  "#6366f1", // indigo
+  "#10b981", // emerald
+  "#f59e0b", // amber
+  "#ef4444", // rose
+  "#8b5cf6", // violet
+  "#06b6d4", // cyan
+  "#f97316", // orange
+  "#ec4899", // pink
+  "#84cc16", // lime
+  "#3b82f6", // blue
+  "#14b8a6", // teal
+  "#a855f7", // purple
 ];
 
 const gbp = new Intl.NumberFormat("en-GB", {
@@ -36,54 +36,38 @@ const gbp = new Intl.NumberFormat("en-GB", {
 
 type Slice = { name: string; value: number; pct: number; color: string };
 
-function bucket(holdings: Holding[], dim: Dimension): Slice[] {
+function bucket(accounts: SavingsAccount[], dim: Dimension): Slice[] {
+  // Fixed colors for Owner dimension so they always match the account table badges
+  const ownerColors: Record<string, string> = { Personal: "#6366f1", Joint: "#10b981" };
+
   const totals: Record<string, number> = {};
-  for (const h of holdings) {
-    const key = (h[dim] as string | null) || "Unknown";
-    const v = Number(h.value_gbp ?? 0);
+  for (const a of accounts) {
+    let key: string;
+    if (dim === "account_name") key = a.account_name;
+    else if (dim === "bank") key = a.bank;
+    else key = a.owner ?? "Personal";
+
+    // Apply 50% share for joint accounts
+    const share = (a.owner ?? "").toLowerCase() === "joint" ? JOINT_SHARE : 1;
+    const v = Number(a.balance_gbp ?? 0) * share;
     if (!Number.isFinite(v) || v <= 0) continue;
     totals[key] = (totals[key] ?? 0) + v;
   }
   const total = Object.values(totals).reduce((a, b) => a + b, 0);
   return Object.entries(totals)
+    .sort(([, a], [, b]) => b - a)
     .map(([name, value], i) => ({
       name,
       value,
       pct: total > 0 ? (value / total) * 100 : 0,
-      color: palette[i % palette.length],
-    }))
-    .sort((a, b) => b.value - a.value)
-    .map((s, i) => ({ ...s, color: palette[i % palette.length] }));
+      color: dim === "owner" ? (ownerColors[name] ?? palette[i % palette.length]) : palette[i % palette.length],
+    }));
 }
 
-export default function AllocationChart({
-  holdings,
-  managed,
-  cash,
-}: {
-  holdings: Holding[];
-  managed?: number | null;
-  cash?: number | null;
-}) {
-  const [dim, setDim] = useState<Dimension>("sector");
+export default function SavingsAllocationChart({ accounts }: { accounts: SavingsAccount[] }) {
+  const [dim, setDim] = useState<Dimension>("account_name");
 
-  const stockSlices = useMemo(() => bucket(holdings, dim), [holdings, dim]);
-
-  // Combine self-managed stocks with managed account and cash as fixed extra slices
-  const chartData = useMemo((): Slice[] => {
-    const offset = stockSlices.length;
-    const extras: Slice[] = [];
-    if (managed && managed > 0) {
-      extras.push({ name: "JP Morgan Managed", value: managed, pct: 0, color: palette[offset % palette.length] });
-    }
-    if (cash && cash > 0) {
-      extras.push({ name: "Cash", value: cash, pct: 0, color: palette[(offset + extras.length) % palette.length] });
-    }
-    const combined = [...stockSlices, ...extras];
-    const grand = combined.reduce((acc, s) => acc + s.value, 0);
-    return combined.map((s) => ({ ...s, pct: grand > 0 ? (s.value / grand) * 100 : 0 }));
-  }, [stockSlices, managed, cash]);
-
+  const chartData = useMemo(() => bucket(accounts, dim), [accounts, dim]);
   const total = useMemo(() => chartData.reduce((acc, d) => acc + d.value, 0), [chartData]);
   const hasData = chartData.length > 0 && total > 0;
 
@@ -91,9 +75,9 @@ export default function AllocationChart({
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Allocation</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Savings Allocation</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            All assets by {dimensionLabels[dim].toLowerCase()}
+            Balance split by {dimensionLabels[dim].toLowerCase()}
           </p>
         </div>
         <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 self-start">
@@ -115,7 +99,7 @@ export default function AllocationChart({
 
       {!hasData ? (
         <div className="h-56 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 text-center px-4">
-          No allocation data yet.
+          No savings data yet.
         </div>
       ) : (
         <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-center">
@@ -159,19 +143,12 @@ export default function AllocationChart({
               {chartData.map((d) => (
                 <li key={d.name} className="flex items-center justify-between gap-3 text-sm">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span
-                      className="w-2.5 h-2.5 rounded-sm shrink-0"
-                      style={{ backgroundColor: d.color }}
-                    />
-                    <span className="truncate text-gray-700 dark:text-gray-300">{d.name}</span>
+                    <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: d.color }} />
+                    <span className="truncate text-gray-700 dark:text-gray-300 capitalize">{d.name}</span>
                   </div>
                   <div className="flex items-center gap-3 shrink-0 tabular-nums">
-                    <span className="text-gray-500 dark:text-gray-400 w-12 text-right">
-                      {d.pct.toFixed(1)}%
-                    </span>
-                    <span className="text-gray-900 dark:text-gray-50 font-medium w-20 text-right">
-                      {gbp.format(d.value)}
-                    </span>
+                    <span className="text-gray-500 dark:text-gray-400 w-12 text-right">{d.pct.toFixed(1)}%</span>
+                    <span className="text-gray-900 dark:text-gray-50 font-medium w-20 text-right">{gbp.format(d.value)}</span>
                   </div>
                 </li>
               ))}

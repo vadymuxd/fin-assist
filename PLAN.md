@@ -330,45 +330,81 @@ Legacy commands kept as aliases so existing muscle memory works.
 - [x] **6C.4** Holdings table — sortable on desktop, card list on mobile, links to drill-down.
 - [x] **6C.5** Per-holding drill-down `/holdings/[ticker]` — name/platform/sector/market chips, P&L, latest alert badge + rationale, recent news with images + sentiment.
 
-### 6D — Tab 2: Insights Feed
+### 6D — Tab 2: Insights Feed ✅ COMPLETE
 
-- [ ] **6D.1** "Today's Discoveries" — latest run ranked by score. Emphasis marker on items that hit Telegram; muted styling on filtered-out.
-- [ ] **6D.2** "Recent Holdings Alerts" — latest ACT/WATCH events; each card links to triggering article(s).
-- [ ] **6D.3** Sector news stream — `news_items` grouped by day, image thumbnails, ticker/sector chip tags.
-- [ ] **6D.4** Historical browse — date picker; past day's discoveries + alerts + news.
-- [ ] **6D.5** Empty state + error handling — friendly message if Supabase returns nothing or fails.
+- [x] **6D.1** "Today's Discoveries" — latest run ranked by score. Emphasis marker on items that hit Telegram; muted styling on filtered-out.
+- [x] **6D.2** "Recent Holdings Alerts" — latest ACT/WATCH events; each card links to triggering article(s).
+- [x] **6D.3** Sector news stream — `news_items` grouped by day, image thumbnails, ticker/sector chip tags.
+- [x] **6D.4** Historical browse — date picker; past day's discoveries + alerts + news.
+- [x] **6D.5** Empty state + error handling — friendly message if Supabase returns nothing or fails.
 
-### 6E — Testing & validation (web)
+### 6E — Savings & Net Worth UI ⏳ IN PROGRESS
 
-> Gate 6F on a green 6E. No Android build until the web product is proven good.
+> Extends the app to 4 tabs: Investments | Savings | Net Worth | Insights. Builds on Phase 7 data layer.
 
-- [ ] **6E.1** Data freshness — run each dual-write script; confirm Supabase rows + live Vercel URL reflect latest run.
-- [ ] **6E.2** E2E smoke per tab — click through every component on prod URL, no console errors.
-- [ ] **6E.3** Responsive on real devices — iOS Safari, Android Chrome, desktop Chrome/Safari. Screenshots at 375/768/1440.
-- [ ] **6E.4** Chart interactions — D/W/M toggle, benchmark overlays, drill-downs (touch + mouse).
-- [ ] **6E.5** News image rendering + sector icon fallback.
-- [ ] **6E.6** Supabase RLS test — anon INSERT must fail; SELECT must succeed.
-- [ ] **6E.7** Performance budget — Lighthouse LCP < 2.5s, CLS < 0.1, interaction < 200ms on mobile.
-- [ ] **6E.8** Empty-state + error path — force-fail a Supabase call; UI shows friendly state.
-- [ ] **6E.9** One-week dogfood — use the app for a week. If Telegram + web is enough, skip 6F entirely.
+- [x] **6E.0** Rename "Dashboard" → "Investments" in nav + page heading. Add Ticker dimension to Allocation chart.
+- [ ] **6E.1** Add Savings + Net Worth tabs to nav (`PiggyBank` / `TrendingUp` icons, lucide-react).
+- [ ] **6E.2** Savings page `/savings` — emerald/teal theme. KPI cards (total/personal/joint + deltas), growth line chart (All/Personal/Joint toggle, D/W/M), allocation donut (Bank/Type/Owner), accounts table.
+- [ ] **6E.3** Net Worth page `/net-worth` — violet theme. KPI cards, combined line chart (net worth + savings + investments), savings-vs-investments donut.
+- [ ] **6E.4** `getSavingsSnapshots()`, `getSavingsAccounts()`, `computeSavingsDeltas()` in `queries.ts`.
 
-### 6F — Android app (via Expo)
+### 6F — Testing & validation (web)
+
+> Gate 6G on a green 6F. No Android build until the web product is proven good.
+
+- [ ] **6F.1** Data freshness — run each dual-write script; confirm Supabase rows + live Vercel URL reflect latest run.
+- [ ] **6F.2** E2E smoke per tab — click through every component on prod URL, no console errors.
+- [ ] **6F.3** Responsive on real devices — iOS Safari, Android Chrome, desktop Chrome/Safari. Screenshots at 375/768/1440.
+- [ ] **6F.4** Chart interactions — D/W/M toggle, benchmark overlays, drill-downs (touch + mouse).
+- [ ] **6F.5** News image rendering + sector icon fallback.
+- [ ] **6F.6** Supabase RLS test — anon INSERT must fail; SELECT must succeed.
+- [ ] **6F.7** Performance budget — Lighthouse LCP < 2.5s, CLS < 0.1, interaction < 200ms on mobile.
+- [ ] **6F.8** Empty-state + error path — force-fail a Supabase call; UI shows friendly state.
+- [ ] **6F.9** One-week dogfood — use the app for a week. If Telegram + web is enough, skip 6G entirely.
+
+### 6G — Android app (via Expo)
 
 > User already has Expo accounts. Default path: WebView wrapper of the Vercel URL.
 
-- [ ] **6F.1** Pick approach:
-  - **6F.1a (default)** Expo WebView wrapper — single screen `react-native-webview` pointing at Vercel URL. ~1 day work.
-  - **6F.1b** react-native-web shared codebase — rebuild as Expo app sharing components. Only if 6E surfaces UX the web can't deliver (native notifications, biometric unlock, offline mode).
-- [ ] **6F.2** Scaffold Expo app in `mobile/` subdir — `npx create-expo-app mobile`, strip to single WebView screen.
-- [ ] **6F.3** Icon + splash + app name via `app.json`.
-- [ ] **6F.4** Build APK/AAB via EAS Build. Install on personal Android for dogfooding.
-- [ ] **6F.5** Distribution — sideload APK (simplest) or EAS Submit to Play Store.
+- [ ] **6G.1** Pick approach:
+  - **6G.1a (default)** Expo WebView wrapper — single screen `react-native-webview` pointing at Vercel URL. ~1 day work.
+  - **6G.1b** react-native-web shared codebase — rebuild as Expo app sharing components. Only if 6F surfaces UX the web can't deliver (native notifications, biometric unlock, offline mode).
+- [ ] **6G.2** Scaffold Expo app in `mobile/` subdir — `npx create-expo-app mobile`, strip to single WebView screen.
+- [ ] **6G.3** Icon + splash + app name via `app.json`.
+- [ ] **6G.4** Build APK/AAB via EAS Build. Install on personal Android for dogfooding.
+- [ ] **6G.5** Distribution — sideload APK (simplest) or EAS Submit to Play Store.
 
 ---
 
-## Phase 7 — Savings
+## Phase 7 — Savings Data Layer ⏳ IN PROGRESS
 
-Extend the system to track savings accounts (Monzo, Chase, Starling, Revolut pots). Goals, interest rates, balances, progress toward targets.
+> Track savings accounts (Monzo, Chase, Starling, Revolut pots, ISAs). Source: `Savings Balance` sheet tab (wide time-series: Bank | Account | Type | Owner | [Month Year Balance] …). UI built in Phase 6E.
+
+### Architecture
+- Sheet `Savings Balance` → `savings_snapshot.py` → Supabase (`savings_accounts` + `savings_snapshots`) → web app
+- Mirrors investments pipeline exactly: sheet is source of truth, Supabase is read cache for the web app
+
+### 7A — Notion: Savings Context page ⏳ IN PROGRESS
+- [ ] **7A.1** Create Notion page "Savings Context" with account registry (Bank, Account, Type, Owner, Notes), goal notes, pipeline reference
+
+### 7B — Google Sheet: `Savings Balance` tab (already created by user)
+- [x] **7B.1** Wide-format tab exists: Bank | Account | Type | Owner | April 2026 Balance | May 2026 Balance | …
+- [ ] **7B.2** Confirm `Owner` column present (Personal / Joint) — needed for Personal/Joint filter in app
+
+### 7C — Supabase: migration `0004_savings.sql`
+- [ ] **7C.1** Create `savings_accounts` table (date, bank, account_name, account_type, owner, balance_gbp) + `savings_snapshots` table (date UNIQUE, total, personal_total, joint_total). RLS: public SELECT.
+
+### 7D — Python script: `scripts/savings_snapshot.py`
+- [ ] **7D.1** Reads `Savings Balance` tab, parses month column headers → dates (last day of month), pivots wide-format → per-account-per-date rows
+- [ ] **7D.2** Upserts `savings_accounts` on `(date, bank, account_name)`; aggregates → upserts `savings_snapshots` on `date`
+- [ ] **7D.3** Triggers Vercel ISR revalidation after write
+- [ ] **7D.4** Add to `daily_monitor.yml` or as standalone manual dispatch
+
+### 7E — `supabase_sink.py` additions
+- [ ] **7E.1** `write_savings_accounts(rows)` and `write_savings_snapshot(date, total, personal, joint)` helpers (fail-open pattern)
+
+### 7F — Live bank API ← DEFERRED (last phase)
+> Open Banking / TrueLayer / Plaid auto-refresh. Not in this phase.
 
 ---
 

@@ -10,7 +10,7 @@ breaks the Google Sheets pipeline.
 import os
 import logging
 import requests as _requests
-from datetime import datetime, timezone
+from datetime import datetime, timedelta, timezone
 from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
@@ -164,9 +164,14 @@ def write_trend_snapshot(snapshot_date: str, data: dict) -> bool:
 
 def write_news_items(items: list[dict]) -> bool:
     """
-    Upsert news articles. Each dict must have 'id' and 'url'.
+    Upsert news articles. Each dict must have 'id', 'url', and 'source_type'
+    ('per_holding' or 'market_scan'). Defensive default of 'market_scan' is
+    applied if missing — per_holding writes must opt in explicitly so they
+    don't accidentally pollute the user-facing news feed.
     Silently skips duplicates via upsert on 'id'.
     """
+    for item in items:
+        item.setdefault('source_type', 'market_scan')
     ok = _upsert('news_items', items, on_conflict='id')
     if ok:
         _trigger_revalidate()
@@ -176,3 +181,65 @@ def write_news_items(items: list[dict]) -> bool:
 def write_sectors(entries: list[dict]) -> bool:
     """Upsert ticker→sector/market lookup rows. Each dict must have 'ticker'."""
     return _upsert('sectors', entries, on_conflict='ticker')
+
+
+def write_savings_accounts(rows: list[dict]) -> bool:
+    """
+    Upsert per-account savings balance rows.
+    Each dict must have: date, bank, account_name, account_type, owner, balance_gbp.
+    Unique constraint: (date, bank, account_name).
+    """
+    ok = _upsert(
+        'savings_accounts',
+        rows,
+        on_conflict='date,bank,account_name',
+    )
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
+def write_savings_snapshot(date: str, total: float, personal: float, joint: float) -> bool:
+    """
+    Upsert one daily savings aggregate row.
+    date: ISO date string (YYYY-MM-DD).
+    """
+    row = {
+        'date': date,
+        'total': total,
+        'personal_total': personal,
+        'joint_total': joint,
+    }
+    ok = _upsert('savings_snapshots', [row], on_conflict='date')
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
+def purge_stale_market_scan_news(days: int = 30) -> int:
+    """
+    Delete market_scan news older than `days`. Per-holding news is kept
+    indefinitely so users can scroll back. Market-scan articles only matter
+    while they're recent enough to inform discovery scoring; stale rows just
+    bloat the table and never re-surface to the user (frontend filters them).
+    Returns count of rows deleted.
+    """
+    client = _get_client()
+    if not client:
+        return 0
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    try:
+        resp = (
+            client.table('news_items')
+            .delete()
+            .eq('source_type', 'market_scan')
+            .lt('published_at', cutoff)
+            .execute()
+        )
+        n = len(resp.data or [])
+        if n:
+            logger.info(f'Purged {n} stale market_scan news rows (older than {days}d)')
+        return n
+    except Exception as e:
+        logger.warning(f'Stale news purge failed: {e}')
+        return 0
