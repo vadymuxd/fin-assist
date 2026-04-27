@@ -464,6 +464,40 @@ Each domain gets two things: a **reference page** (static context — accounts, 
 
 ---
 
+## Phase 13 — Custom Chat Interface (In-App Assistant)
+
+> Replace both Telegram bot and Claude mobile (claude.ai Project) with a native chat UI built into the Fin Assist Android app. One interface, full financial context, push notifications powered by Expo.
+
+### Vision
+
+Instead of switching between Telegram (for alerts) and claude.ai (for conversations), everything lives in the app:
+- Chat with Fin Assist directly inside the Android app
+- Push notifications replace Telegram alerts (holdings ACT events, weekly digest, discoveries)
+- Full financial context loaded per message (Supabase + Notion memory)
+- Same Claude API brain, but owned and embedded — no dependency on external chat apps
+
+### Research questions (design session needed before build)
+
+- **Push notifications**: Expo Push Notifications vs FCM direct — complexity vs control
+- **Chat backend**: Extend Cloudflare Worker (already has Claude API + Notion context logic) vs new endpoint
+- **Context loading**: Mirror Cloudflare Worker approach (fetch Agent Config + Memory Index + Portfolio Snapshot per message) or use Supabase directly
+- **Message persistence**: Store chat history in Supabase for continuity across sessions, or stateless per message
+- **Telegram deprecation**: Keep Telegram as fallback during transition or cut cleanly once app push notifications are stable
+- **Claude Project deprecation**: App chat replaces claude.ai mobile Project — update system prompt + memory rules accordingly
+
+### Tasks (to be detailed after design session)
+
+- [ ] **13.1** Design session — answer research questions, lock architecture
+- [ ] **13.2** Expo push notification setup — register device tokens, test delivery
+- [ ] **13.3** Migrate alert delivery: `holdings_monitor.py`, `prospect_discovery.py`, `weekly_digest.py` push to Expo instead of (or alongside) Telegram
+- [ ] **13.4** Build chat UI in web app (`/chat` route) — message thread, input, streaming response
+- [ ] **13.5** Chat API endpoint — extend Cloudflare Worker or new Next.js API route; loads full financial context, calls Claude API, streams response
+- [ ] **13.6** Message history persistence in Supabase (`chat_messages` table)
+- [ ] **13.7** Android WebView deep-link to `/chat` as default landing or tab
+- [ ] **13.8** Deprecate Telegram bot + Claude mobile Project once app chat is stable
+
+---
+
 ## Credentials & Config (current state)
 
 | Item | Status |
