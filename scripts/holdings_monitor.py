@@ -147,8 +147,12 @@ def get_or_create_alerts_log(sh):
     return ws
 
 
-def read_sent_recent(ws, hours=6):
-    """Return set of tickers alerted within the last `hours` hours."""
+def read_sent_recent(ws, hours=48):
+    """
+    Return set of (ticker, headlines_hash) pairs alerted within the last `hours`.
+    Dedup logic: same ticker + same hash = same event, suppress.
+    Same ticker + different hash = new event, allow through.
+    """
     sent = set()
     cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
     for row in ws.get_all_values()[1:]:
@@ -160,7 +164,7 @@ def read_sent_recent(ws, hours=6):
         except ValueError:
             continue
         if run_time >= cutoff:
-            sent.add(row[1].strip())
+            sent.add((row[1].strip(), row[5].strip()))  # (ticker, headlines_hash)
     return sent
 
 
@@ -470,14 +474,15 @@ def main(mode):
 
     log_ws = get_or_create_alerts_log(sh)
     day = london_today()
-    already_sent = read_sent_recent(log_ws, hours=6)
+    already_sent = read_sent_recent(log_ws, hours=48)
 
     new_alerts, suppressed = [], []
     for r in alerts:
-        (suppressed if r['ticker'] in already_sent else new_alerts).append(r)
+        key = (r['ticker'], r['headlines_hash'])
+        (suppressed if key in already_sent else new_alerts).append(r)
 
     for r in suppressed:
-        print(f"  [dedup] {r['ticker']} — already alerted within 6h; skipping")
+        print(f"  [dedup] {r['ticker']} — same event already alerted within 48h; skipping")
 
     if not new_alerts:
         print(f"\n[auto] {len(alerts)} ACT event(s), all already alerted today — staying silent.")

@@ -178,46 +178,28 @@ _RETURN_CACHE = {}
 
 def prefetch_returns(symbols):
     """
-    Batched 7-day return fetch. Fills _RETURN_CACHE with {symbol: pct or None}.
-    One yf.download() call covers all symbols to avoid 429 rate-limits.
+    Per-symbol 7-day return via yf.Ticker.history() — avoids MultiIndex
+    column-layout ambiguity that breaks batch yf.download() across mixed
+    exchanges (^GSPC, ^FTSE, SGLN.L, etc.) in newer yfinance versions.
     """
     todo = sorted({s for s in symbols if s and s not in _RETURN_CACHE})
     if not todo:
         return
-    try:
-        data = yf.download(
-            todo,
-            period='10d',
-            auto_adjust=True,
-            progress=False,
-            threads=False,
-            group_by='ticker',
-        )
-    except Exception as e:
-        print(f"    yf.download batch failed: {e}")
-        data = None
-
     for sym in todo:
         pct = None
         try:
-            if data is None or data.empty:
-                closes = None
-            elif len(todo) == 1:
-                closes = data['Close'].dropna() if 'Close' in data else None
-            else:
-                # MultiIndex columns: (ticker, field)
-                try:
-                    closes = data[sym]['Close'].dropna()
-                except Exception:
-                    closes = None
-            if closes is not None and len(closes) >= 2:
-                first = float(closes.iloc[0])
-                last  = float(closes.iloc[-1])
-                if first != 0:
-                    pct = (last - first) / first * 100
+            hist = yf.Ticker(sym).history(period='10d', auto_adjust=True)
+            if not hist.empty and 'Close' in hist.columns:
+                closes = hist['Close'].dropna()
+                if len(closes) >= 2:
+                    first = float(closes.iloc[0])
+                    last  = float(closes.iloc[-1])
+                    if first != 0:
+                        pct = (last - first) / first * 100
         except Exception as e:
-            print(f"    7d return parse failed for {sym}: {e}")
+            print(f"    7d return fetch failed for {sym}: {e}")
         _RETURN_CACHE[sym] = pct
+        print(f"    {sym}: {f'{pct:.2f}%' if pct is not None else 'n/a'}")
 
 
 def seven_day_return_pct(symbol):
@@ -329,7 +311,7 @@ def classify_holding(h):
         return ' · '.join(parts)
 
     if level == 'ACT':
-        return ('CONSIDER_SELL', '📉', _note(event or h.get('rationale', '')[:40]))
+        return ('CONSIDER_SELL', '📉', _note(event or h.get('rationale', '')))
 
     if level == 'WATCH':
         is_earnings = 'earning' in (event or '').lower()
@@ -338,9 +320,9 @@ def classify_holding(h):
 
     # alert_level == NONE
     if score <= 4:
-        return ('CONSIDER_SELL', '📉', _note(h.get('rationale', '')[:40] or 'weak signal'))
+        return ('CONSIDER_SELL', '📉', _note(h.get('rationale', '') or 'weak signal'))
     if score >= 8:
-        return ('BUY_MORE', '📈', _note(h.get('rationale', '')[:40] or 'strong signal'))
+        return ('BUY_MORE', '📈', _note(h.get('rationale', '') or 'strong signal'))
     return (None, None, None)   # STEADY — suppressed
 
 
@@ -419,13 +401,12 @@ def build_holdings_section(holdings):
     def _fmt_bucket(title, rows):
         if not rows:
             return None
-        block = [f'\n{title}', '<pre>']
+        block = [f'\n{title}']
         for ticker, score, icon, note in rows:
-            t    = ticker.ljust(6)
-            s    = f'{score:.0f}' if float(score).is_integer() else f'{score:.1f}'
-            note_trunc = note[:42] if note else ''
-            block.append(f'{t} {s:>3}  {icon} {note_trunc}')
-        block.append('</pre>')
+            s = f'{score:.0f}' if float(score).is_integer() else f'{score:.1f}'
+            block.append(f'{icon} <b>{escape_html(ticker)}</b>  {s}/10')
+            if note:
+                block.append(f'  <i>{escape_html(note)}</i>')
         return '\n'.join(block)
 
     for title, key in [
@@ -471,7 +452,11 @@ def build_sector_section(holdings):
         if etf and sector in sector_value:
             etf_returns[sector] = seven_day_return_pct(etf)
 
-    lines = ['━━━ <b>SECTOR CONTEXT</b> ━━━', '<pre>']
+    lines = [
+        '━━━ <b>SECTOR CONTEXT</b> ━━━',
+        '<i>Your allocation % · benchmark ETF 7d return</i>',
+        '<pre>',
+    ]
     sorted_sectors = sorted(sector_value.items(), key=lambda x: -x[1])
     warn_sectors   = []
     for sector, value in sorted_sectors:
@@ -482,9 +467,14 @@ def build_sector_section(holdings):
         if pct_alloc >= SECTOR_CONCENTRATION_WARN:
             warn_sectors.append(sector)
         etf_pct   = etf_returns.get(sector)
-        etf_str   = f'{etf} {pct_str(etf_pct)}' if etf and etf_pct is not None else (f'{etf} n/a' if etf else '')
-        name      = f'{icon} {sector}'.ljust(15)
-        lines.append(f'{name} {pct_alloc:>4.0f}%{warn} {etf_str}')
+        if etf and etf_pct is not None:
+            etf_str = f'{etf} {pct_str(etf_pct)}'
+        elif etf:
+            etf_str = f'{etf}  —'
+        else:
+            etf_str = ''
+        name = f'{icon} {sector}'.ljust(15)
+        lines.append(f'{name} {pct_alloc:>4.0f}%{warn}  {etf_str}')
     lines.append('</pre>')
 
     if warn_sectors:
