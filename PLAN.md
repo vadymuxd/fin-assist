@@ -362,7 +362,7 @@ Legacy commands kept as aliases so existing muscle memory works.
 
 ---
 
-## Phase 7 — Savings Data Layer ⏳ IN PROGRESS
+## Phase 7 — Savings Data Layer ✅ COMPLETE
 
 > Track savings accounts (Monzo, Chase, Starling, Revolut pots, ISAs). Source: `Savings Balance` sheet tab (wide time-series: Bank | Account | Type | Owner | [Month Year Balance] …). UI built in Phase 6E.
 
@@ -379,11 +379,11 @@ Legacy commands kept as aliases so existing muscle memory works.
 ### 7C — Supabase: migration `0004_savings.sql` ✅ COMPLETE
 - [x] **7C.1** `savings_accounts` + `savings_snapshots` tables created with RLS. Migration at `supabase/migrations/0004_savings.sql`.
 
-### 7D — Python script: `scripts/savings_snapshot.py` ✅ MOSTLY COMPLETE
+### 7D — Python script: `scripts/savings_snapshot.py` ✅ COMPLETE
 - [x] **7D.1** Reads `Savings Balance` tab, parses month column headers → dates (last day of month), pivots wide-format → per-account-per-date rows
 - [x] **7D.2** Upserts `savings_accounts` on `(date, bank, account_name)`; aggregates → upserts `savings_snapshots` on `date`
 - [x] **7D.3** Triggers Vercel ISR revalidation after write
-- [ ] **7D.4** Wire `savings_snapshot.py` into `daily_monitor.yml` close run (alongside `daily_portfolio_snapshot.py`)
+- ~~**7D.4**~~ Wiring into `daily_monitor.yml` dropped — superseded by Phase 11 unified sync script that covers all domains consistently
 
 ### 7E — `supabase_sink.py` additions ✅ COMPLETE
 - [x] **7E.1** `write_savings_accounts(rows)` and `write_savings_snapshot(date, total, personal, joint)` in `scripts/lib/supabase_sink.py`
@@ -444,11 +444,11 @@ Each domain gets two things: a **reference page** (static context — accounts, 
 
 ### Tasks
 
-- [ ] **11.1** Create all Notion reference pages not yet existing (Savings Context, Pensions Context, Mortgage Context, Expenses Context) — consistent structure per domain
-- [ ] **11.2** Create Notion "Transactions" DB (single shared DB with Domain field, or per-domain DBs — decide at build time)
-- [ ] **11.3** Update Fin Assist Project system prompt — detect any financial update mention, identify domain, extract fields, write to correct Notion DB, confirm back to user
-- [ ] **11.4** Build `scripts/domain_sync.py` (or per-domain scripts) — queries Notion for unsynced rows, routes by domain, updates Sheet + Supabase, marks Synced, triggers Vercel ISR
-- [ ] **11.5** Add to `daily_monitor.yml` close run — no-op if nothing unsynced
+- [ ] **11.1** Create remaining Notion reference pages (Pensions Context, Mortgage Context, Expenses Context) — Savings Context already done (7A.1)
+- [ ] **11.2** Create Notion "Transactions" DB — single shared DB with Domain field covering all financial domains
+- [ ] **11.3** Update Fin Assist Project system prompt — detect any financial update mention, identify domain, extract fields, write to Transactions DB, confirm back to user
+- [ ] **11.4** Build `scripts/domain_sync.py` — **single comprehensive script replacing all per-domain snapshot scripts**. Runs daily in `daily_monitor.yml` close run. Checks Notion Transactions DB for unsynced entries across ALL domains (Investments, Savings, Pensions, Mortgage, Expenses), routes each row to the correct Sheet tab + Supabase tables, marks Synced, triggers Vercel ISR. No-op if nothing unsynced. Supersedes `savings_snapshot.py` for new data entry — existing scripts (e.g. `daily_portfolio_snapshot.py`) still handle auto-sourced data.
+- [ ] **11.5** Add `domain_sync.py` to `daily_monitor.yml` close run alongside `daily_portfolio_snapshot.py`
 
 ---
 
@@ -477,8 +477,7 @@ Each domain gets two things: a **reference page** (static context — accounts, 
 
 ## Immediate Next Steps
 
-1. **7D.4** — Wire `savings_snapshot.py` into `daily_monitor.yml` close run
-2. **Phase 8** — Pensions tracking
+1. **Phase 8** — Pensions tracking
 3. **Phase 8** — Pensions tracking
 4. **Phase 9** — Mortgage tracking
 5. **Phase 10** — Budgeting & Expenses
