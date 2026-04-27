@@ -370,8 +370,8 @@ Legacy commands kept as aliases so existing muscle memory works.
 - Sheet `Savings Balance` → `savings_snapshot.py` → Supabase (`savings_accounts` + `savings_snapshots`) → web app
 - Mirrors investments pipeline exactly: sheet is source of truth, Supabase is read cache for the web app
 
-### 7A — Notion: Savings Context page ⏳ OPEN
-- [ ] **7A.1** Savings account info currently lives inside Agent Config (wrong place). Create dedicated "Savings Context" reference page (consistent with Portfolio Snapshot). Move account registry there. Clean up Agent Config — keep only actual configs + important facts; remove planning/tracking content.
+### 7A — Notion: Savings Context page ✅ COMPLETE
+- [x] **7A.1** Savings Context page created under Reference. Account registry, data pipeline, goals, sheet column notes. Moved out of Agent Config. Config reference table updated.
 
 ### 7B — Google Sheet: `Savings Balance` tab ✅ COMPLETE
 - [x] **7B.1** Wide-format tab exists: Bank | Account | Type | Owner | April 2026 Balance | May 2026 Balance | …
@@ -478,7 +478,7 @@ Each domain gets two things: a **reference page** (static context — accounts, 
 ## Immediate Next Steps
 
 1. **7D.4** — Wire `savings_snapshot.py` into `daily_monitor.yml` close run
-2. **7A.1** — Create "Savings Context" Notion reference page, move savings info out of Agent Config, clean Config page
+2. **Phase 8** — Pensions tracking
 3. **Phase 8** — Pensions tracking
 4. **Phase 9** — Mortgage tracking
 5. **Phase 10** — Budgeting & Expenses
