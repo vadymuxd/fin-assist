@@ -124,9 +124,10 @@ export default function NetWorthKpiCards({ data }: { data: NetWorthPoint[] }) {
               as of {shortDate(latest.date)}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:gap-6">
+          <div className="grid grid-cols-3 gap-4 sm:gap-6">
             <BreakdownChip label="Investments" value={latest.investments} total={latest.net_worth} color="#2563eb" />
             <BreakdownChip label="Savings" value={latest.savings} total={latest.net_worth} color="#10b981" />
+            <BreakdownChip label="Pensions" value={latest.pensions} total={latest.net_worth} color="#f59e0b" />
           </div>
         </div>
       </div>

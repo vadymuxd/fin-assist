@@ -330,6 +330,83 @@ export function computeSavingsDeltas(
   return { latest, daily, wow, mom, ytd };
 }
 
+// ─── Pensions ─────────────────────────────────────────────────────────────────
+
+export type PensionSnapshot = {
+  date: string;
+  total: number;
+};
+
+export type PensionAccount = {
+  id: number;
+  date: string;
+  provider: string;
+  account_name: string;
+  account_type: string | null;
+  balance_gbp: number;
+};
+
+export type PensionDelta = { absolute: number; pct: number; fromDate: string };
+
+export type PensionDeltasResult = {
+  latest: PensionSnapshot;
+  daily: PensionDelta | null;
+  wow: PensionDelta | null;
+  mom: PensionDelta | null;
+  ytd: PensionDelta | null;
+};
+
+export async function getPensionSnapshots(): Promise<PensionSnapshot[]> {
+  const { data, error } = await supabase
+    .from("pension_snapshots")
+    .select("date, total")
+    .order("date", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+export async function getPensionAccounts(): Promise<PensionAccount[]> {
+  const latest = await supabase
+    .from("pension_snapshots")
+    .select("date")
+    .order("date", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+  if (!latest.data) return [];
+  const { data, error } = await supabase
+    .from("pension_accounts")
+    .select("id, date, provider, account_name, account_type, balance_gbp")
+    .eq("date", latest.data.date)
+    .order("balance_gbp", { ascending: false });
+  if (error) throw error;
+  return data ?? [];
+}
+
+function pensionDelta(latest: PensionSnapshot, prev: PensionSnapshot | null): PensionDelta | null {
+  if (!prev) return null;
+  const absolute = latest.total - prev.total;
+  const pct = prev.total === 0 ? 0 : (absolute / prev.total) * 100;
+  return { absolute, pct, fromDate: prev.date };
+}
+
+function findPensionOnOrBefore(snapshots: PensionSnapshot[], targetISO: string): PensionSnapshot | null {
+  const candidates = snapshots.filter((s) => s.date <= targetISO);
+  return candidates.length === 0 ? null : candidates[candidates.length - 1];
+}
+
+export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDeltasResult | null {
+  if (snapshots.length === 0) return null;
+  const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = sorted[sorted.length - 1];
+  const prior = sorted.slice(0, -1);
+  const daily = sorted.length >= 2 ? pensionDelta(latest, sorted[sorted.length - 2]) : null;
+  const wow = pensionDelta(latest, findPensionOnOrBefore(prior, daysAgoISO(7)));
+  const mom = pensionDelta(latest, findPensionOnOrBefore(prior, daysAgoISO(30)));
+  const yearStart = `${new Date().getUTCFullYear()}-01-01`;
+  const ytd = pensionDelta(latest, findPensionOnOrBefore(prior, yearStart));
+  return { latest, daily, wow, mom, ytd };
+}
+
 // ─── Net Worth ────────────────────────────────────────────────────────────────
 
 export type NetWorthPoint = {
@@ -337,27 +414,32 @@ export type NetWorthPoint = {
   net_worth: number;
   investments: number;
   savings: number;
+  pensions: number;
 };
 
 export async function getNetWorthData(): Promise<NetWorthPoint[]> {
-  const [{ data: inv }, { data: sav }] = await Promise.all([
+  const [{ data: inv }, { data: sav }, { data: pen }] = await Promise.all([
     supabase.from("portfolio_snapshots").select("date, grand_total").order("date", { ascending: true }),
     supabase.from("savings_snapshots").select("date, total, personal_total, joint_total").order("date", { ascending: true }),
+    supabase.from("pension_snapshots").select("date, total").order("date", { ascending: true }),
   ]);
   if (!inv || !sav || sav.length === 0 || !inv.length) return [];
-  // For each savings snapshot (month-end), pair with the closest investment snapshot
-  // on or before that date. Savings = Vadym's share (personal + 50% of joint).
+  // For each savings snapshot (month-end), pair with the closest investment and pension
+  // snapshots on or before that date. Savings = Vadym's share (personal + 50% of joint).
   return sav
     .map((s) => {
       const candidates = inv.filter((i) => i.date <= s.date);
       if (candidates.length === 0) return null;
       const closest = candidates[candidates.length - 1];
       const savingsEff = effectiveSavingsTotal(s as SavingsSnapshot);
+      const penCandidates = (pen ?? []).filter((p) => p.date <= s.date);
+      const pensionTotal = penCandidates.length > 0 ? Number(penCandidates[penCandidates.length - 1].total) : 0;
       return {
         date: s.date,
         investments: closest.grand_total,
         savings: savingsEff,
-        net_worth: closest.grand_total + savingsEff,
+        pensions: pensionTotal,
+        net_worth: closest.grand_total + savingsEff + pensionTotal,
       };
     })
     .filter((p): p is NetWorthPoint => p !== null);

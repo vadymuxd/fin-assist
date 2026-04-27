@@ -3,13 +3,24 @@ market_sources.py
 
 Unified data fetchers for holdings_monitor.py and prospect_discovery.py.
 
-Discovery sources (prospect_discovery.py) — weighted aggregate scoring:
-  - Alpha Vantage NEWS_SENTIMENT market scan  — news articles with built-in sentiment (weight 3)
-  - Marketaux news scan                       — independent sentiment + entity extraction (weight 2)
-  - Yahoo Finance trending                    — volume/attention signal (weight 1)
+Two distinct data flows write to news_items, separated by `source_type`:
 
-Per-ticker scoring (both scripts):
-  - Finnhub company-news             — recent headlines per ticker (free tier)
+  per_holding   — ticker-specific fetches (Finnhub, yfinance) keyed to a
+                  single holding. Feeds the user-facing news feed in /insights
+                  and the Telegram event check in holdings_monitor.py.
+  market_scan   — broad market sweeps (Alpha Vantage NEWS_SENTIMENT,
+                  Marketaux). Feeds prospect_discovery scoring. Articles can
+                  be old or tangentially tagged, so they are intentionally
+                  excluded from the user-facing feed (frontend filters by
+                  source_type='per_holding' AND published_at within 14d).
+
+Discovery sources (weighted aggregate scoring in prospect_discovery.py):
+  - Alpha Vantage NEWS_SENTIMENT market scan  — sentiment + relevance (weight 3)
+  - Marketaux news scan                       — entity sentiment (weight 2)
+  - Yahoo Finance trending                    — attention signal (weight 1)
+
+Per-ticker scoring (holdings_monitor.py + prospect_discovery.py):
+  - Finnhub company-news             — recent headlines per ticker
   - Alpha Vantage NEWS_SENTIMENT     — per-ticker sentiment when Finnhub 403s
   - yfinance                         — analyst info, price targets, LSE/EU news
 
@@ -208,6 +219,7 @@ def fetch_av_market_sentiment(stopwords, limit=50):
                     'published_at': published_at,
                     'tickers':      article_tickers,
                     'source':       'alphavantage',
+                    'source_type':  'market_scan',
                     'title':        title,
                     'url':          url,
                     'image_url':    image_url,
@@ -301,6 +313,7 @@ def fetch_marketaux_news(stopwords, limit=50):
                     'published_at': published_at,
                     'tickers':      article_tickers,
                     'source':       'marketaux',
+                    'source_type':  'market_scan',
                     'title':        title,
                     'url':          url,
                     'image_url':    image_url,
@@ -555,6 +568,7 @@ def fetch_ticker_context(symbol, hours=24, holding_ticker=None):
                 'published_at': published_at,
                 'tickers':      [holding_ticker],
                 'source':       item.get('source', 'finnhub'),
+                'source_type':  'per_holding',
                 'title':        item.get('headline', ''),
                 'url':          url,
                 'image_url':    item.get('image') or None,
@@ -599,10 +613,27 @@ def fetch_yfinance_context(symbol, holding_ticker=None):
                 headlines.append({'headline': title, 'source': 'yfinance', 'datetime': 0})
 
             if holding_ticker and url:
-                pub_ts = item.get('providerPublishTime')
-                published_at = (
-                    datetime.fromtimestamp(pub_ts, tz=timezone.utc).isoformat()
-                    if pub_ts else None
+                # Newer yfinance shape: content.pubDate is ISO; legacy
+                # item.providerPublishTime was a unix epoch.
+                pub_iso = content.get('pubDate') or content.get('displayTime')
+                published_at = None
+                if pub_iso:
+                    try:
+                        published_at = datetime.fromisoformat(
+                            str(pub_iso).replace('Z', '+00:00')
+                        ).isoformat()
+                    except (ValueError, TypeError):
+                        published_at = None
+                if not published_at:
+                    pub_ts = item.get('providerPublishTime')
+                    if pub_ts:
+                        published_at = datetime.fromtimestamp(
+                            pub_ts, tz=timezone.utc
+                        ).isoformat()
+                publisher = (
+                    (content.get('provider') or {}).get('displayName')
+                    or item.get('publisher')
+                    or 'yfinance'
                 )
                 thumb = content.get('thumbnail') or item.get('thumbnail') or {}
                 image_url = None
@@ -611,12 +642,13 @@ def fetch_yfinance_context(symbol, holding_ticker=None):
                     image_url = resolutions[-1].get('url')
                 elif thumb.get('originalUrl'):
                     image_url = thumb['originalUrl']
-                snippet = (content.get('summary') or '')[:500]
+                snippet = (content.get('summary') or content.get('description') or '')[:500]
                 news_rows.append({
                     'id':           hashlib.sha1(url.encode()).hexdigest()[:16],
                     'published_at': published_at,
                     'tickers':      [holding_ticker],
-                    'source':       item.get('publisher', 'yfinance'),
+                    'source':       publisher,
+                    'source_type':  'per_holding',
                     'title':        title,
                     'url':          url,
                     'image_url':    image_url,

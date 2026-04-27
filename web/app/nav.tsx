@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, PiggyBank, TrendingUp, Compass, type LucideIcon } from "lucide-react";
+import { LineChart, PiggyBank, TrendingUp, Compass, Landmark, type LucideIcon } from "lucide-react";
 
 type Tab = {
   label: string;
@@ -13,6 +13,7 @@ type Tab = {
 const tabs: Tab[] = [
   { label: "Investments", href: "/", icon: LineChart },
   { label: "Savings", href: "/savings", icon: PiggyBank },
+  { label: "Pensions", href: "/pensions", icon: Landmark },
   { label: "Net Worth", href: "/net-worth", icon: TrendingUp },
   { label: "Insights", href: "/insights", icon: Compass },
 ];

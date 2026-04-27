@@ -76,11 +76,17 @@ function buildPerformanceData(
 ): { rows: Row[]; activeWithData: BenchmarkLabel[] } {
   if (snapshots.length === 0) return { rows: [], activeWithData: [] };
   const base = snapshots[0];
+  // Anchor each benchmark to its first non-null point, so a series with a
+  // late start (e.g. gold backfilled later) still indexes to 100 from its
+  // own first sample rather than being dropped.
   const baseBench: Partial<Record<BenchmarkLabel, number | null>> = {};
   for (const label of active) {
     const k = benchmarkKeys[label];
-    const v = base[k];
-    baseBench[label] = typeof v === "number" && v > 0 ? v : null;
+    const firstValid = snapshots.find((s) => {
+      const v = s[k];
+      return typeof v === "number" && v > 0;
+    });
+    baseBench[label] = firstValid ? (firstValid[k] as number) : null;
   }
   const activeWithData = active.filter((l) => baseBench[l] != null);
   const rows: Row[] = snapshots.map((s) => {

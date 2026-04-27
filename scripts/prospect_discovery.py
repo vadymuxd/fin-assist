@@ -36,7 +36,7 @@ from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 
-from lib.supabase_sink import write_discoveries
+from lib.supabase_sink import write_discoveries, purge_stale_market_scan_news
 from lib.market_sources import (
     load_filters,
     fetch_ticker_universe,
@@ -384,6 +384,10 @@ def main(mode):
     stopwords       = set(filters.get('ticker_stopwords', []))
     excluded_tickers = set(filters.get('exclude_tickers', []))
     excluded = holdings | excluded_tickers
+
+    purged = purge_stale_market_scan_news(days=30)
+    if purged:
+        print(f"\nPurged {purged} stale market_scan news rows (>30 days old)")
 
     print("\nFetching Alpha Vantage market news sentiment...")
     av_mentions = fetch_av_market_sentiment(stopwords, limit=50)

@@ -216,6 +216,34 @@ def write_savings_snapshot(date: str, total: float, personal: float, joint: floa
     return ok
 
 
+def write_pension_accounts(rows: list[dict]) -> bool:
+    """
+    Upsert per-provider pension balance rows.
+    Each dict must have: date, provider, account_name, account_type, balance_gbp.
+    Unique constraint: (date, provider, account_name).
+    """
+    ok = _upsert(
+        'pension_accounts',
+        rows,
+        on_conflict='date,provider,account_name',
+    )
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
+def write_pension_snapshot(date: str, total: float) -> bool:
+    """
+    Upsert one monthly pension aggregate row.
+    date: ISO date string (YYYY-MM-DD).
+    """
+    row = {'date': date, 'total': total}
+    ok = _upsert('pension_snapshots', [row], on_conflict='date')
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
 def purge_stale_market_scan_news(days: int = 30) -> int:
     """
     Delete market_scan news older than `days`. Per-holding news is kept

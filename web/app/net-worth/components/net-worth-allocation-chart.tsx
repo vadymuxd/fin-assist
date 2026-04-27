@@ -12,6 +12,7 @@ const gbp = new Intl.NumberFormat("en-GB", {
 const slices = [
   { key: "investments" as const, name: "Investments", color: "#2563eb" },
   { key: "savings" as const, name: "Savings", color: "#10b981" },
+  { key: "pensions" as const, name: "Pensions", color: "#f59e0b" },
 ];
 
 export default function NetWorthAllocationChart({ data }: { data: NetWorthPoint[] }) {
@@ -41,7 +42,7 @@ export default function NetWorthAllocationChart({ data }: { data: NetWorthPoint[
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
       <div className="mb-4">
         <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Allocation</h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Savings vs investments</p>
+        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">By asset class</p>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-center">

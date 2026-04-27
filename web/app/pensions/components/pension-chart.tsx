@@ -5,14 +5,12 @@ import {
   Area,
   CartesianGrid,
   ComposedChart,
-  Legend,
-  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from "recharts";
-import type { NetWorthPoint } from "@/lib/queries";
+import type { PensionSnapshot } from "@/lib/queries";
 
 type Granularity = "D" | "W" | "M";
 
@@ -22,11 +20,11 @@ const gbp = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 });
 
-function aggregate(data: NetWorthPoint[], g: Granularity): NetWorthPoint[] {
-  if (g === "D" || data.length <= 1) return data;
-  const bucket: Record<string, NetWorthPoint> = {};
-  for (const p of data) {
-    const d = new Date(`${p.date}T00:00:00Z`);
+function aggregate(snapshots: PensionSnapshot[], g: Granularity): PensionSnapshot[] {
+  if (g === "D" || snapshots.length <= 1) return snapshots;
+  const bucket: Record<string, PensionSnapshot> = {};
+  for (const s of snapshots) {
+    const d = new Date(`${s.date}T00:00:00Z`);
     let key: string;
     if (g === "W") {
       const day = d.getUTCDay();
@@ -37,7 +35,7 @@ function aggregate(data: NetWorthPoint[], g: Granularity): NetWorthPoint[] {
     } else {
       key = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}-01`;
     }
-    bucket[key] = { ...p, date: key };
+    bucket[key] = { ...s, date: key };
   }
   return Object.values(bucket).sort((a, b) => a.date.localeCompare(b.date));
 }
@@ -50,44 +48,48 @@ function shortDate(iso: string) {
   });
 }
 
-type TooltipEntry = { dataKey?: string | number; value?: number; color?: string; name?: string | number };
+type TooltipPayloadItem = { value?: number | string | (number | string)[] };
 
-function CustomTooltip({ active, payload, label }: { active?: boolean; payload?: readonly TooltipEntry[]; label?: string }) {
+function CustomTooltip({
+  active,
+  payload,
+  label,
+}: {
+  active?: boolean;
+  payload?: readonly TooltipPayloadItem[];
+  label?: string;
+}) {
   if (!active || !payload?.length) return null;
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-700 bg-white/95 dark:bg-gray-900/95 backdrop-blur p-3 shadow-lg text-xs">
       <div className="font-medium text-gray-900 dark:text-gray-50 mb-1.5">
         {typeof label === "string" ? shortDate(label) : ""}
       </div>
-      <ul className="space-y-1">
-        {payload.map((p, i) => (
-          <li key={String(p.dataKey ?? i)} className="flex items-center justify-between gap-4">
-            <span className="flex items-center gap-1.5 text-gray-600 dark:text-gray-300">
-              <span className="w-2 h-2 rounded-full" style={{ backgroundColor: p.color }} />
-              {p.name}
-            </span>
-            <span className="font-medium tabular-nums text-gray-900 dark:text-gray-50">
-              {gbp.format(p.value ?? 0)}
-            </span>
-          </li>
-        ))}
-      </ul>
+      <div className="flex items-center gap-2">
+        <span className="w-2 h-2 rounded-full bg-amber-500" />
+        <span className="font-medium tabular-nums text-gray-900 dark:text-gray-50">
+          {gbp.format(Number(Array.isArray(payload[0]?.value) ? (payload[0]?.value[0] ?? 0) : (payload[0]?.value ?? 0)))}
+        </span>
+      </div>
     </div>
   );
 }
 
-export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
+export default function PensionChart({ snapshots }: { snapshots: PensionSnapshot[] }) {
   const [granularity, setGranularity] = useState<Granularity>("M");
 
-  const rows = useMemo(() => aggregate(data, granularity), [data, granularity]);
+  const rows = useMemo(
+    () => aggregate(snapshots, granularity).map((s) => ({ date: s.date, value: s.total })),
+    [snapshots, granularity],
+  );
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
         <div>
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Net Worth Over Time</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Pension Growth</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Investments + Savings + Pensions
+            Total pension value over time, in GBP
           </p>
         </div>
         <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 self-start">
@@ -109,16 +111,16 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
 
       {rows.length < 2 ? (
         <div className="h-64 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 text-center px-4">
-          Not enough overlapping data yet — both investment and savings snapshots are needed for the same dates.
+          Not enough data yet — chart builds up as monthly snapshots accumulate.
         </div>
       ) : (
         <div className="h-64 sm:h-80 -ml-2">
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={rows} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="netWorthFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.22} />
-                  <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+                <linearGradient id="pensionFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#f59e0b" stopOpacity={0.25} />
+                  <stop offset="100%" stopColor="#f59e0b" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" vertical={false} />
@@ -137,59 +139,28 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
                 tickLine={false}
                 axisLine={false}
                 tickFormatter={(v) => gbp.format(v)}
-                width={72}
-                domain={["dataMin - 500", "dataMax + 500"]}
+                width={64}
+                domain={["dataMin - 200", "dataMax + 200"]}
               />
               <Tooltip
                 content={(props) => (
                   <CustomTooltip
                     active={props.active}
-                    payload={props.payload as readonly TooltipEntry[] | undefined}
+                    payload={props.payload as readonly TooltipPayloadItem[] | undefined}
                     label={props.label as string | undefined}
                   />
                 )}
                 cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
               />
-              <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
               <Area
                 type="monotone"
-                dataKey="net_worth"
-                name="Net Worth"
-                stroke="#8b5cf6"
+                dataKey="value"
+                name="Pension"
+                stroke="#f59e0b"
                 strokeWidth={2.25}
-                fill="url(#netWorthFill)"
+                fill="url(#pensionFill)"
                 dot={false}
                 activeDot={{ r: 4 }}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="investments"
-                name="Investments"
-                stroke="#2563eb"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3 }}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="savings"
-                name="Savings"
-                stroke="#10b981"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3 }}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="pensions"
-                name="Pensions"
-                stroke="#f59e0b"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3 }}
                 isAnimationActive={false}
               />
             </ComposedChart>

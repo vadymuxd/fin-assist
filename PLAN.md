@@ -393,9 +393,26 @@ Legacy commands kept as aliases so existing muscle memory works.
 
 ---
 
-## Phase 8 — Pensions
+## Phase 8 — Pensions ✅ COMPLETE
 
-Add pension tracking. Nutmeg, workplace pension, projected retirement value. Read-only monitoring — can't trade, but want visibility.
+Add pension tracking. Read-only monitoring — can't trade but want visibility.
+
+### 8A — Notion Reference page ✅
+- [x] Pensions Context page created under Reference. Provider registry, pipeline, goals, sheet column notes.
+
+### 8B — Google Sheet ✅
+- [x] Wide-format `Pension Balance` tab: Provider | Account | Type | monthly balance columns
+
+### 8C — Supabase ✅
+- [x] Migration `0005_pensions.sql`: `pension_accounts` + `pension_snapshots` tables with RLS
+
+### 8D — `pension_snapshot.py` ✅
+- [x] Reads sheet, pivots wide→long, upserts both tables, triggers Vercel ISR
+
+### 8E — Web app ✅
+- [x] `/pensions` tab (amber theme): KPI cards, trend chart, allocation donut (by provider/account/type), accounts table
+- [x] Nav updated to 5 tabs: Investments | Savings | Pensions | Net Worth | Insights
+- [x] Net Worth updated: 3-way split (Investments + Savings + Pensions), allocation chart + KPI chips
 
 ---
 
