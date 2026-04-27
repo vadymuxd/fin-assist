@@ -34,7 +34,7 @@ load_dotenv()
 SHEET_ID  = os.getenv('PORTFOLIO_SHEET_ID')
 SA_FILE   = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.json')
 SCOPES    = ['https://www.googleapis.com/auth/spreadsheets']
-TAB_NAME  = 'Pension Balance'
+TAB_NAME  = 'Pensions'
 
 MONTH_NAMES = {
     'january': 1, 'february': 2, 'march': 3, 'april': 4,
@@ -97,11 +97,10 @@ def main():
         return None
 
     provider_col = find_col('provider')
-    account_col  = find_col('account')
-    type_col     = find_col('type')
+    account_col  = find_col('employer', 'account')  # sheet uses 'Employer' as the account identifier
 
     if provider_col is None or account_col is None:
-        print("  ERROR: Could not find 'Provider' or 'Account' columns in header row.")
+        print("  ERROR: Could not find 'Provider' or 'Employer'/'Account' columns in header row.")
         print(f"  Headers found: {headers}")
         sys.exit(1)
 
@@ -125,12 +124,11 @@ def main():
         def cell(idx):
             return row[idx].strip() if idx is not None and idx < len(row) else ''
 
-        provider     = cell(provider_col)
-        account      = cell(account_col)
-        acct_type    = cell(type_col).lower() if type_col is not None else None
-        acct_type    = acct_type or None
+        provider  = cell(provider_col)
+        account   = cell(account_col)
 
-        if not provider or not account:
+        # Skip summary/total rows
+        if not provider or not account or provider.lower() in ('total', 'subtotal'):
             continue
 
         for col_i, date_iso in month_cols:
@@ -143,7 +141,6 @@ def main():
                 'date':         date_iso,
                 'provider':     provider,
                 'account_name': account,
-                'account_type': acct_type,
                 'balance_gbp':  balance,
             })
 

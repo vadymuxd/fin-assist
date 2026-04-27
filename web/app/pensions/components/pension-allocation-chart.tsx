@@ -4,12 +4,11 @@ import { useMemo, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { PensionAccount } from "@/lib/queries";
 
-type Dimension = "provider" | "account_name" | "account_type";
+type Dimension = "provider" | "account_name";
 
 const dimensionLabels: Record<Dimension, string> = {
   provider: "Provider",
   account_name: "Account",
-  account_type: "Type",
 };
 
 const palette = [
@@ -38,8 +37,7 @@ function bucket(accounts: PensionAccount[], dim: Dimension): Slice[] {
   for (const a of accounts) {
     let key: string;
     if (dim === "provider") key = a.provider;
-    else if (dim === "account_name") key = a.account_name;
-    else key = a.account_type ?? "Unknown";
+    else key = a.account_name;
 
     const v = Number(a.balance_gbp ?? 0);
     if (!Number.isFinite(v) || v <= 0) continue;
