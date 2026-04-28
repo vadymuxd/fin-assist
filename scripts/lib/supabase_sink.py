@@ -244,6 +244,70 @@ def write_pension_snapshot(date: str, total: float) -> bool:
     return ok
 
 
+def get_recently_alerted_tickers(hours: int = 48) -> set:
+    """
+    Return the set of tickers that had any alert or discovery logged in the
+    last `hours`.  Used by alert_dispatcher.py for ticker-level dedup.
+    Fails open: returns empty set on any error so the pipeline never blocks.
+    """
+    client = _get_client()
+    if not client:
+        return set()
+    cutoff = (datetime.now(timezone.utc) - timedelta(hours=hours)).isoformat()
+    tickers: set = set()
+    try:
+        for table in ('holdings_alerts', 'discoveries'):
+            resp = client.table(table).select('ticker').gte('run_time', cutoff).execute()
+            for row in (resp.data or []):
+                tickers.add(row['ticker'])
+    except Exception as e:
+        logger.warning(f'Dedup check failed: {e}')
+    return tickers
+
+
+def write_holding_alert(run_id: str, run_time: str, assessment: dict) -> bool:
+    """
+    Insert a single actionable holding alert from alert_dispatcher.py.
+    assessment must have: ticker, action, score, event, rationale.
+    """
+    row = {
+        'run_id':           run_id,
+        'run_time':         run_time,
+        'ticker':           assessment['ticker'],
+        'alert_level':      'ACT',
+        'score':            assessment.get('score'),
+        'event':            assessment.get('event', ''),
+        'rationale':        assessment.get('rationale', ''),
+        'suggested_action': assessment.get('action', 'HOLD'),
+    }
+    ok = _insert('holdings_alerts', [row])
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
+def write_prospect_alert(run_id: str, run_time: str, assessment: dict) -> bool:
+    """
+    Insert a single BUY prospect discovery from alert_dispatcher.py.
+    assessment must have: ticker, name, score, rationale.
+    """
+    row = {
+        'run_id':               run_id,
+        'run_time':             run_time,
+        'ticker':               assessment['ticker'],
+        'score':                assessment.get('score'),
+        'recommendation':       'BUY',
+        'sources':              ['market_scan'],
+        'rationale':            assessment.get('rationale', ''),
+        'filtered_reason':      None,
+        'surfaced_to_telegram': True,
+    }
+    ok = _insert('discoveries', [row])
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
 def purge_stale_market_scan_news(days: int = 30) -> int:
     """
     Delete market_scan news older than `days`. Per-holding news is kept

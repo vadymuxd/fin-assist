@@ -41,7 +41,6 @@ export default function AlertsList({
   active: HoldingsAlert[];
   latestRun: { run_time: string; items: HoldingsAlert[] };
 }) {
-  const noneCount = latestRun.items.filter((a) => a.alert_level === "NONE").length;
   const hasActive = active.length > 0;
 
   return (
@@ -50,8 +49,7 @@ export default function AlertsList({
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Holdings Alerts</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {latestRun.run_time ? `Latest run · ${timeAgo(latestRun.run_time)}` : "No runs yet"}
-            {!hasActive && noneCount > 0 && ` · ${noneCount} holdings — all clear`}
+            {latestRun.run_time ? `Last checked · ${timeAgo(latestRun.run_time)}` : "No runs yet"}
           </p>
         </div>
         {hasActive && (
@@ -66,9 +64,9 @@ export default function AlertsList({
           <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xl mb-2">
             ✓
           </div>
-          <div className="text-sm font-medium text-gray-900 dark:text-gray-50">No active alerts</div>
+          <div className="text-sm font-medium text-gray-900 dark:text-gray-50">No actionable alerts</div>
           <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-            All {noneCount || "of your"} holdings flagged NONE in the last run.
+            No concrete sell or buy signals detected in the last 7 days.
           </div>
         </div>
       ) : (
@@ -94,6 +92,11 @@ export default function AlertsList({
                         {timeAgo(a.run_time)}
                       </span>
                     </div>
+                    {a.suggested_action && a.suggested_action !== "HOLD" && (
+                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
+                        {a.suggested_action.replace("_", " ")}
+                      </span>
+                    )}
                     {a.event && (
                       <div className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-200">{a.event}</div>
                     )}

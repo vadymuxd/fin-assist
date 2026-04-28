@@ -11,7 +11,7 @@ on:
 jobs:
   monitor:
     runs-on: ubuntu-latest
-    timeout-minutes: 20
+    timeout-minutes: 35
 
     steps:
       - uses: actions/checkout@v4
@@ -30,29 +30,15 @@ jobs:
           mkdir -p config
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
 
-      # Refresh manual prices (tickers not covered by GOOGLEFINANCE, e.g. SGLN)
+      # ── Refresh manual prices (SGLN and other non-GOOGLEFINANCE tickers) ──────
       - name: Refresh manual prices
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
         run: python3 scripts/update_manual_prices.py
 
-      # Event-driven holdings check — silent unless a concrete event triggers an ACT alert
-      - name: Holdings monitor (auto)
-        env:
-          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
-          ALPHAVANTAGE_API_KEY:           ${{ secrets.ALPHAVANTAGE_API_KEY }}
-          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
-          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
-          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
-          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
-          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python3 scripts/holdings_monitor.py --auto
-
-      # Dynamic prospect discovery — silent unless a new BUY emerges
-      - name: Prospect discovery (auto)
+      # ── Script A: fetch + curate news from all sources ────────────────────────
+      - name: Script A — Fetch news
         env:
           FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
           ALPHAVANTAGE_API_KEY:           ${{ secrets.ALPHAVANTAGE_API_KEY }}
@@ -60,20 +46,49 @@ jobs:
           CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
+          APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
+        run: python3 scripts/news_fetcher.py
+
+      # ── 5-minute gap between Script A and B ───────────────────────────────────
+      - name: Wait 5 minutes
+        run: sleep 300
+
+      # ── Script B: assess stocks, produce only actionable findings ─────────────
+      - name: Script B — Assess stocks
+        env:
+          CLAUDE_API_KEY: ${{ secrets.CLAUDE_API_KEY }}
+        run: python3 scripts/stock_assessor.py
+
+      # ── 5-minute gap between Script B and C ───────────────────────────────────
+      - name: Wait 5 minutes
+        run: sleep 300
+
+      # ── Script C: 48h dedup by ticker, log to Supabase, send Telegram ─────────
+      - name: Script C — Dispatch alerts
+        env:
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
           SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
-        run: python3 scripts/prospect_discovery.py --auto
+          APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
+          APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
+        run: python3 scripts/alert_dispatcher.py
 
-      # Close-run only: refresh sheet scores + Notion portfolio snapshot + Supabase snapshot
-      - name: Sheet scores + Notion snapshot (close run only)
+      # ── Close-run only: Notion portfolio snapshot + Supabase daily snapshot ────
+      - name: Notion snapshot + daily portfolio snapshot (close run only)
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           NOTION_API_KEY:                 ${{ secrets.NOTION_API_KEY }}
           SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
+          APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: |
           HOUR=$(date -u +"%H")
           if [ "$HOUR" -ge "15" ]; then

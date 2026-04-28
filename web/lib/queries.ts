@@ -56,6 +56,7 @@ export type HoldingsAlert = {
   score: number | null;
   event: string | null;
   rationale: string | null;
+  suggested_action: string | null;
 };
 
 export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
@@ -144,10 +145,11 @@ export type Discovery = {
 };
 
 export async function getLatestDiscoveries(): Promise<{ run_time: string; items: Discovery[] }> {
-  // find the most recent run_id
+  // Show BUY discoveries from the last 7 days, deduplicated by ticker (newest first).
+  // The new alert_dispatcher only logs BUY-worthy prospects, so no PASS/filtered noise.
   const { data: latest, error: le } = await supabase
     .from("discoveries")
-    .select("run_id, run_time")
+    .select("run_time")
     .order("run_time", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -157,39 +159,69 @@ export async function getLatestDiscoveries(): Promise<{ run_time: string; items:
   const { data, error } = await supabase
     .from("discoveries")
     .select("*")
-    .eq("run_id", latest.run_id)
-    .order("score", { ascending: false });
+    .eq("recommendation", "BUY")
+    .gte("run_time", daysAgoISO(7))
+    .order("run_time", { ascending: false })
+    .limit(60);
   if (error) throw error;
-  return { run_time: latest.run_time, items: data ?? [] };
+
+  // Dedup by ticker: keep most recent BUY per ticker
+  const seen = new Set<string>();
+  const items = (data ?? []).filter((d) => {
+    if (seen.has(d.ticker)) return false;
+    seen.add(d.ticker);
+    return true;
+  }).sort((a, b) => (b.score ?? 0) - (a.score ?? 0));
+
+  return { run_time: latest.run_time, items };
 }
 
 export async function getRecentAlerts(limit = 20): Promise<HoldingsAlert[]> {
+  // Fetch recent ACT-level alerts from the last 7 days, deduplicated by ticker
+  // (only the most recent alert per ticker is shown — no duplicate rows for the same stock)
   const { data, error } = await supabase
     .from("holdings_alerts")
     .select("*")
-    .in("alert_level", ["ACT", "WATCH"])
+    .eq("alert_level", "ACT")
+    .gte("run_time", daysAgoISO(7))
     .order("run_time", { ascending: false })
-    .limit(limit);
+    .limit(limit * 3); // over-fetch so dedup has enough to work with
   if (error) throw error;
-  return data ?? [];
+  const seen = new Set<string>();
+  return (data ?? []).filter((a) => {
+    if (seen.has(a.ticker)) return false;
+    seen.add(a.ticker);
+    return true;
+  }).slice(0, limit);
 }
 
 export async function getLatestAlertsRun(): Promise<{ run_time: string; items: HoldingsAlert[] }> {
+  // Most recent dispatch run_time (used for the "Latest run · X ago" header)
   const { data: latest, error: le } = await supabase
     .from("holdings_alerts")
-    .select("run_id, run_time")
+    .select("run_time")
     .order("run_time", { ascending: false })
     .limit(1)
     .maybeSingle();
   if (le) throw le;
   if (!latest) return { run_time: "", items: [] };
+
+  // Items = same 7-day deduped set as getRecentAlerts (drives the count in alerts-list header)
   const { data, error } = await supabase
     .from("holdings_alerts")
     .select("*")
-    .eq("run_id", latest.run_id)
-    .order("alert_level", { ascending: true });
+    .eq("alert_level", "ACT")
+    .gte("run_time", daysAgoISO(7))
+    .order("run_time", { ascending: false })
+    .limit(60);
   if (error) throw error;
-  return { run_time: latest.run_time, items: data ?? [] };
+  const seen = new Set<string>();
+  const items = (data ?? []).filter((a) => {
+    if (seen.has(a.ticker)) return false;
+    seen.add(a.ticker);
+    return true;
+  });
+  return { run_time: latest.run_time, items };
 }
 
 const NEWS_FRESH_DAYS = 14;

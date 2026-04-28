@@ -643,6 +643,8 @@ def fetch_yfinance_context(symbol, holding_ticker=None):
                 elif thumb.get('originalUrl'):
                     image_url = thumb['originalUrl']
                 snippet = (content.get('summary') or content.get('description') or '')[:500]
+                if not published_at:
+                    published_at = datetime.now(timezone.utc).isoformat()
                 news_rows.append({
                     'id':           hashlib.sha1(url.encode()).hexdigest()[:16],
                     'published_at': published_at,
