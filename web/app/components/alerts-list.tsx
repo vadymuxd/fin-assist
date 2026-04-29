@@ -11,27 +11,45 @@ function timeAgo(iso: string): string {
   return `${d}d ago`;
 }
 
-function levelStyle(level: string): { dot: string; pill: string; ring: string } {
-  switch (level.toUpperCase()) {
-    case "ACT":
-      return {
-        dot: "bg-rose-500",
-        pill: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
-        ring: "border-rose-200 dark:border-rose-500/30",
-      };
-    case "WATCH":
-      return {
-        dot: "bg-amber-500",
-        pill: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-        ring: "border-amber-200 dark:border-amber-500/30",
-      };
-    default:
-      return {
-        dot: "bg-gray-300 dark:bg-gray-600",
-        pill: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
-        ring: "border-gray-200 dark:border-gray-800",
-      };
+function actionBadge(action: string | null, level: string): { label: string; dot: string; pill: string } {
+  // Prefer suggested_action (SELL / TRIM / EXIT / BUY MORE) — the actual recommendation.
+  // Fall back to alert_level when suggested_action is missing (legacy bot rows).
+  const a = (action ?? "").toUpperCase();
+  if (a === "SELL" || a === "EXIT") {
+    return {
+      label: a,
+      dot: "bg-rose-500",
+      pill: "bg-rose-100 text-rose-700 dark:bg-rose-500/15 dark:text-rose-300",
+    };
   }
+  if (a === "TRIM") {
+    return {
+      label: "TRIM",
+      dot: "bg-orange-500",
+      pill: "bg-orange-100 text-orange-700 dark:bg-orange-500/15 dark:text-orange-300",
+    };
+  }
+  if (a === "BUY_MORE" || a === "BUY") {
+    return {
+      label: "BUY MORE",
+      dot: "bg-emerald-500",
+      pill: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
+    };
+  }
+  // Fallback: legacy ACT row without suggested_action — surface as REVIEW so the user knows it's
+  // worth eyeballing without committing to a direction.
+  if (level.toUpperCase() === "ACT") {
+    return {
+      label: "REVIEW",
+      dot: "bg-amber-500",
+      pill: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
+    };
+  }
+  return {
+    label: level.toUpperCase() || "—",
+    dot: "bg-gray-300 dark:bg-gray-600",
+    pill: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
+  };
 }
 
 export default function AlertsList({
@@ -72,31 +90,26 @@ export default function AlertsList({
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-800">
           {active.map((a) => {
-            const s = levelStyle(a.alert_level);
+            const badge = actionBadge(a.suggested_action, a.alert_level);
             return (
               <li key={a.id} className="px-4 sm:px-6 py-3">
                 <Link
                   href={`/holdings/${encodeURIComponent(a.ticker)}`}
                   className="flex items-start gap-3 group"
                 >
-                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${s.dot}`} />
+                  <span className={`mt-1.5 w-2 h-2 rounded-full shrink-0 ${badge.dot}`} />
                   <div className="min-w-0 flex-1">
                     <div className="flex items-center gap-2 flex-wrap">
                       <span className="font-semibold text-gray-900 dark:text-gray-50 group-hover:underline">
                         {a.ticker}
                       </span>
-                      <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${s.pill}`}>
-                        {a.alert_level}
+                      <span className={`text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded ${badge.pill}`}>
+                        {badge.label}
                       </span>
                       <span className="text-xs text-gray-400 dark:text-gray-500 ml-auto">
                         {timeAgo(a.run_time)}
                       </span>
                     </div>
-                    {a.suggested_action && a.suggested_action !== "HOLD" && (
-                      <span className="text-[10px] font-bold uppercase tracking-wide px-1.5 py-0.5 rounded bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400">
-                        {a.suggested_action.replace("_", " ")}
-                      </span>
-                    )}
                     {a.event && (
                       <div className="mt-1 text-sm font-medium text-gray-700 dark:text-gray-200">{a.event}</div>
                     )}

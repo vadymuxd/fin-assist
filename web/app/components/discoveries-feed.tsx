@@ -44,21 +44,27 @@ export default function DiscoveriesFeed({
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm overflow-hidden">
       <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between">
         <div>
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Today&apos;s Discoveries</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">New Prospects</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {runTime ? `Latest run · ${timeAgo(runTime)}` : "No runs yet"}
+            {runTime ? `Last scanned · ${timeAgo(runTime)}` : "No scans yet"}
           </p>
         </div>
         {items.length > 0 && (
-          <span className="text-xs text-gray-500 dark:text-gray-400 tabular-nums">
-            {surfaced.length} surfaced · {filtered.length} filtered
+          <span className="text-xs font-semibold text-emerald-600 dark:text-emerald-400 tabular-nums">
+            {items.length} BUY
           </span>
         )}
       </div>
 
       {items.length === 0 ? (
-        <div className="px-6 py-12 text-center text-sm text-gray-500 dark:text-gray-400">
-          No discoveries yet. The discovery scanner runs daily and surfaces new tickers worth a look.
+        <div className="px-6 py-10 text-center">
+          <div className="inline-flex items-center justify-center w-10 h-10 rounded-full bg-emerald-100 dark:bg-emerald-500/15 text-emerald-600 dark:text-emerald-400 text-xl mb-2">
+            ✓
+          </div>
+          <div className="text-sm font-medium text-gray-900 dark:text-gray-50">No new prospects</div>
+          <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+            No BUY-worthy candidates surfaced in the last 7 days. The scanner ran but nothing crossed the bar.
+          </div>
         </div>
       ) : (
         <ul className="divide-y divide-gray-100 dark:divide-gray-800">

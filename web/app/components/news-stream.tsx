@@ -66,13 +66,17 @@ export default function NewsStream({ items }: { items: NewsItem[] }) {
                 {dayLabel(day)}
               </div>
               <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-                {items.map((n) => (
+                {items.map((n) => {
+                  const hasLink = isValidUrl(n.url);
+                  const Wrapper = hasLink ? "a" : "div";
+                  const wrapperProps = hasLink
+                    ? { href: n.url!, target: "_blank", rel: "noopener noreferrer" }
+                    : {};
+                  return (
                   <li key={n.id} className="px-4 sm:px-6 py-3">
-                    <a
-                      href={n.url ?? "#"}
-                      target="_blank"
-                      rel="noopener noreferrer"
-                      className="flex gap-3 group"
+                    <Wrapper
+                      {...wrapperProps}
+                      className={`flex gap-3 ${hasLink ? "group" : ""}`}
                     >
                       {isValidUrl(n.image_url) ? (
                         <div className="shrink-0 w-16 h-16 rounded-md overflow-hidden bg-gray-100 dark:bg-gray-800 relative">
@@ -113,9 +117,10 @@ export default function NewsStream({ items }: { items: NewsItem[] }) {
                           </div>
                         )}
                       </div>
-                    </a>
+                    </Wrapper>
                   </li>
-                ))}
+                  );
+                })}
               </ul>
             </div>
           ))}
