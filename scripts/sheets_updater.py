@@ -398,13 +398,16 @@ def main():
     print(f"  Opened: {sh.title}")
 
     if not os.path.exists(RESULTS_PATH):
+        # Daily pipeline (news_fetcher → stock_assessor → alert_dispatcher) doesn't
+        # produce analysis_results.json — this script's score-write path is now
+        # only used by the /holdings bot command. Exit cleanly so missing file
+        # never fails the daily monitor workflow.
         if do_snapshot:
-            # Bot /snapshot command: skip score writing, just update Notion + notify
             print(f"No results file at {RESULTS_PATH} — skipping score write, doing snapshot only")
             results = {}
         else:
-            print(f"No results file at {RESULTS_PATH} — run holdings_monitor.py first")
-            sys.exit(1)
+            print(f"No results file at {RESULTS_PATH} — nothing to update, exiting cleanly")
+            return
     else:
         with open(RESULTS_PATH) as f:
             results = json.load(f)
