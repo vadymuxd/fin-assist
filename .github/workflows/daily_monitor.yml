@@ -80,6 +80,9 @@ jobs:
         run: python3 scripts/alert_dispatcher.py
 
       # ── Close-run only: Notion portfolio snapshot + Supabase daily snapshot ────
+      # sheets_updater.py --snapshot tolerates a missing data/analysis_results.json
+      # (skips the score write, still does the snapshot). Morning/midday runs skip
+      # this step entirely — the 3-step pipeline above doesn't produce that file.
       - name: Notion snapshot + daily portfolio snapshot (close run only)
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
@@ -95,5 +98,5 @@ jobs:
             python3 scripts/sheets_updater.py --snapshot
             python3 scripts/daily_portfolio_snapshot.py
           else
-            python3 scripts/sheets_updater.py
+            echo "Skipping snapshot — close-run only (current hour UTC: $HOUR)"
           fi
