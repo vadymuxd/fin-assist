@@ -441,6 +441,71 @@ export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDelta
   return { latest, daily, wow, mom, ytd };
 }
 
+// ─── Mortgage ─────────────────────────────────────────────────────────────────
+
+export type MortgageSnapshot = {
+  date: string;
+  balance: number;
+  property_value: number;
+  equity: number;
+  equity_half: number;
+  monthly_payment: number;
+  rate: number;
+  lender: string;
+};
+
+export type MortgageDelta = { absolute: number; pct: number; fromDate: string };
+
+export type MortgageDeltasResult = {
+  latest: MortgageSnapshot;
+  mom: MortgageDelta | null;
+  ytd: MortgageDelta | null;
+  sinceStart: MortgageDelta | null;
+};
+
+export async function getMortgageSnapshots(): Promise<MortgageSnapshot[]> {
+  const { data, error } = await supabase
+    .from("mortgage_snapshots")
+    .select("date, balance, property_value, equity, equity_half, monthly_payment, rate, lender")
+    .order("date", { ascending: true });
+  if (error) throw error;
+  return data ?? [];
+}
+
+function findMortgageOnOrBefore(
+  snapshots: MortgageSnapshot[],
+  targetISO: string,
+): MortgageSnapshot | null {
+  const c = snapshots.filter((s) => s.date <= targetISO);
+  return c.length === 0 ? null : c[c.length - 1];
+}
+
+function mortgageDelta(
+  latest: MortgageSnapshot,
+  prev: MortgageSnapshot | null,
+): MortgageDelta | null {
+  if (!prev) return null;
+  // Delta is on equity (the positive metric building over time)
+  const absolute = latest.equity_half - prev.equity_half;
+  const pct = prev.equity_half === 0 ? 0 : (absolute / prev.equity_half) * 100;
+  return { absolute, pct, fromDate: prev.date };
+}
+
+export function computeMortgageDeltas(
+  snapshots: MortgageSnapshot[],
+): MortgageDeltasResult | null {
+  if (snapshots.length === 0) return null;
+  const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
+  const latest = sorted[sorted.length - 1];
+  const first = sorted[0];
+  const prior = sorted.slice(0, -1);
+  const mom = mortgageDelta(latest, findMortgageOnOrBefore(prior, daysAgoISO(30)));
+  const yearStart = `${new Date().getUTCFullYear()}-01-01`;
+  const ytd = mortgageDelta(latest, findMortgageOnOrBefore(prior, yearStart));
+  const sinceStart = first.date !== latest.date ? mortgageDelta(latest, first) : null;
+  return { latest, mom, ytd, sinceStart };
+}
+
 // ─── Net Worth ────────────────────────────────────────────────────────────────
 
 export type NetWorthPoint = {
@@ -449,17 +514,19 @@ export type NetWorthPoint = {
   investments: number;
   savings: number;
   pensions: number;
+  mortgage_equity: number;
 };
 
 export async function getNetWorthData(): Promise<NetWorthPoint[]> {
-  const [{ data: inv }, { data: sav }, { data: pen }] = await Promise.all([
+  const [{ data: inv }, { data: sav }, { data: pen }, { data: mort }] = await Promise.all([
     supabase.from("portfolio_snapshots").select("date, grand_total").order("date", { ascending: true }),
     supabase.from("savings_snapshots").select("date, total, personal_total, joint_total").order("date", { ascending: true }),
     supabase.from("pension_snapshots").select("date, total").order("date", { ascending: true }),
+    supabase.from("mortgage_snapshots").select("date, equity_half").order("date", { ascending: true }),
   ]);
   if (!inv || !sav || sav.length === 0 || !inv.length) return [];
-  // For each savings snapshot (month-end), pair with the closest investment and pension
-  // snapshots on or before that date. Savings = Vadym's share (personal + 50% of joint).
+  // For each savings snapshot (month-end), pair with the closest investment, pension,
+  // and mortgage snapshots on or before that date.
   return sav
     .map((s) => {
       const candidates = inv.filter((i) => i.date <= s.date);
@@ -468,12 +535,15 @@ export async function getNetWorthData(): Promise<NetWorthPoint[]> {
       const savingsEff = effectiveSavingsTotal(s as SavingsSnapshot);
       const penCandidates = (pen ?? []).filter((p) => p.date <= s.date);
       const pensionTotal = penCandidates.length > 0 ? Number(penCandidates[penCandidates.length - 1].total) : 0;
+      const mortCandidates = (mort ?? []).filter((m) => m.date <= s.date);
+      const mortgageEquity = mortCandidates.length > 0 ? Number(mortCandidates[mortCandidates.length - 1].equity_half) : 0;
       return {
         date: s.date,
         investments: closest.grand_total,
         savings: savingsEff,
         pensions: pensionTotal,
-        net_worth: closest.grand_total + savingsEff + pensionTotal,
+        mortgage_equity: mortgageEquity,
+        net_worth: closest.grand_total + savingsEff + pensionTotal + mortgageEquity,
       };
     })
     .filter((p): p is NetWorthPoint => p !== null);

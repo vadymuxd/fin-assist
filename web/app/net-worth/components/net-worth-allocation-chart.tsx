@@ -13,6 +13,7 @@ const slices = [
   { key: "investments" as const, name: "Investments", color: "#2563eb" },
   { key: "savings" as const, name: "Savings", color: "#10b981" },
   { key: "pensions" as const, name: "Pensions", color: "#f59e0b" },
+  { key: "mortgage_equity" as const, name: "Mortgage Equity (½)", color: "#f97316" },
 ];
 
 export default function NetWorthAllocationChart({ data }: { data: NetWorthPoint[] }) {

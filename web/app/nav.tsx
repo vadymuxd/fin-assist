@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, PiggyBank, TrendingUp, Compass, Landmark, type LucideIcon } from "lucide-react";
+import { LineChart, PiggyBank, TrendingUp, Landmark, Home, type LucideIcon } from "lucide-react";
 
 type Tab = {
   label: string;
@@ -15,7 +15,7 @@ const tabs: Tab[] = [
   { label: "Savings", href: "/savings", icon: PiggyBank },
   { label: "Pensions", href: "/pensions", icon: Landmark },
   { label: "Net Worth", href: "/net-worth", icon: TrendingUp },
-  { label: "Insights", href: "/insights", icon: Compass },
+  { label: "Mortgage", href: "/mortgage", icon: Home },
 ];
 
 function isActive(href: string, pathname: string) {
