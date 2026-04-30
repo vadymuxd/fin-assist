@@ -183,6 +183,7 @@ export async function getRecentAlerts(limit = 20): Promise<HoldingsAlert[]> {
     .from("holdings_alerts")
     .select("*")
     .eq("alert_level", "ACT")
+    .not("suggested_action", "is", null)
     .gte("run_time", daysAgoISO(7))
     .order("run_time", { ascending: false })
     .limit(limit * 3); // over-fetch so dedup has enough to work with
@@ -211,6 +212,7 @@ export async function getLatestAlertsRun(): Promise<{ run_time: string; items: H
     .from("holdings_alerts")
     .select("*")
     .eq("alert_level", "ACT")
+    .not("suggested_action", "is", null)
     .gte("run_time", daysAgoISO(7))
     .order("run_time", { ascending: false })
     .limit(60);

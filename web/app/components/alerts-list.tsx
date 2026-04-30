@@ -36,17 +36,8 @@ function actionBadge(action: string | null, level: string): { label: string; dot
       pill: "bg-emerald-100 text-emerald-700 dark:bg-emerald-500/15 dark:text-emerald-300",
     };
   }
-  // Fallback: legacy ACT row without suggested_action — surface as REVIEW so the user knows it's
-  // worth eyeballing without committing to a direction.
-  if (level.toUpperCase() === "ACT") {
-    return {
-      label: "REVIEW",
-      dot: "bg-amber-500",
-      pill: "bg-amber-100 text-amber-700 dark:bg-amber-500/15 dark:text-amber-300",
-    };
-  }
   return {
-    label: level.toUpperCase() || "—",
+    label: a || "—",
     dot: "bg-gray-300 dark:bg-gray-600",
     pill: "bg-gray-100 text-gray-600 dark:bg-gray-800 dark:text-gray-400",
   };

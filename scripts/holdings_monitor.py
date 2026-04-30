@@ -36,7 +36,6 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from lib.market_sources import fetch_ticker_context, fetch_yfinance_context
-from lib.supabase_sink import write_holdings_alerts
 
 load_dotenv()
 
@@ -233,7 +232,7 @@ def build_prompt(ticker, name, qty, avg_buy, current_price, data):
         '  "score": <integer 1-10>,',
         '  "event": "<short phrase describing the specific event, or empty string if none>",',
         '  "rationale": "<1-2 sentences: what happened and why it matters for this holder>",',
-        '  "suggested_action": "<HOLD|REVIEW|BUY|TRIM|EXIT>"',
+        '  "suggested_action": "<HOLD|BUY|TRIM|EXIT>"',
         '}',
         "",
         "alert_level rules:",
@@ -242,8 +241,7 @@ def build_prompt(ticker, name, qty, avg_buy, current_price, data):
         "  ACT   = concrete bad event OR concrete good event reversing prior thesis — user should read this",
         "",
         "suggested_action rules:",
-        "  HOLD   = do nothing",
-        "  REVIEW = user should look, decision unclear",
+        "  HOLD   = no action needed (use for NONE/WATCH, or ACT where no clear trade makes sense)",
         "  BUY    = add to position (use only when ACT + concrete positive catalyst AND score >= 8)",
         "  TRIM   = reduce position",
         "  EXIT   = close position",
@@ -438,9 +436,7 @@ def main(mode):
             ('ACT',   'EXIT'):   'SELL',
             ('ACT',   'TRIM'):   'SELL',
             ('ACT',   'BUY'):    'BUY',
-            ('ACT',   'REVIEW'): 'WATCH',
             ('WATCH', 'BUY'):    'BUY',
-            ('WATCH', 'REVIEW'): 'WATCH',
         }
         rec = rec_map.get((level, r['suggested_action']), 'HOLD')
         conf = 'HIGH' if level == 'ACT' else 'MEDIUM' if level == 'WATCH' else 'LOW'
@@ -457,9 +453,6 @@ def main(mode):
         }
     with open('data/analysis_results.json', 'w') as f:
         json.dump(legacy, f, indent=2)
-
-    run_id = datetime.now(timezone.utc).strftime('%Y%m%d_%H%M%S')
-    write_holdings_alerts(run_id, datetime.now(timezone.utc), results)
 
     alerts = [r for r in results if r['alert_level'] == 'ACT']
 
