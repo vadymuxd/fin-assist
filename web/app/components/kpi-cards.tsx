@@ -123,7 +123,7 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
     );
   }
 
-  const { latest, baselineDate, daily, wow, mom, ytd } = deltas;
+  const { latest, baselineDate, daily, wow, mom, sinceBaseline } = deltas;
   const stocks = latest.self_managed ?? 0;
   const cash = latest.cash ?? 0;
   const managed = latest.managed ?? 0;
@@ -164,7 +164,7 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
         <DeltaCard label="WoW" delta={wow} baselineDate={baselineDate} />
         <DeltaCard label="MoM" delta={mom} baselineDate={baselineDate} />
-        <DeltaCard label="YTD" delta={ytd} baselineDate={baselineDate} />
+        <DeltaCard label="Start" delta={sinceBaseline} baselineDate={baselineDate} />
       </div>
     </div>
   );

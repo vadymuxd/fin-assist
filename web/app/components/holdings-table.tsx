@@ -77,13 +77,23 @@ function SortHeader({
   );
 }
 
+function withComputedPnlPct(h: Holding): Holding {
+  const cost = (h.avg_buy ?? 0) * (h.qty ?? 0);
+  if (cost > 0 && h.pnl_abs !== null) {
+    return { ...h, pnl_pct: (h.pnl_abs / cost) * 100 };
+  }
+  return h;
+}
+
 export default function HoldingsTable({ holdings }: { holdings: Holding[] }) {
   const [sortKey, setSortKey] = useState<SortKey>("value_gbp");
   const [dir, setDir] = useState<Dir>("desc");
 
+  const enriched = useMemo(() => holdings.map(withComputedPnlPct), [holdings]);
+
   const sorted = useMemo(() => {
-    return [...holdings].sort((a, b) => compare(a[sortKey], b[sortKey], dir));
-  }, [holdings, sortKey, dir]);
+    return [...enriched].sort((a, b) => compare(a[sortKey], b[sortKey], dir));
+  }, [enriched, sortKey, dir]);
 
   const onSort = (k: SortKey) => {
     if (k === sortKey) {

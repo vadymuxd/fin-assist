@@ -65,7 +65,7 @@ export default function AllocationChart({
   managed?: number | null;
   cash?: number | null;
 }) {
-  const [dim, setDim] = useState<Dimension>("sector");
+  const [dim, setDim] = useState<Dimension>("ticker");
 
   const stockSlices = useMemo(() => bucket(holdings, dim), [holdings, dim]);
 

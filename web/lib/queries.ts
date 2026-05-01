@@ -297,10 +297,11 @@ export type SavingsDelta = { absolute: number; pct: number; fromDate: string };
 
 export type SavingsDeltasResult = {
   latest: SavingsSnapshot;
+  baselineDate: string;
   daily: SavingsDelta | null;
   wow: SavingsDelta | null;
   mom: SavingsDelta | null;
-  ytd: SavingsDelta | null;
+  sinceStart: SavingsDelta | null;
 };
 
 export async function getSavingsSnapshots(): Promise<SavingsSnapshot[]> {
@@ -355,13 +356,14 @@ export function computeSavingsDeltas(
   if (snapshots.length === 0) return null;
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
   const latest = sorted[sorted.length - 1];
+  const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? savingsDelta(latest, sorted[sorted.length - 2]) : null;
   const wow = savingsDelta(latest, findSavingsOnOrBefore(prior, daysAgoISO(7)));
-  const mom = savingsDelta(latest, findSavingsOnOrBefore(prior, daysAgoISO(30)));
-  const yearStart = `${new Date().getUTCFullYear()}-01-01`;
-  const ytd = savingsDelta(latest, findSavingsOnOrBefore(prior, yearStart));
-  return { latest, daily, wow, mom, ytd };
+  const mom30 = findSavingsOnOrBefore(prior, daysAgoISO(30));
+  const mom = savingsDelta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
+  const sinceStart = baseline.date !== latest.date ? savingsDelta(latest, baseline) : null;
+  return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
 }
 
 // ─── Pensions ─────────────────────────────────────────────────────────────────
@@ -527,10 +529,12 @@ export async function getNetWorthData(): Promise<NetWorthPoint[]> {
   if (!inv || !inv.length) return [];
   // Key off portfolio_snapshots (most frequent — daily). For each investment date,
   // find the latest savings, pension, and mortgage snapshot on or before that date.
+  // Falls back to the earliest available record if all data is after the target date,
+  // so components that were added to the app later don't create a fake spike in net worth.
   function latestOnOrBefore<T extends { date: string }>(arr: T[] | null, date: string): T | null {
-    if (!arr) return null;
+    if (!arr || arr.length === 0) return null;
     const c = arr.filter((r) => r.date <= date);
-    return c.length > 0 ? c[c.length - 1] : null;
+    return c.length > 0 ? c[c.length - 1] : arr[0];
   }
   return inv.map((i) => {
     const savRow = latestOnOrBefore(sav, i.date);
@@ -609,7 +613,8 @@ export function computeDeltas(snapshots: PortfolioSnapshot[]): DashboardDeltas |
   const daily = sorted.length >= 2 ? delta(latest, sorted[sorted.length - 2]) : null;
   const sinceBaseline = baseline.date !== latest.date ? delta(latest, baseline) : null;
   const wow = delta(latest, findClosestOnOrBefore(prior, daysAgoISO(7)));
-  const mom = delta(latest, findClosestOnOrBefore(prior, daysAgoISO(30)));
+  const mom30 = findClosestOnOrBefore(prior, daysAgoISO(30));
+  const mom = delta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
   const yearStart = `${new Date().getUTCFullYear()}-01-01`;
   const ytd = delta(latest, findClosestOnOrBefore(prior, yearStart));
   return { latest, baselineDate: baseline.date, daily, sinceBaseline, wow, mom, ytd };

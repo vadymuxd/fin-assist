@@ -24,8 +24,8 @@ function deltaBg(pct: number) {
 }
 function shortDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "2-digit",
     month: "short",
-    year: "numeric",
     timeZone: "UTC",
   });
 }
@@ -51,7 +51,15 @@ function findOnOrBefore(points: NetWorthPoint[], target: string): NetWorthPoint 
   return c.length === 0 ? null : c[c.length - 1];
 }
 
-function DeltaCard({ label, delta }: { label: string; delta: DeltaInfo }) {
+function DeltaCard({
+  label,
+  delta,
+  baselineDate,
+}: {
+  label: string;
+  delta: DeltaInfo;
+  baselineDate: string;
+}) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -71,7 +79,12 @@ function DeltaCard({ label, delta }: { label: string; delta: DeltaInfo }) {
           <div className="mt-1 text-[10px] text-gray-400 dark:text-gray-500">since {shortDate(delta.fromDate)}</div>
         </>
       ) : (
-        <div className="mt-2 text-xl sm:text-2xl font-semibold tabular-nums text-gray-300 dark:text-gray-700">—</div>
+        <>
+          <div className="mt-2 text-xl sm:text-2xl font-semibold tabular-nums text-gray-300 dark:text-gray-700">—</div>
+          <div className="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+            tracking from {shortDate(baselineDate)}
+          </div>
+        </>
       )}
     </div>
   );
@@ -102,12 +115,13 @@ export default function NetWorthKpiCards({ data }: { data: NetWorthPoint[] }) {
 
   const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
   const latest = sorted[sorted.length - 1];
+  const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
 
   const wow = computeDelta(latest.net_worth, findOnOrBefore(prior, daysAgoISO(7)));
-  const mom = computeDelta(latest.net_worth, findOnOrBefore(prior, daysAgoISO(30)));
-  const yearStart = `${new Date().getUTCFullYear()}-01-01`;
-  const ytd = computeDelta(latest.net_worth, findOnOrBefore(prior, yearStart));
+  const mom30 = findOnOrBefore(prior, daysAgoISO(30));
+  const mom = computeDelta(latest.net_worth, mom30 ?? (prior.length > 0 ? prior[0] : null));
+  const sinceStart = baseline.date !== latest.date ? computeDelta(latest.net_worth, baseline) : null;
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -121,7 +135,7 @@ export default function NetWorthKpiCards({ data }: { data: NetWorthPoint[] }) {
               {gbp.format(latest.net_worth)}
             </div>
             <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              as of {shortDate(latest.date)}
+              as of {new Date(`${latest.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
             </div>
           </div>
           <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
@@ -134,9 +148,9 @@ export default function NetWorthKpiCards({ data }: { data: NetWorthPoint[] }) {
       </div>
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        <DeltaCard label="WoW" delta={wow} />
-        <DeltaCard label="MoM" delta={mom} />
-        <DeltaCard label="YTD" delta={ytd} />
+        <DeltaCard label="WoW" delta={wow} baselineDate={baseline.date} />
+        <DeltaCard label="MoM" delta={mom} baselineDate={baseline.date} />
+        <DeltaCard label="Start" delta={sinceStart} baselineDate={baseline.date} />
       </div>
     </div>
   );

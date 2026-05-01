@@ -15,12 +15,20 @@ import {
 import type { NetWorthPoint } from "@/lib/queries";
 
 type Granularity = "D" | "W" | "M";
+type View = "total" | "breakdown";
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
   maximumFractionDigits: 0,
 });
+
+const seriesColor: Record<string, string> = {
+  Investments: "#2563eb",
+  Savings: "#10b981",
+  Pensions: "#f59e0b",
+  "Mortgage Equity": "#f97316",
+};
 
 function aggregate(data: NetWorthPoint[], g: Granularity): NetWorthPoint[] {
   if (g === "D" || data.length <= 1) return data;
@@ -78,6 +86,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 
 export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
   const [granularity, setGranularity] = useState<Granularity>("D");
+  const [view, setView] = useState<View>("total");
 
   const rows = useMemo(() => aggregate(data, granularity), [data, granularity]);
 
@@ -87,23 +96,42 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Net Worth Over Time</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            Investments + Savings + Pensions + Mortgage Equity
+            {view === "total"
+              ? "Total net worth over time"
+              : "Investments + Savings + Pensions + Mortgage Equity"}
           </p>
         </div>
-        <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 self-start">
-          {(["D", "W", "M"] as Granularity[]).map((g) => (
-            <button
-              key={g}
-              onClick={() => setGranularity(g)}
-              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                granularity === g
-                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
-                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
-              }`}
-            >
-              {g}
-            </button>
-          ))}
+        <div className="flex items-center gap-2">
+          <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+            {(["total", "breakdown"] as View[]).map((v) => (
+              <button
+                key={v}
+                onClick={() => setView(v)}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                  view === v
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+                }`}
+              >
+                {v === "total" ? "Total" : "Breakdown"}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+            {(["D", "W", "M"] as Granularity[]).map((g) => (
+              <button
+                key={g}
+                onClick={() => setGranularity(g)}
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                  granularity === g
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+                }`}
+              >
+                {g}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
 
@@ -150,7 +178,9 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
                 )}
                 cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
               />
-              <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+              {view === "breakdown" && (
+                <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
+              )}
               <Area
                 type="monotone"
                 dataKey="net_worth"
@@ -162,46 +192,19 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
                 activeDot={{ r: 4 }}
                 isAnimationActive={false}
               />
-              <Line
-                type="monotone"
-                dataKey="investments"
-                name="Investments"
-                stroke="#2563eb"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3 }}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="savings"
-                name="Savings"
-                stroke="#10b981"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3 }}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="pensions"
-                name="Pensions"
-                stroke="#f59e0b"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3 }}
-                isAnimationActive={false}
-              />
-              <Line
-                type="monotone"
-                dataKey="mortgage_equity"
-                name="Mortgage Equity"
-                stroke="#f97316"
-                strokeWidth={1.5}
-                dot={false}
-                activeDot={{ r: 3 }}
-                isAnimationActive={false}
-              />
+              {view === "breakdown" && Object.entries(seriesColor).map(([name, color]) => (
+                <Line
+                  key={name}
+                  type="monotone"
+                  dataKey={name === "Investments" ? "investments" : name === "Savings" ? "savings" : name === "Pensions" ? "pensions" : "mortgage_equity"}
+                  name={name}
+                  stroke={color}
+                  strokeWidth={1.5}
+                  dot={false}
+                  activeDot={{ r: 3 }}
+                  isAnimationActive={false}
+                />
+              ))}
             </ComposedChart>
           </ResponsiveContainer>
         </div>

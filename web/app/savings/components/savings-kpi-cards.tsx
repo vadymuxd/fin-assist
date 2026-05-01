@@ -24,13 +24,21 @@ function deltaBg(pct: number) {
 }
 function shortDate(iso: string) {
   return new Date(`${iso}T00:00:00Z`).toLocaleDateString("en-GB", {
+    day: "2-digit",
     month: "short",
-    year: "numeric",
     timeZone: "UTC",
   });
 }
 
-function DeltaCard({ label, delta }: { label: string; delta: SavingsDelta | null }) {
+function DeltaCard({
+  label,
+  delta,
+  baselineDate,
+}: {
+  label: string;
+  delta: SavingsDelta | null;
+  baselineDate: string;
+}) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -56,7 +64,14 @@ function DeltaCard({ label, delta }: { label: string; delta: SavingsDelta | null
           </div>
         </>
       ) : (
-        <div className="mt-2 text-xl sm:text-2xl font-semibold tabular-nums text-gray-300 dark:text-gray-700">—</div>
+        <>
+          <div className="mt-2 text-xl sm:text-2xl font-semibold tabular-nums text-gray-300 dark:text-gray-700">
+            —
+          </div>
+          <div className="mt-0.5 text-[10px] text-gray-400 dark:text-gray-500">
+            tracking from {shortDate(baselineDate)}
+          </div>
+        </>
       )}
     </div>
   );
@@ -82,7 +97,7 @@ export default function SavingsKpiCards({ deltas }: { deltas: SavingsDeltasResul
     );
   }
 
-  const { latest, daily, wow, mom, ytd } = deltas;
+  const { latest, baselineDate, daily, wow, mom, sinceStart } = deltas;
   const myJoint = latest.joint_total * JOINT_SHARE;
   const myTotal = latest.personal_total + myJoint;
 
@@ -98,7 +113,7 @@ export default function SavingsKpiCards({ deltas }: { deltas: SavingsDeltasResul
               {gbp.format(myTotal)}
             </div>
             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span>as of {shortDate(latest.date)}</span>
+              <span>as of {new Date(`${latest.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</span>
               {daily && (
                 <>
                   <span className="text-gray-300 dark:text-gray-700">•</span>
@@ -117,9 +132,9 @@ export default function SavingsKpiCards({ deltas }: { deltas: SavingsDeltasResul
       </div>
 
       <div className="grid grid-cols-3 gap-3 sm:gap-4">
-        <DeltaCard label="WoW" delta={wow} />
-        <DeltaCard label="MoM" delta={mom} />
-        <DeltaCard label="YTD" delta={ytd} />
+        <DeltaCard label="WoW" delta={wow} baselineDate={baselineDate} />
+        <DeltaCard label="MoM" delta={mom} baselineDate={baselineDate} />
+        <DeltaCard label="Start" delta={sinceStart} baselineDate={baselineDate} />
       </div>
     </div>
   );
