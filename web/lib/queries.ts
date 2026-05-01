@@ -524,29 +524,30 @@ export async function getNetWorthData(): Promise<NetWorthPoint[]> {
     supabase.from("pension_snapshots").select("date, total").order("date", { ascending: true }),
     supabase.from("mortgage_snapshots").select("date, equity_half").order("date", { ascending: true }),
   ]);
-  if (!inv || !sav || sav.length === 0 || !inv.length) return [];
-  // For each savings snapshot (month-end), pair with the closest investment, pension,
-  // and mortgage snapshots on or before that date.
-  return sav
-    .map((s) => {
-      const candidates = inv.filter((i) => i.date <= s.date);
-      if (candidates.length === 0) return null;
-      const closest = candidates[candidates.length - 1];
-      const savingsEff = effectiveSavingsTotal(s as SavingsSnapshot);
-      const penCandidates = (pen ?? []).filter((p) => p.date <= s.date);
-      const pensionTotal = penCandidates.length > 0 ? Number(penCandidates[penCandidates.length - 1].total) : 0;
-      const mortCandidates = (mort ?? []).filter((m) => m.date <= s.date);
-      const mortgageEquity = mortCandidates.length > 0 ? Number(mortCandidates[mortCandidates.length - 1].equity_half) : 0;
-      return {
-        date: s.date,
-        investments: closest.grand_total,
-        savings: savingsEff,
-        pensions: pensionTotal,
-        mortgage_equity: mortgageEquity,
-        net_worth: closest.grand_total + savingsEff + pensionTotal + mortgageEquity,
-      };
-    })
-    .filter((p): p is NetWorthPoint => p !== null);
+  if (!inv || !inv.length) return [];
+  // Key off portfolio_snapshots (most frequent — daily). For each investment date,
+  // find the latest savings, pension, and mortgage snapshot on or before that date.
+  function latestOnOrBefore<T extends { date: string }>(arr: T[] | null, date: string): T | null {
+    if (!arr) return null;
+    const c = arr.filter((r) => r.date <= date);
+    return c.length > 0 ? c[c.length - 1] : null;
+  }
+  return inv.map((i) => {
+    const savRow = latestOnOrBefore(sav, i.date);
+    const savingsEff = savRow ? effectiveSavingsTotal(savRow as SavingsSnapshot) : 0;
+    const penRow = latestOnOrBefore(pen, i.date);
+    const pensionTotal = penRow ? Number(penRow.total) : 0;
+    const mortRow = latestOnOrBefore(mort, i.date);
+    const mortgageEquity = mortRow ? Number(mortRow.equity_half) : 0;
+    return {
+      date: i.date,
+      investments: i.grand_total,
+      savings: savingsEff,
+      pensions: pensionTotal,
+      mortgage_equity: mortgageEquity,
+      net_worth: i.grand_total + savingsEff + pensionTotal + mortgageEquity,
+    };
+  });
 }
 
 // ─────────────────────────────────────────────────────────────────────────────

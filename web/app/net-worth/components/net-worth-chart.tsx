@@ -77,7 +77,7 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 }
 
 export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
-  const [granularity, setGranularity] = useState<Granularity>("M");
+  const [granularity, setGranularity] = useState<Granularity>("D");
 
   const rows = useMemo(() => aggregate(data, granularity), [data, granularity]);
 
@@ -109,7 +109,7 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
 
       {rows.length < 2 ? (
         <div className="h-64 flex items-center justify-center text-sm text-gray-500 dark:text-gray-400 text-center px-4">
-          Not enough overlapping data yet — both investment and savings snapshots are needed for the same dates.
+          Not enough data yet — the chart will build up as snapshots accumulate.
         </div>
       ) : (
         <div className="h-64 sm:h-80 -ml-2">
