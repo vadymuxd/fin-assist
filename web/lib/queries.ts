@@ -386,10 +386,11 @@ export type PensionDelta = { absolute: number; pct: number; fromDate: string };
 
 export type PensionDeltasResult = {
   latest: PensionSnapshot;
+  baselineDate: string;
   daily: PensionDelta | null;
   wow: PensionDelta | null;
   mom: PensionDelta | null;
-  ytd: PensionDelta | null;
+  sinceStart: PensionDelta | null;
 };
 
 export async function getPensionSnapshots(): Promise<PensionSnapshot[]> {
@@ -433,14 +434,15 @@ function findPensionOnOrBefore(snapshots: PensionSnapshot[], targetISO: string):
 export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDeltasResult | null {
   if (snapshots.length === 0) return null;
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
+  const baseline = sorted[0];
   const latest = sorted[sorted.length - 1];
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? pensionDelta(latest, sorted[sorted.length - 2]) : null;
   const wow = pensionDelta(latest, findPensionOnOrBefore(prior, daysAgoISO(7)));
-  const mom = pensionDelta(latest, findPensionOnOrBefore(prior, daysAgoISO(30)));
-  const yearStart = `${new Date().getUTCFullYear()}-01-01`;
-  const ytd = pensionDelta(latest, findPensionOnOrBefore(prior, yearStart));
-  return { latest, daily, wow, mom, ytd };
+  const mom30 = findPensionOnOrBefore(prior, daysAgoISO(30));
+  const mom = pensionDelta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
+  const sinceStart = baseline.date !== latest.date ? pensionDelta(latest, baseline) : null;
+  return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
 }
 
 // ─── Mortgage ─────────────────────────────────────────────────────────────────

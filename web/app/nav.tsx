@@ -8,14 +8,15 @@ type Tab = {
   label: string;
   href: string;
   icon: LucideIcon;
+  activeColor: string; // Tailwind text colour class for active state
 };
 
 const tabs: Tab[] = [
-  { label: "Investments", href: "/", icon: LineChart },
-  { label: "Savings", href: "/savings", icon: PiggyBank },
-  { label: "Pensions", href: "/pensions", icon: Landmark },
-  { label: "Net Worth", href: "/net-worth", icon: TrendingUp },
-  { label: "Mortgage", href: "/mortgage", icon: Home },
+  { label: "Investments", href: "/",          icon: LineChart,  activeColor: "text-blue-600 dark:text-blue-400"     },
+  { label: "Savings",     href: "/savings",   icon: PiggyBank,  activeColor: "text-emerald-500 dark:text-emerald-400" },
+  { label: "Pensions",    href: "/pensions",  icon: Landmark,   activeColor: "text-amber-500 dark:text-amber-400"   },
+  { label: "House",       href: "/mortgage",  icon: Home,       activeColor: "text-orange-500 dark:text-orange-400" },
+  { label: "Net Worth",   href: "/net-worth", icon: TrendingUp, activeColor: "text-violet-500 dark:text-violet-400" },
 ];
 
 function isActive(href: string, pathname: string) {
@@ -43,7 +44,7 @@ export default function Nav() {
               </span>
             </Link>
             <nav className="flex items-center gap-1">
-              {tabs.map(({ label, href, icon: Icon }) => {
+              {tabs.map(({ label, href, icon: Icon, activeColor }) => {
                 const active = isActive(href, pathname);
                 return (
                   <Link
@@ -51,11 +52,16 @@ export default function Nav() {
                     href={href}
                     className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md text-sm font-medium transition-colors ${
                       active
-                        ? "bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-50"
+                        ? `bg-gray-100 dark:bg-gray-800 text-gray-900 dark:text-gray-50`
                         : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50 hover:bg-gray-50 dark:hover:bg-gray-900"
                     }`}
                   >
-                    <Icon size={16} strokeWidth={2} aria-hidden="true" />
+                    <Icon
+                      size={16}
+                      strokeWidth={2}
+                      aria-hidden="true"
+                      className={active ? activeColor : ""}
+                    />
                     {label}
                   </Link>
                 );
@@ -86,16 +92,14 @@ export default function Nav() {
         aria-label="Primary"
       >
         <div className="flex h-16">
-          {tabs.map(({ label, href, icon: Icon }) => {
+          {tabs.map(({ label, href, icon: Icon, activeColor }) => {
             const active = isActive(href, pathname);
             return (
               <Link
                 key={href}
                 href={href}
                 className={`flex-1 flex flex-col items-center justify-center gap-1 text-[11px] font-medium transition-colors ${
-                  active
-                    ? "text-blue-600 dark:text-blue-400"
-                    : "text-gray-400 dark:text-gray-500"
+                  active ? activeColor : "text-gray-400 dark:text-gray-500"
                 }`}
               >
                 <Icon
