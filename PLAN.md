@@ -1,24 +1,34 @@
 # Fin Assist — Build Plan
 **Personal Finance AI Assistant**
-Last updated: April 2026
+Last updated: May 2026
+
+> **Authoritative version is in Notion:** https://www.notion.so/34f416f2756681c48b99ef184aa3c5c3
+> This file is a git mirror. Notion is updated first; PLAN.md synced after.
 
 ---
 
 ## Architecture
 
-Cloud-hosted automation pipeline running on **GitHub Actions** (no Mac required to be always-on). Three layers:
+Cloud-hosted automation on **GitHub Actions** (no always-on Mac needed). Three stores, one purpose each:
 
-| Layer | What it does | Technology |
-|-------|-------------|------------|
-| Data | Portfolio + live prices + news + sentiment + fundamentals | Google Sheets + Finnhub (primary) + yfinance (fallback) |
-| Brain | Analysis, scoring, recommendations | Claude API (called by scripts — FAS scoring only, not per-headline) |
-| Interface | Alerts + weekly digest + conversational assistant | Telegram + Claude Project (claude.ai) |
+| Store | Purpose | Written by |
+|-------|---------|------------|
+| **Google Sheets** | Confirmed balances + account metadata (rates, names, owners). Investment source of truth (live formulas). | Human (bulk updates) |
+| **Notion** | Individual transactions + Claude's memory. Entry point for Claude mobile and NL updates. | Claude mobile, sync_worker |
+| **Supabase** | App database — derived from Sheets and Notion. Workers write here. App reads here. | Workers only |
 
-**Key decision:** Checks run 3× daily (09:30 / 13:00 / 16:30 BST, weekdays) + Sunday digest via GitHub Actions cron. No always-on server needed.
+**Schedule:** 3× daily weekdays (09:30 / 13:00 / 16:30 BST) + Monday 08:00 BST digest + Sunday 09:00 BST mortgage monitor.
 
-**Data routing:** Finnhub free tier (60 req/min, 60+ exchanges incl. LSE) for US stocks + news sentiment + analyst data. yfinance as fallback for tickers Finnhub doesn't fully cover on free tier (some LSE endpoints). Script checks `Exchange` field and routes accordingly.
+**Web app:** fin-assist-web.vercel.app — Next.js on Vercel, Supabase read cache, 5 tabs (Investments / Savings / Pensions / Net Worth / Insights + Mortgage)
 
-**Notification channel:** Telegram (both urgent alerts and weekly digest)
+**Transaction input paths — 5 paths, one destination (Supabase → Web App)**
+```
+PATH 1: Cash Flow Sheet → sync_worker.py (1st of month) → Notion Transactions DB → sync_worker.py (daily close) → Supabase
+PATH 2: Claude mobile NL → Notion Transactions DB → sync_worker.py (daily close) → Supabase
+PATH 3: Bank API (future, Phase 19) → Supabase direct + Notion summary
+PATH 4: market_worker.py + snapshot_worker.py → Supabase (investments, unchanged)
+PATH 5: Web app "+" manual entry → Supabase (instant) → sync_worker.py backfills Notion Transactions DB
+```
 
 ---
 
@@ -73,7 +83,7 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 > Goal: get real holdings into the sheet first. Schema emerges from actual data, not upfront design.
 
 > **Sheet:** `1IwBSuAzlP0xt0_9pQbztovmfy4Ng1BVCwUuhDurJhsI`
-> **Scripts may only read/write to:** `Inv26 - Summary`, `Inv26 - Trend`, `InvTransactions`, `Alerts Config`, `Analysis Log`
+> **Scripts may only read/write to:** `Inv26 - Summary`, `InvTransactions`, `Alerts Config`, `Analysis Log`
 > **JP Morgan** = Nutmeg Alpha (product was renamed)
 
 - [x] **3.1** Sheet exists and is shared with service account as Editor
@@ -93,7 +103,7 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
   - **5 benchmarks added**: S&P 500 (6816.89), FTSE 100 (10600.53), NASDAQ 100 (25116.34), MSCI World (132.23), Gold via SGLN (68.80 — references F18 from `update_manual_prices.py`)
 - [x] **3.7** `Alerts Config` tab placeholder created (to be filled in Phase 4 design session)
 - [x] **3.8** `Analysis Log` tab created — empty, ready for `claude_analyst.py`
-- [x] **3B** `Inv26 - Trend` tab created — 20-column schema (A–T). April 13 baseline hardcoded in row 17 (all % = 0). May 2026 template in row 18 with formulas locked to row 17. Benchmarks stored as raw index values; % vs start computed by formula. Tracking start: **April 13, 2026**.
+- [x] **3B** `Inv26 - Trend` tab created (later removed — trend data now lives in app via Supabase `portfolio_snapshots`)
 - [x] **3B** `InvTransactions` extended — Notes column (col I) added. New action types: `DEPOSIT`, `WITHDRAWAL`, `TRANSFER_IN`, `TRANSFER_OUT`. Total Invested = `SUMIF(Action=DEPOSIT)` — P&L stays clean when new cash arrives.
 
 ### Scripts built in Phase 3
@@ -152,12 +162,12 @@ Goal: Claude remembers context across all surfaces — Mac (Claude Code), mobile
 - [x] **5.4** ~~Build `alert_sender.py`~~ — superseded by event-driven alerts in Phase 5C (consolidated brief replaced)
 - [x] **5.5** Build `sheets_updater.py` — write Analysis Log rows to sheet + daily Notion Portfolio Snapshot update after 15:30 UTC run
 - [x] **5.6** ~~Build `prospect_scanner.py`~~ — superseded by `prospect_discovery.py` in Phase 5C (static watchlist replaced with dynamic discovery)
-- [x] **5.7** Build `snapshot_trend.py` — append monthly row to `Inv26 - Trend`. Reads Grand Total + all 5 benchmark values from `Inv26 - Summary`. GitHub Actions cron: `0 16 28-31 * 1-5` (covers last few days of month, weekdays); script checks if it's actually the last weekday before running, exits silently if not. Manual dispatch always available.
+- [x] **5.7** ~~Build `snapshot_trend.py`~~ — removed (sheet removed; trend data lives in app via `portfolio_snapshots`)
 - [x] **5.8** Build `weekly_digest.py` — Monday 08:00 BST Telegram summary. v2 (Apr 2026): portfolio WoW (yfinance-weighted), 7d benchmarks with beat markers, holdings grouped 🚀/⚠️/👀 with bullish/bearish% badges, sector ETFs + concentration warn, discovery top 3, Sonnet 4.6 recommendation paragraph
 - [x] **5.9** GitHub Actions workflows created:
   - `daily_monitor.yml` — 3× daily cron: `30 8 * * 1-5`, `0 12 * * 1-5`, `30 15 * * 1-5`
   - `weekly_digest.yml` — Monday: `0 7 * * 1` (runs holdings_monitor + prospect_discovery first)
-  - `monthly_trend.yml` — last weekday of month: `0 16 28-31 * 1-5`
+  - ~~`monthly_trend.yml`~~ — removed (Inv26 - Trend sheet removed)
 - [x] **5.10** Sheet tabs created: `Analysis Log` (headers + ready), `Watchlist` (headers, add tickers), `Alerts Config` (all 17 held tickers pre-populated with 5%/5% thresholds)
 - [x] Add all secrets to GitHub repo (Settings → Secrets) — 8 secrets set incl. MARKETAUX_API_KEY
 - [x] End-to-end test: trigger workflow manually, confirm Telegram message received
@@ -309,7 +319,7 @@ Legacy commands kept as aliases so existing muscle memory works.
 - [x] **6A.1** Create Supabase project (free tier). Add `SUPABASE_URL`, `SUPABASE_ANON_KEY`, `SUPABASE_SERVICE_ROLE_KEY` to `.env`, GitHub Actions secrets, and Vercel env.
 - [x] **6A.2** Schema migration `supabase/migrations/0001_init.sql` — 7 tables: holdings, portfolio_snapshots, trend_snapshots, discoveries, holdings_alerts, news_items, sectors.
 - [x] **6A.3** Build `scripts/lib/supabase_sink.py` — shared client + writer helpers. Fails open.
-- [x] **6A.4** Dual-write wiring: sheets_updater → holdings, prospect_discovery → discoveries, holdings_monitor → holdings_alerts, snapshot_trend → trend_snapshots, market_sources → news_items.
+- [x] **6A.4** Dual-write wiring: sheets_updater → holdings, prospect_discovery → discoveries, holdings_monitor → holdings_alerts, market_sources → news_items. (snapshot_trend → trend_snapshots removed)
 - [x] **6A.5** `scripts/daily_portfolio_snapshot.py` — reads Inv26-Summary totals + benchmarks, upserts to `portfolio_snapshots`. Called from `daily_monitor.yml` close run (HOUR ≥ 15).
 - [x] **6A.6** `market_sources.py` extended with `image_url` capture from Marketaux + Alpha Vantage.
 - [x] **Migration 0002** — `holdings.value_gbp` column added (GBP-denominated value from sheet col G). Applied via Supabase CLI. Backfill complete (11 rows).
@@ -416,121 +426,171 @@ Add pension tracking. Read-only monitoring — can't trade but want visibility.
 
 ---
 
-## Phase 9 — Mortgage
+## Phase 9 — Mortgage ✅ COMPLETE
 
-Track mortgage balance, remaining term, overpayment opportunities, rate review dates.
-
----
-
-## Phase 10 — Budgeting & Expenses
-
-Full budgeting layer: income, fixed costs, discretionary spending, joint vs personal. Regular ceremonies (monthly review, annual planning). Integrate Emma Live Export data.
+Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. `mortgage_monitor.py` running Sunday 09:00 BST. `mortgage_snapshot.py` seeds amortisation history.
 
 ---
 
-## Phase 11 — Natural Language Update Layer
+## Phase 10 — Architecture Review & Alignment
 
-> One consistent pattern across all financial domains: tell Claude Fin Assist (mobile) what changed, it writes a structured entry to the right Notion DB, a sync script picks it up and updates Sheet + Supabase + web app. Works for Savings, Pensions, Mortgage, Expenses — anything that needs on-demand balance/transaction updates.
+**Why:** Confirm Architecture reference page reflects actual current state before any new build starts.
 
-### Architecture
-
-```
-Mobile (claude.ai Fin Assist Project)
-  ↓ "added £500 to Chase" / "pension contribution £300 this month" / "paid mortgage £1,200"
-Claude identifies domain + parses fields → writes to correct Notion DB
-  ↓
-domain_sync.py (GHA daily close run, no-op if nothing unsynced)
-  reads Synced=false rows → updates Sheet → upserts Supabase → marks Synced
-  ↓
-Web app auto-reflects (reads from Supabase)
-```
-
-### Notion pages & DBs per domain
-
-Each domain gets two things: a **reference page** (static context — accounts, goals, notes) and a **transactions DB** (append-only log of user-entered updates).
-
-| Domain | Reference page | Transactions DB |
-|--------|---------------|-----------------|
-| Investments | Portfolio Snapshot (exists) | Not needed — auto-updated by scripts |
-| Savings | Savings Context (7A.1) | Savings Transactions |
-| Pensions | Pensions Context (Phase 8) | Pension Contributions |
-| Mortgage | Mortgage Context (Phase 9) | Mortgage Payments |
-| Expenses | Expenses Context (Phase 10) | Expense Entries |
-
-**Transactions DB shared schema:** Date | Domain | Account/Category | Amount £ | Type | Notes | Synced
-
-### Tasks
-
-- [ ] **11.1** Create remaining Notion reference pages (Pensions Context, Mortgage Context, Expenses Context) — Savings Context already done (7A.1)
-- [ ] **11.2** Create Notion "Transactions" DB — single shared DB with Domain field covering all financial domains
-- [ ] **11.3** Update Fin Assist Project system prompt — detect any financial update mention, identify domain, extract fields, write to Transactions DB, confirm back to user
-- [ ] **11.4** Build `scripts/domain_sync.py` — **single comprehensive script replacing all per-domain snapshot scripts**. Runs daily in `daily_monitor.yml` close run. Checks Notion Transactions DB for unsynced entries across ALL domains (Investments, Savings, Pensions, Mortgage, Expenses), routes each row to the correct Sheet tab + Supabase tables, marks Synced, triggers Vercel ISR. No-op if nothing unsynced. Supersedes `savings_snapshot.py` for new data entry — existing scripts (e.g. `daily_portfolio_snapshot.py`) still handle auto-sourced data.
-- [ ] **11.5** Add `domain_sync.py` to `daily_monitor.yml` close run alongside `daily_portfolio_snapshot.py`
+- [ ] **10.1** Run architecture review interview session
+- [ ] **10.2** Update Architecture reference page with all corrections ← *in progress (2026-05-05)*
+- [ ] **10.3** Review and adjust Phase 11–16 task lists if anything changed
+- [ ] **10.4** Confirm Phase 11 is ready to start
 
 ---
 
-## Phase 12 — Android App (via Expo)
+## Phase 11 — Clean Up the Engine Room
 
-> Moved from Phase 6G. Web app proven sufficient during dogfood; build Android when native UX is needed (push notifications, offline, biometric).
+**Why:** Consolidate ~12 scripts into 4 clean workers before building anything new on top.
 
-- [ ] **12.1** Pick approach: WebView wrapper (default, ~1 day) or react-native-web shared codebase (only if native features needed)
-- [ ] **12.2** Scaffold Expo app in `mobile/` — `npx create-expo-app mobile`, strip to single WebView screen pointing at Vercel URL
-- [ ] **12.3** Icon + splash + app name via `app.json`
-- [ ] **12.4** Build APK/AAB via EAS Build, install on personal Android
-- [ ] **12.5** Distribution — sideload APK or EAS Submit to Play Store
+| New worker | Replaces | Responsibility |
+|---|---|---|
+| `market_worker.py` | `news_fetcher.py`, `stock_assessor.py`, `alert_dispatcher.py` | Full investment pipeline: fetch → assess → dispatch. `--mode` flag. |
+| `snapshot_worker.py` | `daily_portfolio_snapshot.py`, `savings_snapshot.py`, `pension_snapshot.py`, `mortgage_snapshot.py`, scores from `sheets_updater.py` | Single owner of all Supabase snapshot writes. `--domain` flag. Note: `mortgage_snapshot.py` currently has no GHA trigger — snapshot_worker fixes this. |
+| `sync_worker.py` | *(new)* | Reconciles Notion Transactions DB ↔ Supabase. Cash Flow sheet → Notion on 1st of month. |
+| `digest_worker.py` | `weekly_digest.py` | Reads Supabase directly. No duplicate Monday pipeline calls. |
 
----
+**Kept as-is:** `holdings_monitor.py --bot`, `prospect_discovery.py --bot`, `update_manual_prices.py`, `mortgage_monitor.py`, `sheets_updater.py` (sheet score writes only)
 
-## Phase 13 — Custom Chat Interface (In-App Assistant)
-
-> Replace both Telegram bot and Claude mobile (claude.ai Project) with a native chat UI built into the Fin Assist Android app. One interface, full financial context, push notifications powered by Expo.
-
-### Vision
-
-Instead of switching between Telegram (for alerts) and claude.ai (for conversations), everything lives in the app:
-- Chat with Fin Assist directly inside the Android app
-- Push notifications replace Telegram alerts (holdings ACT events, weekly digest, discoveries)
-- Full financial context loaded per message (Supabase + Notion memory)
-- Same Claude API brain, but owned and embedded — no dependency on external chat apps
-
-### Research questions (design session needed before build)
-
-- **Push notifications**: Expo Push Notifications vs FCM direct — complexity vs control
-- **Chat backend**: Extend Cloudflare Worker (already has Claude API + Notion context logic) vs new endpoint
-- **Context loading**: Mirror Cloudflare Worker approach (fetch Agent Config + Memory Index + Portfolio Snapshot per message) or use Supabase directly
-- **Message persistence**: Store chat history in Supabase for continuity across sessions, or stateless per message
-- **Telegram deprecation**: Keep Telegram as fallback during transition or cut cleanly once app push notifications are stable
-- **Claude Project deprecation**: App chat replaces claude.ai mobile Project — update system prompt + memory rules accordingly
-
-### Tasks (to be detailed after design session)
-
-- [ ] **13.1** Design session — answer research questions, lock architecture
-- [ ] **13.2** Expo push notification setup — register device tokens, test delivery
-- [ ] **13.3** Migrate alert delivery: `holdings_monitor.py`, `prospect_discovery.py`, `weekly_digest.py` push to Expo instead of (or alongside) Telegram
-- [ ] **13.4** Build chat UI in web app (`/chat` route) — message thread, input, streaming response
-- [ ] **13.5** Chat API endpoint — extend Cloudflare Worker or new Next.js API route; loads full financial context, calls Claude API, streams response
-- [ ] **13.6** Message history persistence in Supabase (`chat_messages` table)
-- [ ] **13.7** Android WebView deep-link to `/chat` as default landing or tab
-- [ ] **13.8** Deprecate Telegram bot + Claude mobile Project once app chat is stable
+- [ ] **eng.1** Write `market_worker.py` — absorb `news_fetcher` + `stock_assessor` + `alert_dispatcher`. Delete originals. Update `daily_monitor.yml`.
+- [ ] **eng.2** Write `snapshot_worker.py` — absorb `savings_snapshot.py`, `pension_snapshot.py`, `daily_portfolio_snapshot.py`, `mortgage_snapshot.py` + score-writing from `sheets_updater.py`. Delete originals. Update `daily_monitor.yml`. Add `--domain` flag.
+- [ ] **eng.3** Write `digest_worker.py` — remove pre-run pipeline, read from Supabase directly. Update `weekly_digest.yml`.
+- [ ] **eng.4** Retire `snapshot_trend.py` + `monthly_trend.yml`. Archive `Inv26 - Trend` tab (read-only).
+- [ ] **eng.5** Update Architecture reference page — replace old scripts inventory with worker model.
+- [ ] **eng.6** Smoke test all GHA workflows.
+- [ ] **eng.7** Add `/mortgage` Telegram bot command — wire Cloudflare Worker to dispatch `mortgage_monitor.yml`.
+- [ ] **eng.8** Investigate 4 May cron failure — Daily Monitor + Weekly Digest did not run at expected times.
+- [ ] **eng.9** Add weekend portfolio snapshot — lightweight Saturday cron (snapshot only, no news/alerts).
+- [ ] **eng.10** Fix `mortgage_monitor.py` Telegram 400 error — message exceeds 4,096 char limit. Send short summary (~800 chars); full report stays in repo.
+- ~~**eng.11**~~ ~~Fix "Updated" date on Savings / Pensions / House pages~~ **Deprecated** — updated_at column approach removed (2026-05-05).
 
 ---
 
-## Credentials & Config (current state)
+## Phase 12 — Lock the Data Model
 
-| Item | Status |
-|------|--------|
-| `.env` | ✅ Complete (Claude API key, Telegram token + chat ID) |
-| `config/service_account.json` | ✅ In place |
-| `PORTFOLIO_SHEET_ID` in `.env` | ✅ Set |
-| GitHub repo secrets | ❌ Not added yet (needed for GitHub Actions) |
+**Why:** Lock every schema and sheet decision before writing transaction code.
+
+### Sheet audit
+- [ ] **data.1** Open Sheet — audit every tab, document actual current purpose
+- [ ] **data.2** Classify each tab: Active-scripts / Active-manual / Archive / Redundant
+- [ ] **data.3** Rename tabs where name no longer reflects purpose
+- [ ] **data.4** Deprecate or hide fully redundant tabs
+- [ ] **data.5** Document `Pension Balance` and `Cash Flow` tabs in Sheet Structure reference page
+- [ ] **data.6** Full rewrite of Sheet Structure page — tab inventory with purpose, owner, read/write rules
+- [ ] **data.7** Rewrite AI safety rules in Agent Config — update Scripts may read/write section to reflect worker model
+- [ ] **data.8** Flag any `(+)` tabs superseded by Phase 12 — mark as candidates for deprecation
+
+### Architecture decisions to lock
+- [ ] **data.9** Map Cash Flow sheet — rows/columns for monthly schedule per domain
+- [ ] **data.10** Confirm which Sheet tabs are retained post-Phase 13 (investments + Cash Flow only?)
+- [ ] **data.11** Lock and apply Supabase `transactions` table migration
+
+**`transactions` table schema:**
+`id (uuid) | date | domain | account_name | amount_gbp | type | notes | source | synced_to_notion (bool) | created_at`
+
+---
+
+## Phase 13 — Add Transaction Entry to the App
+
+**Why:** Web app becomes the primary way to log financial events — "+" button opens a modal, pick domain, fill fields, hit submit. Supabase updates instantly, charts revalidate.
+
+- [ ] **entry.1** Write migration `0008_transactions.sql` — create `transactions` table with RLS.
+- [ ] **entry.2** Add `write_transaction()` helper to `supabase_sink.py`
+- [ ] **entry.3** Build `/api/transactions` POST route — validates payload, inserts to Supabase, triggers ISR
+- [ ] **entry.4** Build `TransactionModal` component — domain picker step → contextual field step → confirm
+- [ ] **entry.5** Wire "+" button into header (persistent across all tabs)
+- [ ] **entry.6** Connect domain dropdowns to live Supabase account lists (`savings_accounts`, `pension_accounts`)
+- [ ] **entry.7** Verify charts revalidate correctly after insert
+- [ ] **entry.8** One-time backfill: push historical Savings Balance + Pension Balance sheet data → Supabase `transactions`
+
+---
+
+## Phase 14 — Investments Comparison Chart
+
+**Why:** Frontend-only. Answers: how is my custom stock portfolio performing vs market and managed funds?
+
+- [ ] **chart.1** Confirm `portfolio_snapshots` has enough history to isolate custom-stocks baseline
+- [ ] **chart.2** Confirm pension + managed fund monthly snapshots have consistent cadence for overlay
+- [ ] **chart.3** Build `ComparisonChart` component — normalised % from first data point, 4 lines, Recharts
+- [ ] **chart.4** Add to Investments tab (below existing dashboard or as toggle)
+
+---
+
+## Phase 15 — Tell Claude What Changed (NL Entry)
+
+**Why:** For ad-hoc updates — "moved £2k from Chase to Moneybox" — tell Claude mobile, it writes to Notion Transactions DB. sync_worker picks it up at daily close.
+
+- [ ] **nl.1** Create Notion Transactions DB — columns: Date | Domain | Account | Amount £ | Type | Notes | Source | Synced
+- [ ] **nl.2** Create Expenses Context reference page
+- [ ] **nl.3** Confirm Mortgage + Pensions Context pages complete
+- [ ] **nl.4** Update Fin Assist system prompt — detect financial update mentions, extract fields, write to Notion Transactions DB
+- [ ] **nl.5** Test all domains end-to-end
+- [ ] **nl.6** Verify sync picks up NL entries and routes correctly within 24h
+
+---
+
+## Phase 16 — Close the Loop (Bidirectional Sync)
+
+**Why:** Two transaction stores (Supabase from app, Notion from Claude) need to stay in sync automatically.
+
+**Reconciliation logic:**
+- Notion `Synced=false` → write to Supabase, mark Synced
+- Supabase `synced_to_notion=false` → write to Notion, mark synced
+- Dedup key: `date + domain + account_name + amount_gbp + type`
+
+- [ ] **sync.1** Map Cash Flow sheet layout (confirm in data.9 before building)
+- [ ] **sync.2** Build `sync_worker.py` — Cash Flow read + Notion write (1st of month) + bidirectional reconciliation (daily close)
+- [ ] **sync.3** Add `monthly_sync.yml` GHA workflow (1st of month trigger)
+- [ ] **sync.4** Add `sync_worker.py` to `daily_monitor.yml` close run
+
+---
+
+## Phase 17 — Android App
+
+**Why:** Build when native UX (push notifications, home screen icon, offline) is actually needed.
+
+- [ ] **android.1** Pick approach: WebView wrapper or react-native-web
+- [ ] **android.2** Scaffold in `mobile/` — single WebView screen pointing at Vercel URL
+- [ ] **android.3** Icon + splash + app name via `app.json`
+- [ ] **android.4** EAS Build → APK/AAB, install on personal Android
+- [ ] **android.5** Distribution: sideload or EAS Submit to Play Store
+
+---
+
+## Phase 18 — In-App Chat Interface
+
+**Why:** Collapse Telegram + claude.ai into the Fin Assist app — native chat UI, push notifications, full financial context.
+
+- [ ] **chat.1** Design session — lock push notification approach, chat backend, context loading, message persistence
+- [ ] **chat.2** Expo push notification setup
+- [ ] **chat.3** Migrate alert delivery to Expo push
+- [ ] **chat.4** Build `/chat` route — message thread, input, streaming response
+- [ ] **chat.5** Chat API endpoint — financial context + Claude API + streaming
+- [ ] **chat.6** Message history in Supabase (`chat_messages` table)
+- [ ] **chat.7** Android WebView default landing → `/chat`
+- [ ] **chat.8** Deprecate Telegram bot + Claude mobile Project once stable
+
+---
+
+## Phase 19 — Budgeting & Expenses ⚠️ OPTIONAL / DEFERRED
+
+> **Status:** Parked indefinitely. Expenses tracked in Emma app. Only build if Open Banking / Plaid / TrueLayer MCP integration becomes viable for automatic transaction import.
 
 ---
 
 ## Immediate Next Steps
 
-1. **Phase 8** — Pensions tracking
-3. **Phase 8** — Pensions tracking
-4. **Phase 9** — Mortgage tracking
-5. **Phase 10** — Budgeting & Expenses
-6. **Phase 11** — Natural language update layer (Claude mobile → Notion → sync across all domains)
-7. **Ongoing** — Update managed fund values (Nutmeg Alpha, Moneyfarm) monthly from app → `Inv26 - Summary`
+1. **Phase 10** — Complete architecture review, update docs (in progress)
+2. **Phase 11** — Script consolidation + operational fixes (cron drift, mortgage Telegram, weekend snapshot)
+3. **Phase 12** — Sheet audit, schema decisions, safety rules rewrite
+4. **Phase 13** — "+" modal, instant Supabase write (highest immediate user value)
+5. **Phase 14** — Investments comparison chart (parallel-safe after Phase 12)
+6. **Phase 15** — NL entry via Claude mobile → Notion
+7. **Phase 16** — `sync_worker.py` bidirectional reconciliation
+8. **Phase 17** — Android app (when native UX needed)
+9. **Phase 18** — In-app chat (long-term, replaces Telegram + claude.ai)
+10. **Ongoing** — Update managed fund values (Nutmeg Alpha, JP Morgan) monthly in `Inv26 - Summary`
