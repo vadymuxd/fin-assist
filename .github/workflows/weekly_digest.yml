@@ -23,39 +23,11 @@ jobs:
       - name: Install dependencies
         run: pip install -r requirements.txt
 
-      - name: Write service account credentials
-        run: |
-          mkdir -p config
-          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
-
-      - name: Refresh holdings alerts (data/holdings_alerts.json)
-        env:
-          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
-          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
-          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
-          TELEGRAM_BOT_TOKEN:             ''
-          TELEGRAM_CHAT_ID:               ''
-        run: python3 scripts/holdings_monitor.py --auto
-
-      - name: Refresh prospect discoveries (data/prospect_results.json)
-        env:
-          FINNHUB_API_KEY:                ${{ secrets.FINNHUB_API_KEY }}
-          ALPHA_VANTAGE_API_KEY:          ${{ secrets.ALPHA_VANTAGE_API_KEY }}
-          MARKETAUX_API_KEY:              ${{ secrets.MARKETAUX_API_KEY }}
-          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
-          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
-          TELEGRAM_BOT_TOKEN:             ''
-          TELEGRAM_CHAT_ID:               ''
-        run: python3 scripts/prospect_discovery.py --auto
-        continue-on-error: true
-
       - name: Send weekly digest
         env:
-          CLAUDE_API_KEY:                 ${{ secrets.CLAUDE_API_KEY }}
-          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
-          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: python3 scripts/weekly_digest.py
+          CLAUDE_API_KEY:            ${{ secrets.CLAUDE_API_KEY }}
+          TELEGRAM_BOT_TOKEN:        ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:          ${{ secrets.TELEGRAM_CHAT_ID }}
+          SUPABASE_URL:              ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY: ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+        run: python3 scripts/digest_worker.py
