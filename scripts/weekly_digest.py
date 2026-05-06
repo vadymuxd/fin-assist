@@ -48,10 +48,6 @@ ROW_STOCKS_TOTAL  = 11
 ROW_MANAGED_TOTAL = 28
 COL_VALUE_IDX     = 6   # 0-based = col G
 
-# Inv26 - Trend baseline row (April 2026)
-TREND_BASELINE_ROW = 17
-TREND_TOTAL_COL    = 4   # 0-based = col E (Total)
-
 # yfinance symbols for benchmarks
 BENCHMARKS = [
     ('S&P 500',    '^GSPC'),
@@ -229,18 +225,6 @@ def read_summary(sh):
     }
 
 
-def read_baseline_total(sh):
-    """Read grand total from Inv26 - Trend row 17 (Apr 13 baseline)."""
-    try:
-        ws = sh.worksheet('Inv26 - Trend')
-        row = ws.row_values(TREND_BASELINE_ROW)
-        if len(row) > TREND_TOTAL_COL:
-            return parse_float(row[TREND_TOTAL_COL])
-    except Exception as e:
-        print(f"  Baseline read failed: {e}")
-    return 0.0
-
-
 # ---------------------------------------------------------------------------
 # Portfolio WoW via yfinance (weighted by market value)
 # ---------------------------------------------------------------------------
@@ -330,7 +314,7 @@ def classify_holding(h):
 # Section builders
 # ---------------------------------------------------------------------------
 
-def build_portfolio_section(summary, portfolio_7d, baseline_total):
+def build_portfolio_section(summary, portfolio_7d):
     total = summary['grand_total']
     lines = ['━━━ <b>PORTFOLIO</b> ━━━']
 
@@ -342,10 +326,6 @@ def build_portfolio_section(summary, portfolio_7d, baseline_total):
         )
     else:
         lines.append(f'Total: <b>£{total:,.0f}</b>')
-
-    if baseline_total > 0:
-        baseline_pct = (total - baseline_total) / baseline_total * 100
-        lines.append(f'vs Apr 13 baseline: <b>{pct_str(baseline_pct)}</b>')
 
     return '\n'.join(lines)
 
@@ -605,9 +585,8 @@ def main():
     print(f"  Opened: {sh.title}")
 
     print("\nReading portfolio summary...")
-    summary        = read_summary(sh)
-    baseline_total = read_baseline_total(sh)
-    print(f"  Grand Total: £{summary['grand_total']:,.2f}  |  Baseline: £{baseline_total:,.2f}")
+    summary = read_summary(sh)
+    print(f"  Grand Total: £{summary['grand_total']:,.2f}")
 
     print("\nLoading holdings_alerts.json...")
     holdings = load_holdings()
@@ -645,7 +624,7 @@ def main():
 
     sections = [
         header,
-        build_portfolio_section(summary, portfolio_7d, baseline_total),
+        build_portfolio_section(summary, portfolio_7d),
         build_benchmarks_section(portfolio_7d, bench_returns),
         build_holdings_section(holdings) if holdings else '',
         build_sector_section(holdings) if holdings else '',

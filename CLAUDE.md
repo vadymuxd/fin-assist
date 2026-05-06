@@ -26,7 +26,6 @@ Add a detailed summary to the Sessions DB in Notion, then add a one-liner entry 
 ## Safety rules (always apply, even if Notion is unavailable)
 
 - **Never touch** these Google Sheet tabs: `Inv25+`, `Summary (+)`, `Money Flow (+)`, `Joint Spendings (+)`, `Personal Spendings (+)`, `Saving Transfers` (was `Savings (+)`), `Accounts (+)`, `Legend`, `Inv22-24`, `Earnings 2025`
-- Scripts may only read/write: `Inv26 - Summary`, `Inv26 - Trend`, `InvTransactions`, `Alerts Config`, `Analysis Log`
+- Scripts may only read/write: `Inv26 - Summary`, `InvTransactions`, `Alerts Config`, `Analysis Log`
 - Scripts may **read** (not modify): `Savings Balance` — savings account balances time-series (Bank | Account | Type | Owner | monthly columns)
-- `Inv26` tab has been renamed to `Inv26 - Summary`; `Inv26 - Trend` is a new tab created in Phase 3B
-- Phase 3B complete: sheet structure, benchmarks, Trend tab, and transaction architecture finalised
+- `Inv26` tab has been renamed to `Inv26 - Summary`; `Inv26 - Trend` tab has been removed (trend data lives in the app via Supabase `portfolio_snapshots`)

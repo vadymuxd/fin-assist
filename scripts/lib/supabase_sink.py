@@ -153,15 +153,6 @@ def write_portfolio_snapshot(date: str, totals: dict) -> bool:
     return ok
 
 
-def write_trend_snapshot(snapshot_date: str, data: dict) -> bool:
-    """
-    Upsert one monthly trend snapshot row.
-    data: all numeric columns from Inv26 - Trend schema.
-    """
-    row = {'snapshot_date': snapshot_date, **data}
-    return _upsert('trend_snapshots', [row], on_conflict='snapshot_date')
-
-
 def write_news_items(items: list[dict]) -> bool:
     """
     Upsert news articles. Each dict must have 'id', 'url', and 'source_type'
