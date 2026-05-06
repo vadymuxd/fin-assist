@@ -15,7 +15,7 @@ Run:
 import os
 import sys
 import requests
-from datetime import date
+from datetime import date, datetime, timezone
 from decimal import Decimal, ROUND_HALF_UP
 from dotenv import load_dotenv
 from supabase import create_client
@@ -78,6 +78,7 @@ def make_row(d: date, balance: Decimal) -> dict:
         'monthly_payment': float(MONTHLY_PAYMENT),
         'rate':            float(ANNUAL_RATE),
         'lender':          LENDER,
+        'updated_at':      datetime.now(timezone.utc).isoformat(),
     }
 
 

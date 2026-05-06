@@ -15,11 +15,10 @@ export default async function MortgagePage() {
         <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-50">Mortgage</h1>
         {deltas && (
           <span className="text-xs text-gray-500 dark:text-gray-400">
-            Updated {new Date(`${deltas.latest.date}T00:00:00Z`).toLocaleDateString("en-GB", {
+            Updated {new Date(deltas.latest.updated_at).toLocaleDateString("en-GB", {
               day: "2-digit",
               month: "short",
               year: "numeric",
-              timeZone: "UTC",
             })}
           </span>
         )}

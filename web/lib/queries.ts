@@ -281,6 +281,7 @@ export type SavingsSnapshot = {
   total: number;
   personal_total: number;
   joint_total: number;
+  updated_at: string;
 };
 
 export type SavingsAccount = {
@@ -307,7 +308,7 @@ export type SavingsDeltasResult = {
 export async function getSavingsSnapshots(): Promise<SavingsSnapshot[]> {
   const { data, error } = await supabase
     .from("savings_snapshots")
-    .select("date, total, personal_total, joint_total")
+    .select("date, total, personal_total, joint_total, updated_at")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -371,6 +372,7 @@ export function computeSavingsDeltas(
 export type PensionSnapshot = {
   date: string;
   total: number;
+  updated_at: string;
 };
 
 export type PensionAccount = {
@@ -396,7 +398,7 @@ export type PensionDeltasResult = {
 export async function getPensionSnapshots(): Promise<PensionSnapshot[]> {
   const { data, error } = await supabase
     .from("pension_snapshots")
-    .select("date, total")
+    .select("date, total, updated_at")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -456,6 +458,7 @@ export type MortgageSnapshot = {
   monthly_payment: number;
   rate: number;
   lender: string;
+  updated_at: string;
 };
 
 export type MortgageDelta = { absolute: number; pct: number; fromDate: string };
@@ -470,7 +473,7 @@ export type MortgageDeltasResult = {
 export async function getMortgageSnapshots(): Promise<MortgageSnapshot[]> {
   const { data, error } = await supabase
     .from("mortgage_snapshots")
-    .select("date, balance, property_value, equity, equity_half, monthly_payment, rate, lender")
+    .select("date, balance, property_value, equity, equity_half, monthly_payment, rate, lender, updated_at")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];

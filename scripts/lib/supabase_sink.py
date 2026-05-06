@@ -200,6 +200,7 @@ def write_savings_snapshot(date: str, total: float, personal: float, joint: floa
         'total': total,
         'personal_total': personal,
         'joint_total': joint,
+        'updated_at': datetime.now(timezone.utc).isoformat(),
     }
     ok = _upsert('savings_snapshots', [row], on_conflict='date')
     if ok:
@@ -228,7 +229,11 @@ def write_pension_snapshot(date: str, total: float) -> bool:
     Upsert one monthly pension aggregate row.
     date: ISO date string (YYYY-MM-DD).
     """
-    row = {'date': date, 'total': total}
+    row = {
+        'date': date,
+        'total': total,
+        'updated_at': datetime.now(timezone.utc).isoformat(),
+    }
     ok = _upsert('pension_snapshots', [row], on_conflict='date')
     if ok:
         _trigger_revalidate()
