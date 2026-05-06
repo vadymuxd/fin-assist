@@ -357,10 +357,12 @@ export function computeSavingsDeltas(
   const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? savingsDelta(latest, sorted[sorted.length - 2]) : null;
-  // WoW: on-or-before 7 days ago, but only if that snapshot is within 14 days (avoids monthly
-  // data appearing as a "weekly" comparison — consistent with investments tab behaviour)
+  // WoW: compare against the best available snapshot on or before 7 days ago; label shows the
+  // semantic target date (daysAgoISO(7)) rather than the actual snapshot date so it reads
+  // "since 29 Apr" even when the nearest snapshot is from Apr 13.
   const wowRaw = findOnOrBefore(prior, daysAgoISO(7));
-  const wow = wowRaw && wowRaw.date >= daysAgoISO(14) ? savingsDelta(latest, wowRaw) : null;
+  const wowDelta = savingsDelta(latest, wowRaw);
+  const wow = wowDelta ? { ...wowDelta, fromDate: daysAgoISO(7) } : null;
   // MoM: on-or-before 30 days ago, fall back to earliest snapshot (e.g. start date Apr 13)
   const mom30 = findOnOrBefore(prior, daysAgoISO(30));
   const mom = savingsDelta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
@@ -437,7 +439,8 @@ export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDelta
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? pensionDelta(latest, sorted[sorted.length - 2]) : null;
   const wowRaw = findOnOrBefore(prior, daysAgoISO(7));
-  const wow = wowRaw && wowRaw.date >= daysAgoISO(14) ? pensionDelta(latest, wowRaw) : null;
+  const wowDelta = pensionDelta(latest, wowRaw);
+  const wow = wowDelta ? { ...wowDelta, fromDate: daysAgoISO(7) } : null;
   const mom30p = findOnOrBefore(prior, daysAgoISO(30));
   const mom = pensionDelta(latest, mom30p ?? (prior.length > 0 ? prior[0] : null));
   const sinceStart = baseline.date !== latest.date ? pensionDelta(latest, baseline) : null;
