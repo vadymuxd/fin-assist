@@ -103,7 +103,7 @@ def normalize_title(title):
     if not title:
         return ''
     t = title.lower().strip()
-    for ch in '"\''""():.,!?-—–|':
+    for ch in '"\'“”():.,!?-—–|':
         t = t.replace(ch, ' ')
     return ' '.join(t.split())
 
