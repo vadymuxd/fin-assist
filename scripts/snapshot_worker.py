@@ -196,7 +196,6 @@ def run_savings():
     if owner_col is None:
         print("  No 'Owner' column — will infer from Type column.")
 
-    print(f"  Raw headers: {headers}")
     month_cols = [(i, parse_month_header(h)) for i, h in enumerate(headers)]
     month_cols = [(i, d) for i, d in month_cols if d]
 
@@ -302,7 +301,6 @@ def run_pensions():
         print(f"  ERROR: missing 'Provider' or 'Employer'/'Account' column. Headers: {headers}")
         sys.exit(1)
 
-    print(f"  Raw headers: {headers}")
     month_cols = [(i, parse_month_header(h)) for i, h in enumerate(headers)]
     month_cols = [(i, d) for i, d in month_cols if d]
 
