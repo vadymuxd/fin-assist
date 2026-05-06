@@ -457,7 +457,7 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 **Kept as-is:** `holdings_monitor.py --bot`, `prospect_discovery.py --bot`, `update_manual_prices.py`, `mortgage_monitor.py`, `sheets_updater.py` (sheet score writes only)
 
 - [x] **eng.1** Write `market_worker.py` — absorbs `news_fetcher` + `stock_assessor` + `alert_dispatcher` via `--mode fetch|assess|dispatch`. Originals deleted. `daily_monitor.yml` updated.
-- [ ] **eng.2** Write `snapshot_worker.py` — absorb `savings_snapshot.py`, `pension_snapshot.py`, `daily_portfolio_snapshot.py`, `mortgage_snapshot.py` + score-writing from `sheets_updater.py`. Delete originals. Update `daily_monitor.yml`. Add `--domain` flag.
+- [x] **eng.2** Write `snapshot_worker.py` — absorbs `savings_snapshot.py`, `pension_snapshot.py`, `daily_portfolio_snapshot.py` via `--domain portfolio|savings|pensions|all`. Originals deleted. `daily_monitor.yml` updated (close-run calls `snapshot_worker --domain all` then `sheets_updater --snapshot`).
 - [ ] **eng.3** Write `digest_worker.py` — remove pre-run pipeline, read from Supabase directly. Update `weekly_digest.yml`.
 - [x] **eng.4** Retire `snapshot_trend.py` + `monthly_trend.yml`. `Inv26 - Trend` tab removed. `trend_snapshots` Supabase table dropped (migration 0007). `write_trend_snapshot` removed from `supabase_sink.py`. Trend/history data lives in app via `portfolio_snapshots`.
 - [ ] **eng.5** Update Architecture reference page — replace old scripts inventory with worker model.
