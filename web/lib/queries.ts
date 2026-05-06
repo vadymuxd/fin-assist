@@ -343,14 +343,9 @@ function savingsDelta(
   return { absolute, pct, fromDate: prev.date };
 }
 
-function findClosest<T extends { date: string }>(snapshots: T[], targetISO: string): T | null {
-  if (snapshots.length === 0) return null;
-  const target = new Date(targetISO).getTime();
-  return snapshots.reduce((best, s) => {
-    const sDiff = Math.abs(new Date(s.date).getTime() - target);
-    const bDiff = Math.abs(new Date(best.date).getTime() - target);
-    return sDiff < bDiff ? s : best;
-  });
+function findOnOrBefore<T extends { date: string }>(snapshots: T[], targetISO: string): T | null {
+  const candidates = snapshots.filter((s) => s.date <= targetISO);
+  return candidates.length === 0 ? null : candidates[candidates.length - 1];
 }
 
 export function computeSavingsDeltas(
@@ -362,8 +357,11 @@ export function computeSavingsDeltas(
   const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? savingsDelta(latest, sorted[sorted.length - 2]) : null;
-  const wow = savingsDelta(latest, findClosest(prior, daysAgoISO(7)));
-  const mom = savingsDelta(latest, findClosest(prior, daysAgoISO(30)));
+  // WoW: strictly on-or-before 7 days ago — null (shown as "—") if no snapshot exists that far back
+  const wow = savingsDelta(latest, findOnOrBefore(prior, daysAgoISO(7)));
+  // MoM: on-or-before 30 days ago, fall back to earliest snapshot (e.g. start date Apr 13)
+  const mom30 = findOnOrBefore(prior, daysAgoISO(30));
+  const mom = savingsDelta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
   const sinceStart = baseline.date !== latest.date ? savingsDelta(latest, baseline) : null;
   return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
 }
@@ -436,8 +434,9 @@ export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDelta
   const latest = sorted[sorted.length - 1];
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? pensionDelta(latest, sorted[sorted.length - 2]) : null;
-  const wow = pensionDelta(latest, findClosest(prior, daysAgoISO(7)));
-  const mom = pensionDelta(latest, findClosest(prior, daysAgoISO(30)));
+  const wow = pensionDelta(latest, findOnOrBefore(prior, daysAgoISO(7)));
+  const mom30p = findOnOrBefore(prior, daysAgoISO(30));
+  const mom = pensionDelta(latest, mom30p ?? (prior.length > 0 ? prior[0] : null));
   const sinceStart = baseline.date !== latest.date ? pensionDelta(latest, baseline) : null;
   return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
 }
