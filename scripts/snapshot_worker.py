@@ -80,8 +80,8 @@ def read_cell(ws, row, col_idx):
 
 
 def parse_month_header(header: str) -> str | None:
-    """Parse 'April 2026 Balance' / 'Apr 2026' / '6 May 2026' → ISO date of last day of month."""
-    m = re.match(r'(?:\d{1,2}\s+)?(\w+)\s+(\d{4})(?:\s+.*)?$', header.strip(), re.IGNORECASE)
+    """Parse any of: 'Apr 2026', 'April 2026 Balance', 'May 1, 2026', '6 May 2026' → ISO last day of month."""
+    m = re.match(r'(?:\d{1,2}\s+)?(\w+)(?:\s+\d{1,2},?)?\s+(\d{4})(?:\s+.*)?$', header.strip(), re.IGNORECASE)
     if not m:
         return None
     month_num = MONTH_NAMES.get(m.group(1).lower())
