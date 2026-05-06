@@ -180,6 +180,9 @@ def write_savings_accounts(rows: list[dict]) -> bool:
     Each dict must have: date, bank, account_name, account_type, owner, balance_gbp.
     Unique constraint: (date, bank, account_name).
     """
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        row['updated_at'] = now
     ok = _upsert(
         'savings_accounts',
         rows,
@@ -214,6 +217,9 @@ def write_pension_accounts(rows: list[dict]) -> bool:
     Each dict must have: date, provider, account_name, account_type, balance_gbp.
     Unique constraint: (date, provider, account_name).
     """
+    now = datetime.now(timezone.utc).isoformat()
+    for row in rows:
+        row['updated_at'] = now
     ok = _upsert(
         'pension_accounts',
         rows,
