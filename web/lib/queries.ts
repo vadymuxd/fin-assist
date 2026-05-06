@@ -343,12 +343,14 @@ function savingsDelta(
   return { absolute, pct, fromDate: prev.date };
 }
 
-function findSavingsOnOrBefore(
-  snapshots: SavingsSnapshot[],
-  targetISO: string,
-): SavingsSnapshot | null {
-  const candidates = snapshots.filter((s) => s.date <= targetISO);
-  return candidates.length === 0 ? null : candidates[candidates.length - 1];
+function findClosest<T extends { date: string }>(snapshots: T[], targetISO: string): T | null {
+  if (snapshots.length === 0) return null;
+  const target = new Date(targetISO).getTime();
+  return snapshots.reduce((best, s) => {
+    const sDiff = Math.abs(new Date(s.date).getTime() - target);
+    const bDiff = Math.abs(new Date(best.date).getTime() - target);
+    return sDiff < bDiff ? s : best;
+  });
 }
 
 export function computeSavingsDeltas(
@@ -360,9 +362,8 @@ export function computeSavingsDeltas(
   const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? savingsDelta(latest, sorted[sorted.length - 2]) : null;
-  const wow = savingsDelta(latest, findSavingsOnOrBefore(prior, daysAgoISO(7)));
-  const mom30 = findSavingsOnOrBefore(prior, daysAgoISO(30));
-  const mom = savingsDelta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
+  const wow = savingsDelta(latest, findClosest(prior, daysAgoISO(7)));
+  const mom = savingsDelta(latest, findClosest(prior, daysAgoISO(30)));
   const sinceStart = baseline.date !== latest.date ? savingsDelta(latest, baseline) : null;
   return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
 }
@@ -428,11 +429,6 @@ function pensionDelta(latest: PensionSnapshot, prev: PensionSnapshot | null): Pe
   return { absolute, pct, fromDate: prev.date };
 }
 
-function findPensionOnOrBefore(snapshots: PensionSnapshot[], targetISO: string): PensionSnapshot | null {
-  const candidates = snapshots.filter((s) => s.date <= targetISO);
-  return candidates.length === 0 ? null : candidates[candidates.length - 1];
-}
-
 export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDeltasResult | null {
   if (snapshots.length === 0) return null;
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
@@ -440,9 +436,8 @@ export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDelta
   const latest = sorted[sorted.length - 1];
   const prior = sorted.slice(0, -1);
   const daily = sorted.length >= 2 ? pensionDelta(latest, sorted[sorted.length - 2]) : null;
-  const wow = pensionDelta(latest, findPensionOnOrBefore(prior, daysAgoISO(7)));
-  const mom30 = findPensionOnOrBefore(prior, daysAgoISO(30));
-  const mom = pensionDelta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
+  const wow = pensionDelta(latest, findClosest(prior, daysAgoISO(7)));
+  const mom = pensionDelta(latest, findClosest(prior, daysAgoISO(30)));
   const sinceStart = baseline.date !== latest.date ? pensionDelta(latest, baseline) : null;
   return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
 }

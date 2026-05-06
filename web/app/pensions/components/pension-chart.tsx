@@ -76,7 +76,7 @@ function CustomTooltip({
 }
 
 export default function PensionChart({ snapshots }: { snapshots: PensionSnapshot[] }) {
-  const [granularity, setGranularity] = useState<Granularity>("M");
+  const [granularity, setGranularity] = useState<Granularity>("D");
 
   const rows = useMemo(
     () => aggregate(snapshots, granularity).map((s) => ({ date: s.date, value: s.total })),

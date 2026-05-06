@@ -79,7 +79,7 @@ function CustomTooltip({
 }
 
 export default function SavingsChart({ snapshots }: { snapshots: SavingsSnapshot[] }) {
-  const [granularity, setGranularity] = useState<Granularity>("M");
+  const [granularity, setGranularity] = useState<Granularity>("D");
   const [filter, setFilter] = useState<Filter>("All");
 
   const aggregated = useMemo(() => aggregate(snapshots, granularity), [snapshots, granularity]);
