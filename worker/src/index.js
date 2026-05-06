@@ -30,6 +30,7 @@ const COMMANDS = {
   '/digest':   { workflow: 'bot_digest.yml',       label: 'Weekly digest'      },
   '/snapshot': { workflow: 'bot_snapshot.yml',     label: 'Portfolio snapshot' },
   '/mortgage': { workflow: 'mortgage_monitor.yml', label: 'Mortgage monitor'   },
+  '/sync':     { workflow: 'bot_sync.yml',         label: 'Sync snapshots'    },
   // Legacy aliases — keep old commands working
   '/analyse':  { workflow: 'bot_analyse.yml',      label: 'Holdings check'     },
   '/scan':     { workflow: 'bot_scan.yml',         label: 'Prospect discovery' },
