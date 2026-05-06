@@ -1,0 +1,39 @@
+name: Weekend Snapshot
+
+on:
+  schedule:
+    # Saturday 09:00 BST = 08:00 UTC
+    - cron: '0 8 * * 6'
+  workflow_dispatch:
+
+jobs:
+  snapshot:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v5
+        with:
+          python-version: '3.11'
+          cache: 'pip'
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt
+
+      - name: Write service account credentials
+        run: |
+          mkdir -p config
+          echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
+
+      - name: Portfolio snapshot
+        env:
+          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
+          APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
+        run: python3 scripts/snapshot_worker.py --domain portfolio
