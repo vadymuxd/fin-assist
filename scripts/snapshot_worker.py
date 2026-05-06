@@ -80,16 +80,23 @@ def read_cell(ws, row, col_idx):
 
 
 def parse_month_header(header: str) -> str | None:
-    """Parse any of: 'Apr 2026', 'April 2026 Balance', 'May 1, 2026', '6 May 2026' → ISO last day of month."""
-    m = re.match(r'(?:\d{1,2}\s+)?(\w+)(?:\s+\d{1,2},?)?\s+(\d{4})(?:\s+.*)?$', header.strip(), re.IGNORECASE)
+    """Parse sheet column headers → ISO date.
+    - 'Apr 2026' / 'April 2026 Balance' → last day of month (no specific day given)
+    - 'May 6, 2026' / '6 May 2026'       → exact date (2026-05-06)
+    """
+    m = re.match(
+        r'(?:(?P<day_pre>\d{1,2})\s+)?(?P<month>\w+)(?:\s+(?P<day_post>\d{1,2}),?)?\s+(?P<year>\d{4})(?:\s+.*)?$',
+        header.strip(), re.IGNORECASE,
+    )
     if not m:
         return None
-    month_num = MONTH_NAMES.get(m.group(1).lower())
+    month_num = MONTH_NAMES.get(m.group('month').lower())
     if not month_num:
         return None
-    year = int(m.group(2))
-    last_day = calendar.monthrange(year, month_num)[1]
-    return date(year, month_num, last_day).isoformat()
+    year = int(m.group('year'))
+    day_str = m.group('day_pre') or m.group('day_post')
+    day = int(day_str) if day_str else calendar.monthrange(year, month_num)[1]
+    return date(year, month_num, day).isoformat()
 
 
 def find_col(headers_lower, *candidates):
