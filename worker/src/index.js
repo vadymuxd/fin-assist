@@ -25,13 +25,14 @@
 // ---------------------------------------------------------------------------
 
 const COMMANDS = {
-  '/holdings': { workflow: 'bot_analyse.yml',  label: 'Holdings check'     },
-  '/discover': { workflow: 'bot_scan.yml',     label: 'Prospect discovery' },
-  '/digest':   { workflow: 'bot_digest.yml',   label: 'Weekly digest'      },
-  '/snapshot': { workflow: 'bot_snapshot.yml', label: 'Portfolio snapshot' },
+  '/holdings': { workflow: 'bot_analyse.yml',      label: 'Holdings check'     },
+  '/discover': { workflow: 'bot_scan.yml',         label: 'Prospect discovery' },
+  '/digest':   { workflow: 'bot_digest.yml',       label: 'Weekly digest'      },
+  '/snapshot': { workflow: 'bot_snapshot.yml',     label: 'Portfolio snapshot' },
+  '/mortgage': { workflow: 'mortgage_monitor.yml', label: 'Mortgage monitor'   },
   // Legacy aliases — keep old commands working
-  '/analyse':  { workflow: 'bot_analyse.yml',  label: 'Holdings check'     },
-  '/scan':     { workflow: 'bot_scan.yml',     label: 'Prospect discovery' },
+  '/analyse':  { workflow: 'bot_analyse.yml',      label: 'Holdings check'     },
+  '/scan':     { workflow: 'bot_scan.yml',         label: 'Prospect discovery' },
 };
 
 // Notion page IDs for context

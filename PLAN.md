@@ -462,10 +462,10 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 - [x] **eng.4** Retire `snapshot_trend.py` + `monthly_trend.yml`. `Inv26 - Trend` tab removed. `trend_snapshots` Supabase table dropped (migration 0007). `write_trend_snapshot` removed from `supabase_sink.py`. Trend/history data lives in app via `portfolio_snapshots`.
 - [ ] **eng.5** Update Architecture reference page — replace old scripts inventory with worker model.
 - [ ] **eng.6** Smoke test all GHA workflows.
-- [ ] **eng.7** Add `/mortgage` Telegram bot command — wire Cloudflare Worker to dispatch `mortgage_monitor.yml`.
+- [x] **eng.7** Add `/mortgage` Telegram bot command — wired in Cloudflare Worker COMMANDS map → `mortgage_monitor.yml`.
 - ~~[ ] **eng.8**~~ ~~Investigate 4 May cron failure~~ — resolved.
 - [ ] **eng.9** Add weekend portfolio snapshot — lightweight Saturday cron (snapshot only, no news/alerts).
-- [ ] **eng.10** Fix `mortgage_monitor.py` Telegram 400 error — message exceeds 4,096 char limit. Send short summary (~800 chars); full report stays in repo.
+- [x] **eng.10** Fix `mortgage_monitor.py` Telegram 400 error — `build_telegram_summary()` extracts rates + BoE + recommendation into ~800 char plain-text message. Full report still saved to repo.
 - ~~**eng.11**~~ ~~Fix "Updated" date on Savings / Pensions / House pages~~ **Deprecated** — updated_at column approach removed (2026-05-05).
 
 ---

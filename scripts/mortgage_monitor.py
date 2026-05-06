@@ -182,21 +182,63 @@ def generate_report(news_articles, previous_snapshot):
     return message.content[0].text
 
 
+def build_telegram_summary(report):
+    """Extract key data from the full report into a short plain-text summary."""
+    rate_lines = []
+    boe_line   = ''
+    rec_text   = ''
+
+    in_rec = False
+    for line in report.splitlines():
+        # Rate table rows (| 2-year fixed ... | 4.29% | Halifax | ...)
+        if '| 2-year' in line or '| 5-year' in line:
+            cols = [c.strip() for c in line.split('|') if c.strip()]
+            if len(cols) >= 3:
+                rate_lines.append(f"  {cols[0]}: {cols[1]} ({cols[2]})")
+
+        # BoE base rate line
+        if 'Current base rate' in line and not boe_line:
+            boe_line = line.replace('**', '').replace('- ', '').strip()
+
+        # Recommended action block
+        if '## ✅ Recommended Action' in line:
+            in_rec = True
+            continue
+        if in_rec:
+            if line.startswith('---') or (line.startswith('## ') and 'Recommended' not in line):
+                in_rec = False
+                continue
+            clean = line.replace('**', '').replace('*', '').strip()
+            if clean and not clean.startswith('#'):
+                rec_text += clean + ' '
+
+    parts = [f'🏦 Mortgage Monitor — {TODAY}', '']
+    if rate_lines:
+        parts.append('Rates (85% LTV):')
+        parts.extend(rate_lines[:2])
+    if boe_line:
+        parts.append(f'\n{boe_line}')
+    if rec_text:
+        parts.append(f'\n✅ {rec_text.strip()[:400]}')
+    parts.append('\n(Full report saved to repo)')
+
+    return '\n'.join(parts)
+
+
 def send_telegram(text):
     if not TELEGRAM_TOKEN or not TELEGRAM_CHAT_ID:
         print("  Telegram not configured — report printed above")
         return
-    chunks = [text[i:i+4000] for i in range(0, len(text), 4000)]
-    for chunk in chunks:
-        try:
-            resp = requests.post(
-                f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
-                json={'chat_id': TELEGRAM_CHAT_ID, 'text': chunk, 'parse_mode': 'Markdown'},
-                timeout=10,
-            )
-            resp.raise_for_status()
-        except Exception as e:
-            print(f"  Telegram error: {e}")
+    safe = text if len(text) <= 4096 else text[:4090] + '…'
+    try:
+        resp = requests.post(
+            f'https://api.telegram.org/bot{TELEGRAM_TOKEN}/sendMessage',
+            json={'chat_id': TELEGRAM_CHAT_ID, 'text': safe},
+            timeout=10,
+        )
+        resp.raise_for_status()
+    except Exception as e:
+        print(f"  Telegram error: {e}")
 
 
 def main():
@@ -218,8 +260,10 @@ def main():
     REPORT_PATH.write_text(report)
     print(f"\nReport saved to {REPORT_PATH}")
 
-    print("Sending to Telegram...")
-    send_telegram(report)
+    print("Sending summary to Telegram...")
+    summary = build_telegram_summary(report)
+    print(f"  Summary length: {len(summary)} chars")
+    send_telegram(summary)
     print("Done.")
 
 
