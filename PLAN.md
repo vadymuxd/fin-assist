@@ -585,13 +585,10 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 
 ## Immediate Next Steps
 
-1. **Phase 10** — Complete architecture review, update docs (in progress)
-2. **Phase 11** — Script consolidation + operational fixes (cron drift, mortgage Telegram, weekend snapshot)
-3. **Phase 12** — Sheet audit, schema decisions, safety rules rewrite
-4. **Phase 13** — "+" modal, instant Supabase write (highest immediate user value)
-5. **Phase 14** — Investments comparison chart (parallel-safe after Phase 12)
-6. **Phase 15** — NL entry via Claude mobile → Notion
-7. **Phase 16** — `sync_worker.py` bidirectional reconciliation
-8. **Phase 17** — Android app (when native UX needed)
-9. **Phase 18** — In-app chat (long-term, replaces Telegram + claude.ai)
-10. **Ongoing** — Update managed fund values (Nutmeg Alpha, JP Morgan) monthly in `Inv26 - Summary`
+1. **Phase 15** — NL entry via Claude mobile → Notion Transactions DB
+2. **Phase 16** — `sync_worker.py` bidirectional reconciliation + Cash Flow schedule sync (decide sync.0 scope first)
+3. **Phase 13** — Manual web "+" modal (deferred — revisit when needed)
+4. **Phase 17** — Android app (when native UX is actually needed)
+5. **Phase 18** — In-app chat (long-term, replaces Telegram + claude.ai Project)
+6. **Phase 19** — Budgeting & Expenses (only if Open Banking/MCP becomes viable)
+7. **Ongoing** — Update managed fund values (Nutmeg Alpha, JP Morgan) monthly in `Investments` tab
