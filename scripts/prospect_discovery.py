@@ -16,7 +16,7 @@ Pipeline:
      drop anything below min_source_mentions / min_market_cap_usd
   3. For each surviving candidate: fetch company news + sentiment + analyst
   4. Ask Claude for an exploratory thesis — alert-worthy at score ≥6 with a real case
-  5. Append/update rows in the Watchlist tab (journal of every discovery)
+  5. Write all evaluated candidates to Supabase discoveries table
   6. Modes:
        --auto  (cron)    silent unless a new BUY emerges
        --bot   (Telegram) always replies with top discoveries + rationale
@@ -62,13 +62,6 @@ TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
 BUY_THRESHOLD = 6   # exploratory: alert at 6+ with real thesis
 
-WATCHLIST_TAB = 'Watchlist'
-WATCHLIST_HEADERS = [
-    'Date Added', 'Ticker', 'Name', 'Exchange', 'Source(s)',
-    'First Score', 'Latest Score', 'Recommendation', 'Rationale', 'Status',
-]
-
-
 # ---------------------------------------------------------------------------
 # Sheet access
 # ---------------------------------------------------------------------------
@@ -79,27 +72,10 @@ def open_sheet():
     return gc.open_by_key(SHEET_ID)
 
 
-def get_or_create_watchlist(sh):
-    """Ensure the Watchlist tab exists with the correct header row."""
-    try:
-        ws = sh.worksheet(WATCHLIST_TAB)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sh.add_worksheet(title=WATCHLIST_TAB, rows=500, cols=len(WATCHLIST_HEADERS))
-        ws.update(values=[WATCHLIST_HEADERS], range_name='A1')
-        return ws
-
-    first_row = ws.row_values(1)
-    if first_row[:len(WATCHLIST_HEADERS)] != WATCHLIST_HEADERS:
-        # Header mismatch — wipe and rewrite to match new schema
-        ws.clear()
-        ws.update(values=[WATCHLIST_HEADERS], range_name='A1')
-    return ws
-
-
 def read_holdings(sh):
     """Return set of held tickers (qty > 0) — exclude from discovery."""
     try:
-        ws = sh.worksheet('Inv26 - Summary')
+        ws = sh.worksheet('Investments')
     except gspread.exceptions.WorksheetNotFound:
         return set()
     held = set()
@@ -115,23 +91,6 @@ def read_holdings(sh):
         if ticker and qty > 0:
             held.add(ticker)
     return held
-
-
-def read_watchlist_rows(ws):
-    """Return {ticker: {row_index, first_score, status, date_added}}."""
-    rows = ws.get_all_values()
-    existing = {}
-    for i, row in enumerate(rows[1:], start=2):  # row 2 = first data row
-        if not row or not row[1].strip():
-            continue
-        ticker = row[1].strip().upper()
-        existing[ticker] = {
-            'row':         i,
-            'first_score': row[5] if len(row) > 5 else '',
-            'status':      row[9] if len(row) > 9 else '',
-            'date_added':  row[0] if row else '',
-        }
-    return existing
 
 
 # ---------------------------------------------------------------------------
@@ -241,43 +200,6 @@ def evidence_has_excluded_keyword(candidate, keywords):
 
 
 # ---------------------------------------------------------------------------
-# Watchlist writer
-# ---------------------------------------------------------------------------
-
-def upsert_watchlist(ws, evaluated):
-    """
-    For each evaluated candidate:
-      - If ticker already exists: update Latest Score + Recommendation + Rationale
-        (keep First Score, Date Added, Status)
-      - Else: append a new row with Status=Active
-    """
-    existing = read_watchlist_rows(ws)
-    today    = datetime.now(timezone.utc).strftime('%Y-%m-%d')
-
-    updates  = []  # list of (range_a1, [[values]]) for batch_update
-    appends  = []  # list of new rows
-
-    for r in evaluated:
-        ticker = r['ticker']
-        if ticker in existing:
-            row_idx = existing[ticker]['row']
-            updates.append((f'G{row_idx}:I{row_idx}', [[r['score'], r['recommendation'], r['thesis']]]))
-        else:
-            appends.append([
-                today, ticker, r.get('name', ''), r.get('exchange_tag', ''),
-                ', '.join(r.get('sources', [])),
-                r['score'], r['score'], r['recommendation'], r['thesis'], 'Active',
-            ])
-
-    if updates:
-        ws.batch_update([{'range': rng, 'values': vals} for rng, vals in updates])
-        print(f"  Updated {len(updates)} existing Watchlist row(s)")
-    if appends:
-        ws.append_rows(appends, value_input_option='USER_ENTERED')
-        print(f"  Appended {len(appends)} new Watchlist row(s)")
-
-
-# ---------------------------------------------------------------------------
 # Telegram
 # ---------------------------------------------------------------------------
 
@@ -316,14 +238,14 @@ def format_auto_alert(buys):
         lines.append(f'   Sources: {escape_html(", ".join(r.get("sources", [])))}')
         lines.append(f'   {escape_html(r["thesis"])}')
         lines.append('')
-    lines.append('Added to Watchlist tab.')
+    lines.append('Saved to Supabase discoveries.')
     return '\n'.join(lines).strip()
 
 
 def format_bot_reply(evaluated):
     """
     Bot-mode: show top 5 candidates scored ≥6, ranked by score.
-    All evaluated candidates are still written to the Watchlist regardless.
+    All evaluated candidates are still written to Supabase regardless.
     """
     now_str = datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')
     lines = [f'🔍 <b>DISCOVERY SCAN</b> — {now_str}', '']
@@ -340,7 +262,7 @@ def format_bot_reply(evaluated):
 
     if not shortlisted:
         lines.append(f'Scanned {total} candidates — none scored 6+ today.')
-        lines.append('All added to Watchlist. Try again tomorrow.')
+        lines.append('All saved to Supabase. Try again tomorrow.')
         return '\n'.join(lines)
 
     lines.append(f'Top picks from {total} candidates scanned:\n')
@@ -352,7 +274,7 @@ def format_bot_reply(evaluated):
         lines.append(f'   {escape_html(r["thesis"])}')
         lines.append('')
 
-    lines.append(f'Full list ({total} tickers) saved to Watchlist tab.')
+    lines.append(f'Full list ({total} tickers) saved to Supabase.')
     return '\n'.join(lines).strip()
 
 
@@ -378,8 +300,6 @@ def main(mode):
     sh = open_sheet()
     holdings = read_holdings(sh)
     print(f"  {len(holdings)} held tickers")
-
-    ws = get_or_create_watchlist(sh)
 
     stopwords       = set(filters.get('ticker_stopwords', []))
     excluded_tickers = set(filters.get('exclude_tickers', []))
@@ -482,19 +402,10 @@ def main(mode):
         json.dump(evaluated, f, indent=2)
     print(f"\nResults saved → {RESULTS_PATH}")
 
-    # Snapshot BEFORE upsert — determines what's genuinely new this run
-    pre_run_watchlist = read_watchlist_rows(ws)
-
-    # Journal everything to Watchlist
-    if evaluated:
-        upsert_watchlist(ws, evaluated)
-
-    # A "new BUY" is a ticker that wasn't in the Watchlist at all before this run
     new_buys = [
         r for r in evaluated
         if r['score'] >= BUY_THRESHOLD
         and r['recommendation'] == 'BUY'
-        and r['ticker'] not in pre_run_watchlist
     ]
 
     surfaced_tickers: set[str] = set()

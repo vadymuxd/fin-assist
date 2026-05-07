@@ -4,8 +4,7 @@ sheets_updater.py
 
 Reads data/analysis_results.json (written by holdings_monitor.py) and:
   1. Writes Score (col K), Recommendation (col L), Last Updated (col M)
-     to matching rows in Inv26 - Summary
-  2. Appends a row to Analysis Log for each scored ticker
+     to matching rows in Investments
 
 Also handles the daily Notion Portfolio Snapshot update (after 15:30 UTC run).
 That block only runs when --snapshot flag is passed or when called from the
@@ -54,10 +53,10 @@ def parse_float(val):
 
 def write_scores_to_inv26(sh, results):
     """
-    Write Score (K), Recommendation (L), Last Updated (M) to Inv26 - Summary.
+    Write Score (K), Recommendation (L), Last Updated (M) to Investments.
     Looks up each ticker dynamically in col A — safe if row order ever changes.
     """
-    ws = sh.worksheet('Inv26 - Summary')
+    ws = sh.worksheet('Investments')
     col_a = ws.col_values(1)
     updated = 0
 
@@ -65,7 +64,7 @@ def write_scores_to_inv26(sh, results):
         try:
             row = col_a.index(ticker) + 1  # 1-based
         except ValueError:
-            print(f"  {ticker}: not found in Inv26 - Summary col A — skipping")
+            print(f"  {ticker}: not found in Investments col A — skipping")
             continue
 
         score = result.get('score', '')
@@ -79,35 +78,9 @@ def write_scores_to_inv26(sh, results):
         print(f"  {ticker} row {row}: Score={score}, Rec={rec}")
         updated += 1
 
-    print(f"  Inv26 - Summary: {updated} rows updated")
+    print(f"  Investments: {updated} rows updated")
     return updated
 
-
-def append_to_analysis_log(sh, results):
-    """
-    Append one row per ticker to Analysis Log.
-    Columns: Date | Ticker | Score | Confidence | Reason
-    """
-    ws = sh.worksheet('Analysis Log')
-
-    # Write header if sheet is empty
-    if not ws.get_all_values():
-        ws.append_row(['Date', 'Ticker', 'Score', 'Recommendation', 'Confidence', 'Reason'])
-
-    rows = []
-    for ticker, result in results.items():
-        rows.append([
-            result.get('run_time', ''),
-            ticker,
-            result.get('score', ''),
-            result.get('recommendation', ''),
-            result.get('confidence', ''),
-            result.get('reason', ''),
-        ])
-
-    if rows:
-        ws.append_rows(rows, value_input_option='USER_ENTERED')
-        print(f"  Analysis Log: {len(rows)} rows appended")
 
 
 # ---------------------------------------------------------------------------
@@ -202,14 +175,14 @@ def update_notion_snapshot(sh, results):
     headers = _notion_headers(notion_key)
     run_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
-    # --- Read summary totals from Inv26 - Summary ---
+    # --- Read summary totals from Investments ---
     # Row 7 = Grand Total row (col G = current value total)
     # Row 9 = Cash row (col G = cash value)
     # Row 11 = Self-managed stocks totals (col G = stocks total, L = P&L £, M = P&L %)
     # Row 28 = Managed Funds totals (col G = managed total)
     # All values are 0-based index into row_values()
     try:
-        ws = sh.worksheet('Inv26 - Summary')
+        ws = sh.worksheet('Investments')
         row7  = ws.row_values(7)
         row9  = ws.row_values(9)
         row11 = ws.row_values(11)
@@ -287,7 +260,7 @@ def update_notion_snapshot(sh, results):
 
     # Header
     blocks.append(_paragraph(f'⚠️ Auto-updated by sheets_updater.py — {run_time}'))
-    blocks.append(_paragraph('Source of truth: Google Sheet Inv26 - Summary'))
+    blocks.append(_paragraph('Source of truth: Google Sheet Investments'))
     blocks.append(_divider())
 
     # Summary table
@@ -340,7 +313,7 @@ def update_notion_snapshot(sh, results):
         blocks.append(_divider())
 
     # Footer
-    blocks.append(_paragraph('Source of truth: Google Sheet Inv26 - Summary'))
+    blocks.append(_paragraph('Source of truth: Google Sheet Investments'))
 
     # --- Write to Notion ---
     print(f"  Archiving existing page blocks...")
@@ -413,11 +386,8 @@ def main():
             results = json.load(f)
         print(f"Loaded {len(results)} results from {RESULTS_PATH}")
 
-        print("\nWriting scores to Inv26 - Summary...")
+        print("\nWriting scores to Investments...")
         write_scores_to_inv26(sh, results)
-
-        print("\nAppending to Analysis Log...")
-        append_to_analysis_log(sh, results)
 
     if do_snapshot:
         print("\nUpdating Notion portfolio snapshot...")
@@ -425,7 +395,7 @@ def main():
 
         if do_bot:
             try:
-                ws       = sh.worksheet('Inv26 - Summary')
+                ws       = sh.worksheet('Investments')
                 row7     = ws.row_values(7)
                 grand_total = parse_float(row7[6]) if len(row7) > 6 else 0.0
             except Exception:

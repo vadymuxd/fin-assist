@@ -47,8 +47,6 @@ RESULTS_PATH = 'data/holdings_alerts.json'
 TELEGRAM_TOKEN   = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 
-ALERTS_LOG_TAB = 'Alerts Log'
-ALERTS_LOG_HEADERS = ['Date (Europe/London)', 'Ticker', 'Action', 'Score', 'Event', 'Headlines Hash', 'Run Time (UTC)']
 LONDON_TZ = ZoneInfo('Europe/London')
 
 # Per-ticker routing mirrors claude_analyst.py
@@ -88,7 +86,7 @@ def parse_float(val):
 
 
 def read_positions(sh):
-    ws = sh.worksheet('Inv26 - Summary')
+    ws = sh.worksheet('Investments')
     positions = []
     for row in ws.get_all_values():
         if len(row) < 6:
@@ -130,47 +128,6 @@ def headlines_hash(headlines):
         return ''
     joined = '\n'.join(sorted(set(titles)))
     return hashlib.sha1(joined.encode('utf-8')).hexdigest()[:12]
-
-
-def get_or_create_alerts_log(sh):
-    try:
-        ws = sh.worksheet(ALERTS_LOG_TAB)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sh.add_worksheet(title=ALERTS_LOG_TAB, rows=1000, cols=len(ALERTS_LOG_HEADERS))
-        ws.update(values=[ALERTS_LOG_HEADERS], range_name='A1')
-        return ws
-    first_row = ws.row_values(1)
-    if first_row[:len(ALERTS_LOG_HEADERS)] != ALERTS_LOG_HEADERS:
-        ws.clear()
-        ws.update(values=[ALERTS_LOG_HEADERS], range_name='A1')
-    return ws
-
-
-def read_sent_recent(ws, hours=48):
-    """
-    Return set of (ticker, headlines_hash) pairs alerted within the last `hours`.
-    Dedup logic: same ticker + same hash = same event, suppress.
-    Same ticker + different hash = new event, allow through.
-    """
-    sent = set()
-    cutoff = datetime.now(timezone.utc) - timedelta(hours=hours)
-    for row in ws.get_all_values()[1:]:
-        if len(row) < 7:
-            continue
-        run_time_str = row[6].strip().replace(' UTC', '')
-        try:
-            run_time = datetime.strptime(run_time_str, '%Y-%m-%d %H:%M').replace(tzinfo=timezone.utc)
-        except ValueError:
-            continue
-        if run_time >= cutoff:
-            sent.add((row[1].strip(), row[5].strip()))  # (ticker, headlines_hash)
-    return sent
-
-
-def append_sent(ws, entries):
-    if not entries:
-        return
-    ws.append_rows(entries, value_input_option='USER_ENTERED')
 
 
 # ---------------------------------------------------------------------------
@@ -360,7 +317,7 @@ def main(mode):
     sh = gc.open_by_key(SHEET_ID)
     print(f"  Opened: {sh.title}")
 
-    print("\nReading holdings from Inv26 - Summary...")
+    print("\nReading holdings from Investments...")
     positions = read_positions(sh)
     print(f"  {len(positions)} open positions")
     if not positions:
@@ -465,31 +422,8 @@ def main(mode):
         print("\n[auto] No ACT-level events — staying silent.")
         return
 
-    log_ws = get_or_create_alerts_log(sh)
-    day = london_today()
-    already_sent = read_sent_recent(log_ws, hours=48)
-
-    new_alerts, suppressed = [], []
-    for r in alerts:
-        key = (r['ticker'], r['headlines_hash'])
-        (suppressed if key in already_sent else new_alerts).append(r)
-
-    for r in suppressed:
-        print(f"  [dedup] {r['ticker']} — same event already alerted within 48h; skipping")
-
-    if not new_alerts:
-        print(f"\n[auto] {len(alerts)} ACT event(s), all already alerted today — staying silent.")
-        return
-
-    sent_ok = send_telegram(format_alert_message(new_alerts))
-    if sent_ok:
-        append_sent(log_ws, [
-            [day, r['ticker'], r['suggested_action'], r['score'], r['event'], r['headlines_hash'], r['run_time']]
-            for r in new_alerts
-        ])
-        print(f"\n[auto] {len(new_alerts)} new alert(s) sent; {len(suppressed)} deduped.")
-    else:
-        print(f"\n[auto] Telegram send failed — not logging, so next run can retry. ({len(new_alerts)} alerts, {len(suppressed)} deduped)")
+    send_telegram(format_alert_message(alerts))
+    print(f"\n[auto] {len(alerts)} alert(s) sent.")
 
 
 if __name__ == '__main__':

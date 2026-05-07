@@ -36,7 +36,7 @@ SHEET_ID = os.getenv('PORTFOLIO_SHEET_ID')
 SA_FILE  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.json')
 SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
 
-# Row numbers in Inv26 - Summary (1-based)
+# Row numbers in Investments (1-based)
 ROW_GRAND_TOTAL   = 7
 ROW_CASH          = 9
 ROW_STOCKS_TOTAL  = 11
@@ -131,8 +131,8 @@ def run_portfolio():
 
     print("\nConnecting to Google Sheets...")
     sh = open_sheet()
-    ws = sh.worksheet('Inv26 - Summary')
-    print(f"  Opened: {sh.title} / Inv26 - Summary")
+    ws = sh.worksheet('Investments')
+    print(f"  Opened: {sh.title} / Investments")
 
     totals = {
         'grand_total':  read_cell(ws, ROW_GRAND_TOTAL,   COL_VALUE_IDX),

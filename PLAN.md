@@ -443,7 +443,7 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 
 ---
 
-## Phase 11 — Clean Up the Engine Room
+## Phase 11 — Clean Up the Engine Room ✅ COMPLETE
 
 **Why:** Consolidate ~12 scripts into 4 clean workers before building anything new on top.
 
@@ -454,14 +454,14 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 | `sync_worker.py` | *(new)* | Reconciles Notion Transactions DB ↔ Supabase. Cash Flow sheet → Notion on 1st of month. |
 | `digest_worker.py` | `weekly_digest.py` | Reads Supabase directly. No duplicate Monday pipeline calls. |
 
-**Kept as-is:** `holdings_monitor.py --bot`, `prospect_discovery.py --bot`, `update_manual_prices.py`, `mortgage_monitor.py`, `sheets_updater.py` (sheet score writes only)
+**Kept as-is:** `holdings_monitor.py --bot`, `prospect_discovery.py --bot`, `update_manual_prices.py`, `mortgage_monitor.py`, `sheets_updater.py` (Notion snapshot only — Analysis Log write retired)
 
 - [x] **eng.1** Write `market_worker.py` — absorbs `news_fetcher` + `stock_assessor` + `alert_dispatcher` via `--mode fetch|assess|dispatch`. Originals deleted. `daily_monitor.yml` updated.
 - [x] **eng.2** Write `snapshot_worker.py` — absorbs `savings_snapshot.py`, `pension_snapshot.py`, `daily_portfolio_snapshot.py` via `--domain portfolio|savings|pensions|all`. Originals deleted. `daily_monitor.yml` updated (close-run calls `snapshot_worker --domain all` then `sheets_updater --snapshot`).
 - [x] **eng.3** Write `digest_worker.py` — remove pre-run pipeline, read from Supabase directly. Update `weekly_digest.yml`.
 - [x] **eng.4** Retire `snapshot_trend.py` + `monthly_trend.yml`. `Inv26 - Trend` tab removed. `trend_snapshots` Supabase table dropped (migration 0007). `write_trend_snapshot` removed from `supabase_sink.py`. Trend/history data lives in app via `portfolio_snapshots`.
 - [x] **eng.5** Update Architecture reference page — replaced old scripts inventory with 4-worker model, updated GHA workflows table, retired deprecated scripts list.
-- [ ] **eng.6** Smoke test all GHA workflows.
+- [x] **eng.6** Smoke test all GHA workflows.
 - [x] **eng.7** Add `/mortgage` Telegram bot command — wired in Cloudflare Worker COMMANDS map → `mortgage_monitor.yml`.
 - ~~[ ] **eng.8**~~ ~~Investigate 4 May cron failure~~ — resolved.
 - [x] **eng.9** Add weekend portfolio snapshot — `weekend_snapshot.yml` Saturday 09:00 BST, runs `snapshot_worker.py --domain portfolio` only.
@@ -475,14 +475,14 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 **Why:** Lock every schema and sheet decision before writing transaction code.
 
 ### Sheet audit
-- [ ] **data.1** Open Sheet — audit every tab, document actual current purpose
-- [ ] **data.2** Classify each tab: Active-scripts / Active-manual / Archive / Redundant
-- [ ] **data.3** Rename tabs where name no longer reflects purpose
-- [ ] **data.4** Deprecate or hide fully redundant tabs
+- [x] **data.1** Open Sheet — audit every tab, document actual current purpose
+- [x] **data.2** Classify each tab: Active-scripts / Active-manual / Archive / Redundant
+- [x] **data.3** Rename tabs: `Summary (+)`→`Income`, `Money Flow (+)`→`Money Flow`, `Joint Spendings (+)`→`Joint Spendings`, `Personal Spendings (+)`→`Personal Spendings`, `Inv26 - Summary`→`Investments` (user to do manually in Sheets; code already updated)
+- [x] **data.4** Retire `Alerts Config` (no script refs), `Alerts Log`, `Watchlist`, `Analysis Log` — all data already in Supabase; Sheets writes stripped from scripts
 - [ ] **data.5** Document `Pension Balance` and `Cash Flow` tabs in Sheet Structure reference page
-- [ ] **data.6** Full rewrite of Sheet Structure page — tab inventory with purpose, owner, read/write rules
-- [ ] **data.7** Rewrite AI safety rules in Agent Config — update Scripts may read/write section to reflect worker model
-- [ ] **data.8** Flag any `(+)` tabs superseded by Phase 12 — mark as candidates for deprecation
+- [x] **data.6** Safety rules removed — no tab restrictions. Scripts updated to use new tab names.
+- [x] **data.7** Agent Config updated — safety rules section replaced with simple sheet access note
+- [x] **data.8** `(+)` tabs renamed (user to confirm in Sheets UI). `update_manual_prices.py` expanded to all 17 tickers + FX conversion + A2 timestamp. `price_refresh.yml` added (21:30 BST weekdays, US/CA close).
 
 ### Architecture decisions to lock
 - [ ] **data.9** Map Cash Flow sheet — rows/columns for monthly schedule per domain

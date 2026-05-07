@@ -2,18 +2,18 @@
 """
 update_manual_prices.py
 
-Fetches prices for tickers not available via GOOGLEFINANCE
-and writes them directly to the Inv26 - Summary tab in Google Sheets.
+Fetches latest prices for all portfolio tickers via yfinance and writes
+them directly to the Investments tab in Google Sheets.
 
-Currently handles:
-  - SGLN (iShares Physical Gold ETC) via Yahoo Finance (SGLN.L)
+Handles currency conversion to GBP:
+  - LSE (.L)      — Yahoo returns GBX (pence) → divide by 100
+  - US            — Yahoo returns USD → convert via GBPUSD=X
+  - EU (.DE, .PA) — Yahoo returns EUR → convert via GBPEUR=X
+  - CA (.TO)      — Yahoo returns CAD → convert via GBPCAD=X
 
-Add more tickers to MANUAL_TICKERS as needed.
+Also writes "Last updated: YYYY-MM-DD HH:MM UTC" to cell A2.
 
-Run from repo root:
-    python3 scripts/update_manual_prices.py
-
-Can be added to GitHub Actions alongside holdings_monitor.py.
+Runs 3× daily via daily_monitor.yml (09:30 / 13:00 / 16:30 BST).
 """
 
 import os
@@ -26,71 +26,123 @@ from google.oauth2.service_account import Credentials
 load_dotenv()
 
 SHEET_ID = os.getenv('PORTFOLIO_SHEET_ID')
-SA_FILE = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.json')
-SCOPES = ['https://www.googleapis.com/auth/spreadsheets']
+SA_FILE  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.json')
+SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
 
-# Yahoo Finance ticker → (Inv26 ticker in col A, price_in_gbx)
-# gbx=True  → Yahoo returns pence, divide by 100 to get £
-# gbx=False → Yahoo returns £ directly
-MANUAL_TICKERS = {
-    'SGLN.L': ('SGLN', True),   # iShares Physical Gold ETC — LSE, priced in GBX
+# sheet_ticker → (yfinance_symbol, currency)
+# currency: 'GBX' (pence→GBP ÷100), 'USD', 'EUR', 'CAD'
+TICKERS = {
+    'NVDA':   ('NVDA',      'USD'),
+    'RTX':    ('RTX',       'USD'),
+    'GOOG':   ('GOOG',      'USD'),
+    'BRK.B':  ('BRK-B',     'USD'),
+    'TECK.B': ('TECK-B.TO', 'CAD'),
+    'RIO':    ('RIO.L',     'GBX'),
+    'SGLN':   ('SGLN.L',    'GBX'),
+    'INRG':   ('INRG.L',    'GBX'),
+    'IITU':   ('IITU.L',    'GBX'),
+    'VGER':   ('VGER.L',    'GBX'),
+    'BA.':    ('BA.L',      'GBX'),
+    'VUSA':   ('VUSA.L',    'GBX'),
+    'ISP6':   ('ISP6.L',    'GBX'),
+    'LGEN':   ('LGEN.L',    'GBX'),
+    'EUE':    ('EUE.L',     'GBX'),
+    'RHM':    ('RHM.DE',    'EUR'),
+    'HO':     ('HO.PA',     'EUR'),
+}
+
+# GBPXXX=X pairs: 1 GBP = X foreign → gbp_per_unit = 1 / rate
+FX_PAIRS = {
+    'USD': 'GBPUSD=X',
+    'EUR': 'GBPEUR=X',
+    'CAD': 'GBPCAD=X',
 }
 
 
-def fetch_price(yahoo_ticker, gbx=False):
-    """Fetch latest closing price from Yahoo Finance. Returns GBP."""
-    ticker = yf.Ticker(yahoo_ticker)
-    hist = ticker.history(period='5d')
-    if hist.empty:
-        raise ValueError(f"No price data returned for {yahoo_ticker}")
-    raw = float(hist['Close'].iloc[-1])
-    return round(raw / 100 if gbx else raw, 4)
+def fetch_fx_rates():
+    """Fetch GBP cost of 1 unit of each foreign currency."""
+    rates = {}
+    for currency, pair in FX_PAIRS.items():
+        try:
+            hist = yf.Ticker(pair).history(period='2d')
+            if not hist.empty:
+                rates[currency] = round(1.0 / float(hist['Close'].iloc[-1]), 6)
+                print(f"  FX {currency}: £{rates[currency]:.4f} per 1 {currency}")
+            else:
+                print(f"  Warning: no FX data for {pair}")
+        except Exception as e:
+            print(f"  FX fetch error for {pair}: {e}")
+    return rates
 
 
-def update_inv26(sh, prices):
+def fetch_prices(fx_rates):
+    """Fetch latest close price for every ticker and convert to GBP."""
+    prices = {}
+    for sheet_ticker, (yf_symbol, currency) in TICKERS.items():
+        try:
+            hist = yf.Ticker(yf_symbol).history(period='5d')
+            if hist.empty:
+                print(f"  {sheet_ticker}: no data — skipping")
+                continue
+            raw = float(hist['Close'].iloc[-1])
+
+            if currency == 'GBX':
+                price_gbp = round(raw / 100, 4)
+            elif currency in fx_rates:
+                price_gbp = round(raw * fx_rates[currency], 4)
+            else:
+                price_gbp = round(raw, 4)
+
+            prices[sheet_ticker] = price_gbp
+            print(f"  {sheet_ticker} ({yf_symbol}): {raw:.4f} {currency} → £{price_gbp:.4f}")
+        except Exception as e:
+            print(f"  {sheet_ticker}: error — {e}")
+    return prices
+
+
+def update_sheet(sh, prices, timestamp):
     """
-    Locate each ticker in Inv26 column A, write price to column F,
-    and timestamp to column M (Last Updated by Script).
-    Uses dynamic row lookup so it's safe if row order ever changes.
+    Write prices to column F in the Investments tab.
+    Write sheet-level timestamp to cell A2.
     """
-    ws = sh.worksheet('Inv26 - Summary')
-    col_a = ws.col_values(1)  # All values in column A
-    now = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    ws    = sh.worksheet('Investments')
+    col_a = ws.col_values(1)
 
+    ws.update_cell(2, 1, f'Last updated: {timestamp}')
+
+    updated = 0
     for sheet_ticker, price_gbp in prices.items():
         try:
-            row = col_a.index(sheet_ticker) + 1  # 1-based
+            row = col_a.index(sheet_ticker) + 1
         except ValueError:
-            print(f"  Warning: '{sheet_ticker}' not found in Inv26 — skipping")
+            print(f"  Warning: '{sheet_ticker}' not found in Investments col A — skipping")
             continue
-        ws.update_cell(row, 6, price_gbp)   # F: Current Price £
-        ws.update_cell(row, 13, now)         # M: Last Updated by Script
-        print(f"  {sheet_ticker}: £{price_gbp:.4f} written to row {row}")
+        ws.update_cell(row, 6, price_gbp)
+        updated += 1
+
+    print(f"  Investments: {updated}/{len(prices)} rows updated")
 
 
 def main():
     print("Connecting to Google Sheets...")
     creds = Credentials.from_service_account_file(SA_FILE, scopes=SCOPES)
-    gc = gspread.authorize(creds)
-    sh = gc.open_by_key(SHEET_ID)
+    gc    = gspread.authorize(creds)
+    sh    = gc.open_by_key(SHEET_ID)
     print(f"  Opened: {sh.title}")
 
-    print("\nFetching prices from Yahoo Finance...")
-    prices = {}
-    for yahoo_ticker, (sheet_ticker, gbx) in MANUAL_TICKERS.items():
-        try:
-            price = fetch_price(yahoo_ticker, gbx=gbx)
-            prices[sheet_ticker] = price
-            print(f"  {yahoo_ticker}: raw→ £{price:.4f} ({'GBX÷100' if gbx else 'GBP direct'})")
-        except Exception as e:
-            print(f"  Error fetching {yahoo_ticker}: {e}")
+    print("\nFetching FX rates...")
+    fx_rates = fetch_fx_rates()
+
+    print("\nFetching ticker prices...")
+    prices = fetch_prices(fx_rates)
 
     if not prices:
         print("  Nothing to update.")
         return
 
-    print("\nWriting to Inv26 - Summary...")
-    update_inv26(sh, prices)
+    timestamp = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    print(f"\nWriting to Investments tab (timestamp: {timestamp})...")
+    update_sheet(sh, prices, timestamp)
 
     print("\nDone.")
 

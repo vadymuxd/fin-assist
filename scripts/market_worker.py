@@ -62,11 +62,6 @@ MAX_PER_TICKER = 4
 MAX_CURATED    = 5
 MAX_PROSPECTS  = 10
 
-ALERTS_LOG_TAB     = 'Alerts Log'
-ALERTS_LOG_HEADERS = [
-    'Date (Europe/London)', 'Ticker', 'Type', 'Action', 'Score', 'Event', 'Run Time (UTC)',
-]
-
 TICKER_CONFIG = {
     'NVDA':   ('NVDA',    'NVDA',       'US'),
     'RTX':    ('RTX',     'RTX',        'US'),
@@ -160,7 +155,7 @@ def call_claude(client, prompt, ticker):
 # ── Mode: fetch ───────────────────────────────────────────────────────────────
 
 def read_positions(sh):
-    ws = sh.worksheet('Inv26 - Summary')
+    ws = sh.worksheet('Investments')
     positions = []
     for row in ws.get_all_values():
         if len(row) < 6:
@@ -685,19 +680,6 @@ def format_telegram(new_alerts):
     return '\n'.join(lines).strip()
 
 
-def get_or_create_alerts_log(sh):
-    try:
-        ws = sh.worksheet(ALERTS_LOG_TAB)
-    except gspread.exceptions.WorksheetNotFound:
-        ws = sh.add_worksheet(title=ALERTS_LOG_TAB, rows=1000, cols=len(ALERTS_LOG_HEADERS))
-        ws.update(values=[ALERTS_LOG_HEADERS], range_name='A1')
-        return ws
-    if ws.row_values(1)[:len(ALERTS_LOG_HEADERS)] != ALERTS_LOG_HEADERS:
-        ws.clear()
-        ws.update(values=[ALERTS_LOG_HEADERS], range_name='A1')
-    return ws
-
-
 def run_dispatch():
     print("=== market_worker --mode dispatch ===")
 
@@ -746,21 +728,6 @@ def run_dispatch():
     if msg:
         ok = send_telegram(msg)
         print(f"  Telegram: {'sent' if ok else 'FAILED'}")
-
-    try:
-        creds   = Credentials.from_service_account_file(SA_FILE, scopes=SCOPES)
-        sh      = gspread.authorize(creds).open_by_key(SHEET_ID)
-        log_ws  = get_or_create_alerts_log(sh)
-        day     = datetime.now(LONDON_TZ).strftime('%Y-%m-%d')
-        run_str = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
-        log_ws.append_rows(
-            [[day, a['ticker'], a['type'], a['action'], a['score'], a.get('event', ''), run_str]
-             for a in new_alerts],
-            value_input_option='USER_ENTERED',
-        )
-        print(f"  Appended {len(new_alerts)} row(s) to Alerts Log")
-    except Exception as e:
-        print(f"  Sheets log failed (non-critical): {e}")
 
     try:
         url    = os.getenv('APP_REVALIDATE_URL', '')
