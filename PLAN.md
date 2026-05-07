@@ -477,17 +477,17 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 ### Sheet audit
 - [x] **data.1** Open Sheet — audit every tab, document actual current purpose
 - [x] **data.2** Classify each tab: Active-scripts / Active-manual / Archive / Redundant
-- [x] **data.3** Rename tabs: `Summary (+)`→`Income`, `Money Flow (+)`→`Money Flow`, `Joint Spendings (+)`→`Joint Spendings`, `Personal Spendings (+)`→`Personal Spendings`, `Inv26 - Summary`→`Investments` (user to do manually in Sheets; code already updated)
-- [x] **data.4** Retire `Alerts Config` (no script refs), `Alerts Log`, `Watchlist`, `Analysis Log` — all data already in Supabase; Sheets writes stripped from scripts
-- [ ] **data.5** Document `Pension Balance` and `Cash Flow` tabs in Sheet Structure reference page
+- [x] **data.3** Rename tabs: `Summary (+)`→`Income`, `Money Flow (+)`→`Cash Flow`, `Joint Spendings (+)`→`Joint Spendings`, `Personal Spendings (+)`→`Personal Spendings`, `Inv26 - Summary`→`Investments`. Removed: `Inv25+`, `Inv22-24`, `Earnings 2025`, `Legend`, `Accounts (+)`, `Alerts Config`, `Alerts Log`, `Watchlist`, `Analysis Log`.
+- [x] **data.4** Retire `Alerts Log`, `Watchlist`, `Analysis Log` — data already in Supabase; Sheets writes stripped from scripts
+- [x] **data.5** `Pensions` and `Cash Flow` tabs documented in Sheet Structure reference page
 - [x] **data.6** Safety rules removed — no tab restrictions. Scripts updated to use new tab names.
 - [x] **data.7** Agent Config updated — safety rules section replaced with simple sheet access note
-- [x] **data.8** `(+)` tabs renamed (user to confirm in Sheets UI). `update_manual_prices.py` expanded to all 17 tickers + FX conversion + A2 timestamp. `price_refresh.yml` added (21:30 BST weekdays, US/CA close).
+- [x] **data.8** `(+)` tabs renamed. `update_manual_prices.py` expanded to all 17 tickers + FX conversion + A2 timestamp. `price_refresh.yml` added (21:30 BST weekdays, US/CA close).
 
 ### Architecture decisions to lock
-- [ ] **data.9** Map Cash Flow sheet — rows/columns for monthly schedule per domain
-- [ ] **data.10** Confirm which Sheet tabs are retained post-Phase 13 (investments + Cash Flow only?)
-- [ ] **data.11** Lock and apply Supabase `transactions` table migration
+- [x] **data.9** Cash Flow tab mapped: `Date (day) | From | To | Description | Amount £` — monthly routing template (salary in, account transfers, pot top-ups). 25 rows. `sync_worker` reads on 1st of month to pre-populate expected transactions.
+- [x] **data.10** All 9 tabs retained: `Income`, `Cash Flow`, `Investments`, `Joint Spendings`, `Personal Spendings`, `Saving Transfers`, `Savings Balance`, `Pensions`, `InvTransactions`. Nothing removed in Phase 13. `InvTransactions` retires in Phase 16 when `sync_worker` is live.
+- [x] **data.11** `transactions` table migration written → `supabase/migrations/0010_transactions.sql`. Apply to Supabase before Phase 13 build starts.
 
 **`transactions` table schema:**
 `id (uuid) | date | domain | account_name | amount_gbp | type | notes | source | synced_to_notion (bool) | created_at`
