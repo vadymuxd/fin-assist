@@ -41,14 +41,8 @@ TICKERS = {
     'SGLN':   ('SGLN.L',    'GBX'),
     'INRG':   ('INRG.L',    'GBX'),
     'IITU':   ('IITU.L',    'GBX'),
-    'VGER':   ('VGER.L',    'GBX'),
-    'BA.':    ('BA.L',      'GBX'),
-    'VUSA':   ('VUSA.L',    'GBX'),
-    'ISP6':   ('ISP6.L',    'GBX'),
-    'LGEN':   ('LGEN.L',    'GBX'),
-    'EUE':    ('EUE.L',     'GBX'),
+    'VGER':   ('VGER.L',    'GBP'),  # Yahoo returns GBP directly, not GBX
     'RHM':    ('RHM.DE',    'EUR'),
-    'HO':     ('HO.PA',     'EUR'),
 }
 
 # GBPXXX=X pairs: 1 GBP = X foreign → gbp_per_unit = 1 / rate
