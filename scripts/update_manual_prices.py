@@ -41,9 +41,9 @@ TICKERS = {
     'SGLN':   ('SGLN.L',    'GBX'),
     'INRG':   ('INRG.L',    'GBX'),
     'IITU':   ('IITU.L',    'GBX'),
-    'VGER':   ('VGER.L',    'GBX'),
+    'VGER':   ('VGER.L',    'GBP'),  # Yahoo returns GBP directly, not GBX
     'BA.':    ('BA.L',      'GBX'),
-    'VUSA':   ('VUSA.L',    'GBX'),
+    'VUSA':   ('VUSA.L',    'GBP'),  # Yahoo returns GBP directly, not GBX
     'ISP6':   ('ISP6.L',    'GBX'),
     'LGEN':   ('LGEN.L',    'GBX'),
     'EUE':    ('EUE.L',     'GBX'),
