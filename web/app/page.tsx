@@ -1,6 +1,7 @@
-import { computeDeltas, getHoldingsWithSectors, getPortfolioSnapshots } from "@/lib/queries";
+import { computeDeltas, getHoldingsWithSectors, getPensionSnapshots, getPortfolioSnapshots } from "@/lib/queries";
 import KpiCards from "./components/kpi-cards";
 import PortfolioChart from "./components/portfolio-chart";
+import ComparisonChart from "./components/comparison-chart";
 import AllocationChart from "./components/allocation-chart";
 import HoldingsTable from "./components/holdings-table";
 import Link from "next/link";
@@ -9,9 +10,10 @@ import { Compass } from "lucide-react";
 export const revalidate = 300;
 
 export default async function DashboardPage() {
-  const [snapshots, holdings] = await Promise.all([
+  const [snapshots, holdings, pensionSnapshots] = await Promise.all([
     getPortfolioSnapshots(),
     getHoldingsWithSectors(),
+    getPensionSnapshots(),
   ]);
   const deltas = computeDeltas(snapshots);
 
@@ -36,6 +38,7 @@ export default async function DashboardPage() {
       </div>
       <KpiCards deltas={deltas} />
       <PortfolioChart snapshots={snapshots} />
+      <ComparisonChart portfolioSnapshots={snapshots} pensionSnapshots={pensionSnapshots} />
       <AllocationChart holdings={holdings} managed={deltas?.latest.managed} cash={deltas?.latest.cash} />
       <HoldingsTable holdings={holdings} />
     </div>
