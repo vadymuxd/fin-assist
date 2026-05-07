@@ -11,6 +11,7 @@ import {
   YAxis,
 } from "recharts";
 import type { MortgageSnapshot } from "@/lib/queries";
+import { generateHalifaxSchedule, HALIFAX_PROPERTY } from "@/lib/queries";
 
 type Mode = "balance" | "equity";
 
@@ -61,15 +62,38 @@ export default function MortgageChart({ snapshots }: { snapshots: MortgageSnapsh
   const [mode, setMode] = useState<Mode>("balance");
   const [half, setHalf] = useState(false);
 
-  const rows = useMemo(() =>
-    snapshots.map((s) => ({
+  const combined = useMemo(() => {
+    const firstCoopDate = snapshots[0]?.date ?? "9999-01-01";
+    const halifaxRows = generateHalifaxSchedule(firstCoopDate).map((h) => ({
+      date: h.date,
+      balance: h.balance,
+      equity: HALIFAX_PROPERTY - h.balance,
+      equity_half: (HALIFAX_PROPERTY - h.balance) / 2,
+    }));
+    const coopRows = snapshots.map((s) => ({
       date: s.date,
-      value:
-        mode === "balance"
-          ? half ? s.balance / 2 : s.balance
-          : half ? s.equity_half : s.equity,
-    })),
-  [snapshots, mode, half]);
+      balance: s.balance,
+      equity: s.equity,
+      equity_half: s.equity_half,
+    }));
+    return [...halifaxRows, ...coopRows];
+  }, [snapshots]);
+
+  const rows = useMemo(
+    () =>
+      combined.map((s) => ({
+        date: s.date,
+        value:
+          mode === "balance"
+            ? half
+              ? s.balance / 2
+              : s.balance
+            : half
+              ? s.equity_half
+              : s.equity,
+      })),
+    [combined, mode, half],
+  );
 
   const isBalance = mode === "balance";
   const stroke = isBalance ? "#f97316" : "#10b981";

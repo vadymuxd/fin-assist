@@ -148,15 +148,19 @@ export default function MortgageKpiCards({ deltas }: { deltas: MortgageDeltasRes
           <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
             <span>Monthly payment: <span className="font-medium text-gray-700 dark:text-gray-300">{gbp.format(latest.monthly_payment)}</span></span>
             <span>
-              <span className="text-orange-600 dark:text-orange-400 font-medium">{gbp.format(interestThisMonth)} interest</span>
+              <span className="text-red-600 dark:text-red-400 font-medium">{gbp.format(interestThisMonth)} interest</span>
               {" · "}
               <span className="text-emerald-600 dark:text-emerald-400 font-medium">{gbp.format(principalThisMonth)} principal</span>
             </span>
           </div>
-          <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+          <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden flex gap-px">
             <div
-              className="h-full rounded-full bg-gradient-to-r from-orange-400 to-emerald-400"
-              style={{ width: `${(principalThisMonth / latest.monthly_payment) * 100}%`, marginLeft: `${(interestThisMonth / latest.monthly_payment) * 100}%` }}
+              className="h-full rounded-l-full bg-red-500"
+              style={{ width: `${(interestThisMonth / latest.monthly_payment) * 100}%` }}
+            />
+            <div
+              className="h-full rounded-r-full bg-emerald-400"
+              style={{ width: `${(principalThisMonth / latest.monthly_payment) * 100}%` }}
             />
           </div>
           <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mt-1">

@@ -559,39 +559,6 @@ export async function getNetWorthData(): Promise<NetWorthPoint[]> {
   });
 }
 
-// ─── Comparison Chart ─────────────────────────────────────────────────────────
-
-export type ComparisonPoint = {
-  date: string;
-  customStocks: number;
-  managed: number | null;
-  spx: number | null;
-  pensions: number | null;
-};
-
-export function buildComparisonData(
-  portfolioSnapshots: PortfolioSnapshot[],
-  pensionSnapshots: PensionSnapshot[],
-): ComparisonPoint[] {
-  if (portfolioSnapshots.length === 0) return [];
-  const sorted = [...portfolioSnapshots].sort((a, b) => a.date.localeCompare(b.date));
-  const sortedPensions = [...pensionSnapshots].sort((a, b) => a.date.localeCompare(b.date));
-  const base = sorted[0];
-  const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
-  const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
-  return sorted.map((s) => {
-    const pensionRow = sortedPensions.filter((p) => p.date <= s.date).slice(-1)[0] ?? null;
-    return {
-      date: s.date,
-      customStocks: (s.self_managed / base.self_managed) * 100,
-      managed: s.managed != null && base.managed != null && base.managed > 0
-        ? (s.managed / base.managed) * 100 : null,
-      spx: s.spx != null && baseSpx != null ? (s.spx / baseSpx) * 100 : null,
-      pensions: pensionRow && basePension ? (pensionRow.total / basePension) * 100 : null,
-    };
-  });
-}
-
 // ─────────────────────────────────────────────────────────────────────────────
 
 export async function getHoldingsWithSectors(): Promise<Holding[]> {
@@ -657,3 +624,90 @@ export function computeDeltas(snapshots: PortfolioSnapshot[]): DashboardDeltas |
   const ytd = delta(latest, findClosestOnOrBefore(prior, yearStart));
   return { latest, baselineDate: baseline.date, daily, sinceBaseline, wow, mom, ytd };
 }
+
+// ─── Performance Comparison ───────────────────────────────────────────────────
+
+export type ComparisonPoint = {
+  date: string;
+  customStocks: number;
+  managed: number | null;
+  spx: number | null;
+  pensions: number | null;
+};
+
+export function buildComparisonData(
+  portfolioSnapshots: PortfolioSnapshot[],
+  pensionSnapshots: PensionSnapshot[],
+): ComparisonPoint[] {
+  if (portfolioSnapshots.length === 0) return [];
+  const sorted = [...portfolioSnapshots].sort((a, b) => a.date.localeCompare(b.date));
+  const sortedPensions = [...pensionSnapshots].sort((a, b) => a.date.localeCompare(b.date));
+  const base = sorted[0];
+  const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
+  const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
+  return sorted.map((s) => {
+    const pensionRow = sortedPensions.filter((p) => p.date <= s.date).slice(-1)[0] ?? null;
+    return {
+      date: s.date,
+      customStocks: (s.self_managed / base.self_managed) * 100,
+      managed:
+        s.managed != null && base.managed != null && base.managed > 0
+          ? (s.managed / base.managed) * 100
+          : null,
+      spx: s.spx != null && baseSpx != null ? (s.spx / baseSpx) * 100 : null,
+      pensions: pensionRow && basePension ? (pensionRow.total / basePension) * 100 : null,
+    };
+  });
+}
+
+// ─── Halifax amortisation schedule ───────────────────────────────────────────
+
+export type HalifaxRow = {
+  date: string;
+  balance: number;
+  interest: number;
+  principal: number;
+  ltv: number;
+};
+
+const HALIFAX_LOAN = 585999;
+const HALIFAX_PROPERTY = 650000;
+const HALIFAX_RATE_SWITCH = "2024-10-01";
+const HALIFAX_RATE_1 = 0.0275;
+const HALIFAX_RATE_2 = 0.0449;
+const HALIFAX_PAYMENT_1 = 2207.34;
+const HALIFAX_PAYMENT_2 = 2761.78;
+
+export function generateHalifaxSchedule(untilDate: string): HalifaxRow[] {
+  const rows: HalifaxRow[] = [];
+  let balance = HALIFAX_LOAN;
+  let y = 2022, m = 9;
+
+  while (true) {
+    const mm = String(m).padStart(2, "0");
+    const dateStr = `${y}-${mm}-01`;
+    if (dateStr >= untilDate) break;
+
+    const rate = dateStr < HALIFAX_RATE_SWITCH ? HALIFAX_RATE_1 : HALIFAX_RATE_2;
+    const payment = dateStr < HALIFAX_RATE_SWITCH ? HALIFAX_PAYMENT_1 : HALIFAX_PAYMENT_2;
+    const interest = balance * (rate / 12);
+    const principal = payment - interest;
+    balance = Math.max(0, balance - principal);
+
+    rows.push({
+      date: dateStr,
+      balance: Math.round(balance),
+      interest: Math.round(interest),
+      principal: Math.round(principal),
+      ltv: parseFloat(((balance / HALIFAX_PROPERTY) * 100).toFixed(2)),
+    });
+
+    m++;
+    if (m > 12) { m = 1; y++; }
+  }
+  return rows;
+}
+
+export const COOP_LOAN = 570999;
+
+export { HALIFAX_LOAN, HALIFAX_PROPERTY };

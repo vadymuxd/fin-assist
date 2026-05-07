@@ -2,9 +2,9 @@
 
 import { useMemo } from "react";
 import {
-  Area,
   CartesianGrid,
   ComposedChart,
+  Area,
   Line,
   ResponsiveContainer,
   Tooltip,
@@ -12,8 +12,7 @@ import {
   YAxis,
 } from "recharts";
 import type { MortgageSnapshot } from "@/lib/queries";
-
-const ORIGINAL_BALANCE = 570999;
+import { generateHalifaxSchedule, HALIFAX_LOAN, COOP_LOAN } from "@/lib/queries";
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -84,25 +83,49 @@ function LtvTooltip({
 }
 
 export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnapshot[] }) {
-  const splitRows = useMemo(() =>
-    snapshots.map((s) => {
+  const firstCoopDate = snapshots[0]?.date ?? "9999-01-01";
+  const latest = snapshots.at(-1);
+
+  const halifaxSchedule = useMemo(
+    () => generateHalifaxSchedule(firstCoopDate),
+    [firstCoopDate],
+  );
+
+  const splitRows = useMemo(() => {
+    const halifaxPart = halifaxSchedule.map((h) => ({
+      date: h.date,
+      interest: h.interest,
+      principal: h.principal,
+    }));
+    const coopPart = snapshots.map((s) => {
       const interest = s.balance * (s.rate / 12);
       const principal = s.monthly_payment - interest;
       return { date: s.date, interest: Math.round(interest), principal: Math.round(principal) };
-    }),
-  [snapshots]);
+    });
+    return [...halifaxPart, ...coopPart];
+  }, [halifaxSchedule, snapshots]);
 
-  const ltvRows = useMemo(() =>
-    snapshots.map((s) => ({
+  const ltvRows = useMemo(() => {
+    const halifaxPart = halifaxSchedule.map((h) => ({
+      date: h.date,
+      ltv: h.ltv,
+    }));
+    const coopPart = snapshots.map((s) => ({
       date: s.date,
       ltv: parseFloat(((s.balance / s.property_value) * 100).toFixed(2)),
-    })),
-  [snapshots]);
+    }));
+    return [...halifaxPart, ...coopPart];
+  }, [halifaxSchedule, snapshots]);
 
-  const latest = snapshots.at(-1);
-  const paid = latest ? ORIGINAL_BALANCE - latest.balance : 0;
-  const paidPct = latest ? (paid / ORIGINAL_BALANCE) * 100 : 0;
-  const remainingPct = 100 - paidPct;
+  const halifaxEndBalance = halifaxSchedule.at(-1)?.balance ?? HALIFAX_LOAN;
+  const halifaxPaid = HALIFAX_LOAN - halifaxEndBalance;
+  const halifaxPaidPct = (halifaxPaid / HALIFAX_LOAN) * 100;
+
+  const coopPaid = latest ? COOP_LOAN - latest.balance : 0;
+  const coopPaidPct = (coopPaid / COOP_LOAN) * 100;
+
+  const totalPaid = latest ? HALIFAX_LOAN - latest.balance : 0;
+  const totalPaidPct = (totalPaid / HALIFAX_LOAN) * 100;
 
   if (snapshots.length < 2) return null;
 
@@ -251,43 +274,79 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
         </div>
       </div>
 
-      {/* Payoff progress */}
+      {/* Payoff progress — 3 progress bars */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
-        <div className="mb-4">
+        <div className="mb-5">
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Payoff Progress</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {gbp.format(paid)} repaid of {gbp.format(ORIGINAL_BALANCE)} original balance
+            How much of each loan has been paid off
           </p>
         </div>
-        <div className="space-y-3">
-          <div className="h-4 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-            <div
-              className="h-full rounded-full bg-gradient-to-r from-orange-400 to-emerald-400 transition-all"
-              style={{ width: `${paidPct}%` }}
-            />
-          </div>
-          <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400">
-            <div className="flex items-center gap-1.5">
-              <span className="w-2 h-2 rounded-full bg-gradient-to-br from-orange-400 to-emerald-400 inline-block" />
-              <span className="font-medium text-gray-700 dark:text-gray-300">{paidPct.toFixed(1)}%</span>
-              <span>paid off</span>
+        <div className="space-y-5">
+          {/* Halifax bar */}
+          <div>
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-medium text-gray-700 dark:text-gray-300">
+                Halifax <span className="font-normal text-gray-400 dark:text-gray-500">(Sep 2022 – remortgage)</span>
+              </span>
+              <span className="tabular-nums text-gray-500 dark:text-gray-400">
+                <span className="font-semibold text-orange-600 dark:text-orange-400">{gbp.format(halifaxPaid)}</span>
+                {" of "}
+                {gbp.format(HALIFAX_LOAN)}
+                <span className="ml-2 font-semibold text-gray-700 dark:text-gray-300">{halifaxPaidPct.toFixed(1)}%</span>
+              </span>
             </div>
-            <div className="text-right">
-              <span className="font-medium text-rose-600 dark:text-rose-400">{remainingPct.toFixed(1)}%</span>
-              <span className="ml-1">remaining ({gbp.format(latest?.balance ?? 0)})</span>
+            <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+              <div className="h-full rounded-full bg-orange-400 transition-all" style={{ width: `${halifaxPaidPct}%` }} />
+            </div>
+          </div>
+
+          {/* Co-op bar */}
+          <div>
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-medium text-gray-700 dark:text-gray-300">
+                Co-operative Bank <span className="font-normal text-gray-400 dark:text-gray-500">(current)</span>
+              </span>
+              <span className="tabular-nums text-gray-500 dark:text-gray-400">
+                <span className="font-semibold text-blue-600 dark:text-blue-400">{gbp.format(coopPaid)}</span>
+                {" of "}
+                {gbp.format(COOP_LOAN)}
+                <span className="ml-2 font-semibold text-gray-700 dark:text-gray-300">{coopPaidPct.toFixed(1)}%</span>
+              </span>
+            </div>
+            <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+              <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${coopPaidPct}%` }} />
+            </div>
+          </div>
+
+          {/* Total bar */}
+          <div>
+            <div className="flex items-center justify-between text-xs mb-2">
+              <span className="font-medium text-gray-700 dark:text-gray-300">
+                Total Journey <span className="font-normal text-gray-400 dark:text-gray-500">(Halifax start → now)</span>
+              </span>
+              <span className="tabular-nums text-gray-500 dark:text-gray-400">
+                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{gbp.format(totalPaid)}</span>
+                {" of "}
+                {gbp.format(HALIFAX_LOAN)}
+                <span className="ml-2 font-semibold text-gray-700 dark:text-gray-300">{totalPaidPct.toFixed(1)}%</span>
+              </span>
+            </div>
+            <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
+              <div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-emerald-400 transition-all" style={{ width: `${totalPaidPct}%` }} />
             </div>
           </div>
         </div>
 
         {latest && (
-          <div className="mt-4 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
+          <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Original</div>
-              <div className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-300">{gbp.format(ORIGINAL_BALANCE)}</div>
+              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Halifax Start</div>
+              <div className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-300">{gbp.format(HALIFAX_LOAN)}</div>
             </div>
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Paid Off</div>
-              <div className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{gbp.format(paid)}</div>
+              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Total Paid</div>
+              <div className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{gbp.format(totalPaid)}</div>
             </div>
             <div>
               <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Remaining</div>
