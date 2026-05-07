@@ -485,7 +485,7 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 - [x] **data.8** `(+)` tabs renamed. `update_manual_prices.py` expanded to all 17 tickers + FX conversion + A2 timestamp. `price_refresh.yml` added (21:30 BST weekdays, US/CA close).
 
 ### Architecture decisions to lock
-- [x] **data.9** Cash Flow tab mapped: `Date (day) | From | To | Description | Amount £` — monthly routing template (salary in, account transfers, pot top-ups). 25 rows. `sync_worker` reads on 1st of month to pre-populate expected transactions.
+- [x] **data.9** Cash Flow tab mapped: `Date (day) | From | To | Description | Amount £` — monthly routing template (salary in, account transfers, pot top-ups). 25 rows. `From` and `To` columns contain actual account names (e.g. "Monzo", "Chase ISA") — ready for direct mapping to `savings_accounts`/`pension_accounts` in Supabase. `sync_worker` reads on 1st of month to pre-populate expected transactions.
 - [x] **data.10** All 9 tabs retained: `Income`, `Cash Flow`, `Investments`, `Joint Spendings`, `Personal Spendings`, `Saving Transfers`, `Savings Balance`, `Pensions`, `InvTransactions`. Nothing removed in Phase 13. `InvTransactions` retires in Phase 16 when `sync_worker` is live.
 - [x] **data.11** `transactions` table migration written → `supabase/migrations/0010_transactions.sql`. Apply to Supabase before Phase 13 build starts.
 
@@ -543,7 +543,7 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 - Dedup key: `date + domain + account_name + amount_gbp + type`
 
 - [x] **sync.1** Cash Flow layout mapped (Phase 12 data.9): `Date (day) | From | To | Description | Amount £` — monthly recurring template, ~25 rows.
-- [ ] **sync.0** **Decision required before build:** Cash Flow drives transaction logging (planned). Should it also automate Savings Balance updates? Option A: transactions only — Cash Flow → Supabase transactions, Savings Balance still manually updated. Option B: balance calculation — sync_worker applies Cash Flow movements to last month's balances, writes new Savings Balance column automatically (needs account mapping per Cash Flow row). Decide scope of sync_worker before starting sync.2.
+- [ ] **sync.0** **Decision required before build:** Cash Flow drives transaction logging (planned). Should it also automate Savings Balance updates? Option A: transactions only — Cash Flow → Supabase transactions, Savings Balance still manually updated. Option B: balance calculation — sync_worker applies Cash Flow movements to last month's balances, writes new Savings Balance column automatically. Note: `From`/`To` columns already contain account names matching Supabase `savings_accounts` — mapping is ready, no config file needed. Decide scope of sync_worker before starting sync.2.
 - [ ] **sync.2** Build `sync_worker.py` — Cash Flow read + Notion write (1st of month) + bidirectional reconciliation (daily close)
 - [ ] **sync.3** Add `monthly_sync.yml` GHA workflow (1st of month trigger)
 - [ ] **sync.4** Add `sync_worker.py` to `daily_monitor.yml` close run
