@@ -542,7 +542,8 @@ Mortgage dashboard live (chart, metrics, KPI). Net worth gains mortgage equity. 
 - Supabase `synced_to_notion=false` → write to Notion, mark synced
 - Dedup key: `date + domain + account_name + amount_gbp + type`
 
-- [ ] **sync.1** Map Cash Flow sheet layout (confirm in data.9 before building)
+- [x] **sync.1** Cash Flow layout mapped (Phase 12 data.9): `Date (day) | From | To | Description | Amount £` — monthly recurring template, ~25 rows.
+- [ ] **sync.0** **Decision required before build:** Cash Flow drives transaction logging (planned). Should it also automate Savings Balance updates? Option A: transactions only — Cash Flow → Supabase transactions, Savings Balance still manually updated. Option B: balance calculation — sync_worker applies Cash Flow movements to last month's balances, writes new Savings Balance column automatically (needs account mapping per Cash Flow row). Decide scope of sync_worker before starting sync.2.
 - [ ] **sync.2** Build `sync_worker.py` — Cash Flow read + Notion write (1st of month) + bidirectional reconciliation (daily close)
 - [ ] **sync.3** Add `monthly_sync.yml` GHA workflow (1st of month trigger)
 - [ ] **sync.4** Add `sync_worker.py` to `daily_monitor.yml` close run
