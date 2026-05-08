@@ -30,14 +30,6 @@ jobs:
           mkdir -p config
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
 
-      # ── Refresh manual prices (SGLN and other non-GOOGLEFINANCE tickers) ──────
-      - name: Refresh manual prices
-        env:
-          PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
-          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
-          TWELVE_DATA_API_KEY:            ${{ secrets.TWELVE_DATA_API_KEY }}
-        run: python3 scripts/update_manual_prices.py
-
       # ── market_worker --mode fetch: build news pool ───────────────────────────
       - name: Fetch news
         env:
