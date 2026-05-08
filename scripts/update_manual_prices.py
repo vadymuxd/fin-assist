@@ -18,12 +18,24 @@ Runs 3× daily via daily_monitor.yml (09:30 / 13:00 / 16:30 BST).
 
 import os
 from datetime import datetime, timezone
+import requests
 import yfinance as yf
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 
 load_dotenv()
+
+_session = requests.Session()
+_session.headers.update({
+    'User-Agent': (
+        'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) '
+        'AppleWebKit/537.36 (KHTML, like Gecko) '
+        'Chrome/124.0.0.0 Safari/537.36'
+    ),
+    'Accept': 'text/html,application/xhtml+xml,application/xml;q=0.9,*/*;q=0.8',
+    'Accept-Language': 'en-US,en;q=0.5',
+})
 
 SHEET_ID = os.getenv('PORTFOLIO_SHEET_ID')
 SA_FILE  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.json')
@@ -58,7 +70,7 @@ def fetch_fx_rates():
     rates = {}
     for currency, pair in FX_PAIRS.items():
         try:
-            hist = yf.Ticker(pair).history(period='2d')
+            hist = yf.Ticker(pair, session=_session).history(period='2d')
             if not hist.empty:
                 rates[currency] = round(1.0 / float(hist['Close'].iloc[-1]), 6)
                 print(f"  FX {currency}: £{rates[currency]:.4f} per 1 {currency}")
@@ -74,7 +86,7 @@ def fetch_prices(fx_rates):
     prices = {}
     for sheet_ticker, (yf_symbol, currency) in TICKERS.items():
         try:
-            hist = yf.Ticker(yf_symbol).history(period='5d')
+            hist = yf.Ticker(yf_symbol, session=_session).history(period='5d')
             if hist.empty:
                 print(f"  {sheet_ticker}: no data — skipping")
                 continue
