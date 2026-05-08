@@ -5,6 +5,10 @@ update_manual_prices.py
 Fetches latest prices for all portfolio tickers via Twelve Data API and writes
 them directly to the Investments tab in Google Sheets.
 
+Free tier: 8 API credits/minute. Each symbol = 1 credit.
+Script batches in groups of 8 with 61s sleep between batches.
+Total runtime: ~3 minutes (FX batch + sleep + ticker batch 1 + sleep + ticker batch 2).
+
 Handles currency conversion to GBP:
   - LSE (.L)      — Twelve Data returns GBX (pence) → divide by 100
   - US            — Twelve Data returns USD → convert via GBP/USD
@@ -18,6 +22,7 @@ and once via price_refresh.yml (21:30 BST after US/CA close).
 """
 
 import os
+import time
 import requests
 from datetime import datetime, timezone
 from dotenv import load_dotenv
@@ -31,6 +36,8 @@ SA_FILE         = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_ac
 TWELVE_DATA_KEY = os.getenv('TWELVE_DATA_API_KEY')
 SCOPES          = ['https://www.googleapis.com/auth/spreadsheets']
 BASE_URL        = 'https://api.twelvedata.com/price'
+RATE_LIMIT      = 8   # credits per minute on free tier
+RATE_WINDOW     = 61  # seconds to wait between batches
 
 # sheet_ticker → (twelve_data_symbol, currency)
 # currency: 'GBX' (pence→GBP ÷100), 'USD', 'EUR', 'CAD', 'GBP'
@@ -38,8 +45,8 @@ TICKERS = {
     'NVDA':   ('NVDA',        'USD'),
     'RTX':    ('RTX',         'USD'),
     'GOOG':   ('GOOG',        'USD'),
-    'BRK.B':  ('BRK/B',       'USD'),
-    'TECK.B': ('TECK/B:TSX',  'CAD'),
+    'BRK.B':  ('BRK.B',       'USD'),
+    'TECK.B': ('TECK.B:TSX',  'CAD'),
     'RIO':    ('RIO:LSE',     'GBX'),
     'SGLN':   ('SGLN:LSE',    'GBX'),
     'INRG':   ('INRG:LSE',    'GBX'),
@@ -56,21 +63,40 @@ FX_PAIRS = {
 }
 
 
-def _batch_fetch(symbols: list[str]) -> dict:
-    """Call Twelve Data /price with comma-separated symbols. Returns {symbol: price_str}."""
+def _fetch_chunk(symbols: list[str]) -> dict:
+    """Fetch one batch of up to 8 symbols. Returns {symbol: price_str}."""
     resp = requests.get(BASE_URL, params={
         'symbol': ','.join(symbols),
         'apikey': TWELVE_DATA_KEY,
     }, timeout=30)
     resp.raise_for_status()
     data = resp.json()
-    # Single-symbol response: {"price": "123.45"}
-    # Multi-symbol response:  {"NVDA": {"price": "123.45"}, ...}
+
+    if data.get('status') == 'error':
+        print(f"  Twelve Data error: {data.get('message')}")
+        return {}
+
+    # Single-symbol: {"price": "123.45"}
+    # Multi-symbol:  {"NVDA": {"price": "123.45"}, ...}
     if 'price' in data:
         return {symbols[0]: data['price']}
-    result = {sym: entry.get('price') for sym, entry in data.items() if isinstance(entry, dict)}
-    if not any(result.values()):
-        print(f"  [debug] raw Twelve Data response: {data}")
+
+    return {
+        sym: entry['price']
+        for sym, entry in data.items()
+        if isinstance(entry, dict) and 'price' in entry
+    }
+
+
+def _batch_fetch(symbols: list[str]) -> dict:
+    """Fetch all symbols in rate-limited batches of 8, sleeping 61s between batches."""
+    result = {}
+    chunks = [symbols[i:i + RATE_LIMIT] for i in range(0, len(symbols), RATE_LIMIT)]
+    for i, chunk in enumerate(chunks):
+        if i > 0:
+            print(f"  Rate limit pause ({RATE_WINDOW}s)...")
+            time.sleep(RATE_WINDOW)
+        result.update(_fetch_chunk(chunk))
     return result
 
 
@@ -94,6 +120,10 @@ def fetch_fx_rates() -> dict:
 def fetch_prices(fx_rates: dict) -> dict:
     """Fetch latest price for every ticker and convert to GBP."""
     td_symbols = [td_sym for _, (td_sym, _) in TICKERS.items()]
+
+    print(f"  Rate limit pause ({RATE_WINDOW}s before ticker fetch)...")
+    time.sleep(RATE_WINDOW)
+
     raw = _batch_fetch(td_symbols)
 
     prices = {}
