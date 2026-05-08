@@ -35,6 +35,7 @@ jobs:
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          TWELVE_DATA_API_KEY:            ${{ secrets.TWELVE_DATA_API_KEY }}
         run: python3 scripts/update_manual_prices.py
 
       # ── market_worker --mode fetch: build news pool ───────────────────────────
