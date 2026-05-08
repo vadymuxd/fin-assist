@@ -68,7 +68,10 @@ def _batch_fetch(symbols: list[str]) -> dict:
     # Multi-symbol response:  {"NVDA": {"price": "123.45"}, ...}
     if 'price' in data:
         return {symbols[0]: data['price']}
-    return {sym: entry.get('price') for sym, entry in data.items() if isinstance(entry, dict)}
+    result = {sym: entry.get('price') for sym, entry in data.items() if isinstance(entry, dict)}
+    if not any(result.values()):
+        print(f"  [debug] raw Twelve Data response: {data}")
+    return result
 
 
 def fetch_fx_rates() -> dict:
