@@ -582,11 +582,22 @@ export type Delta = { absolute: number; pct: number; fromDate: string };
 export type DashboardDeltas = {
   latest: PortfolioSnapshot;
   baselineDate: string;
+  // Vadym
   daily: Delta | null;
   wow: Delta | null;
   mom: Delta | null;
   ytd: Delta | null;
   sinceBaseline: Delta | null;
+  // Lisa
+  lisaDaily: Delta | null;
+  lisaWow: Delta | null;
+  lisaMom: Delta | null;
+  lisaSinceBaseline: Delta | null;
+  // Joint
+  jointDaily: Delta | null;
+  jointWow: Delta | null;
+  jointMom: Delta | null;
+  jointSinceBaseline: Delta | null;
 };
 
 function daysAgoISO(days: number): string {
@@ -612,20 +623,53 @@ function delta(latest: PortfolioSnapshot, prev: PortfolioSnapshot | null) {
   return { absolute, pct, fromDate: prev.date };
 }
 
+function deltaField(
+  latest: PortfolioSnapshot,
+  prev: PortfolioSnapshot | null,
+  field: "lisa_total" | "joint_total",
+): Delta | null {
+  if (!prev) return null;
+  const latestVal = latest[field] ?? 0;
+  const prevVal = prev[field] ?? 0;
+  if (prevVal === 0) return null;
+  const absolute = latestVal - prevVal;
+  const pct = (absolute / prevVal) * 100;
+  return { absolute, pct, fromDate: prev.date };
+}
+
 export function computeDeltas(snapshots: PortfolioSnapshot[]): DashboardDeltas | null {
   if (snapshots.length === 0) return null;
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
   const latest = sorted[sorted.length - 1];
   const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
+  const prev7 = findClosestOnOrBefore(prior, daysAgoISO(7));
+  const prev30 = findClosestOnOrBefore(prior, daysAgoISO(30));
+  const prevFallback = prior.length > 0 ? prior[0] : null;
+
   const daily = sorted.length >= 2 ? delta(latest, sorted[sorted.length - 2]) : null;
   const sinceBaseline = baseline.date !== latest.date ? delta(latest, baseline) : null;
-  const wow = delta(latest, findClosestOnOrBefore(prior, daysAgoISO(7)));
-  const mom30 = findClosestOnOrBefore(prior, daysAgoISO(30));
-  const mom = delta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
+  const wow = delta(latest, prev7);
+  const mom = delta(latest, prev30 ?? prevFallback);
   const yearStart = `${new Date().getUTCFullYear()}-01-01`;
   const ytd = delta(latest, findClosestOnOrBefore(prior, yearStart));
-  return { latest, baselineDate: baseline.date, daily, sinceBaseline, wow, mom, ytd };
+
+  const lisaDaily = sorted.length >= 2 ? deltaField(latest, sorted[sorted.length - 2], "lisa_total") : null;
+  const lisaWow = deltaField(latest, prev7, "lisa_total");
+  const lisaMom = deltaField(latest, prev30 ?? prevFallback, "lisa_total");
+  const lisaSinceBaseline = baseline.date !== latest.date ? deltaField(latest, baseline, "lisa_total") : null;
+
+  const jointDaily = sorted.length >= 2 ? deltaField(latest, sorted[sorted.length - 2], "joint_total") : null;
+  const jointWow = deltaField(latest, prev7, "joint_total");
+  const jointMom = deltaField(latest, prev30 ?? prevFallback, "joint_total");
+  const jointSinceBaseline = baseline.date !== latest.date ? deltaField(latest, baseline, "joint_total") : null;
+
+  return {
+    latest, baselineDate: baseline.date,
+    daily, sinceBaseline, wow, mom, ytd,
+    lisaDaily, lisaWow, lisaMom, lisaSinceBaseline,
+    jointDaily, jointWow, jointMom, jointSinceBaseline,
+  };
 }
 
 // ─── Performance Comparison ───────────────────────────────────────────────────
@@ -636,6 +680,7 @@ export type ComparisonPoint = {
   managed: number | null;
   spx: number | null;
   pensions: number | null;
+  lisa: number | null;
 };
 
 export function buildComparisonData(
@@ -648,6 +693,7 @@ export function buildComparisonData(
   const base = sorted[0];
   const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
   const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
+  const baseLisa = sorted.find((s) => s.lisa_total != null && s.lisa_total > 0)?.lisa_total ?? null;
   return sorted.map((s) => {
     const pensionRow = sortedPensions.filter((p) => p.date <= s.date).slice(-1)[0] ?? null;
     return {
@@ -659,6 +705,7 @@ export function buildComparisonData(
           : null,
       spx: s.spx != null && baseSpx != null ? (s.spx / baseSpx) * 100 : null,
       pensions: pensionRow && basePension ? (pensionRow.total / basePension) * 100 : null,
+      lisa: s.lisa_total != null && baseLisa != null ? (s.lisa_total / baseLisa) * 100 : null,
     };
   });
 }

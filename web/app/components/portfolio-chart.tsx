@@ -24,6 +24,7 @@ const benchmarkKeys = {
   NDX: "ndx",
   MSCI: "msci",
   Gold: "gold",
+  Lisa: "lisa_total",
 } as const satisfies Record<string, keyof PortfolioSnapshot>;
 
 type BenchmarkLabel = keyof typeof benchmarkKeys;
@@ -36,6 +37,7 @@ const seriesColor: Record<string, string> = {
   NDX: "#f59e0b",
   MSCI: "#8b5cf6",
   Gold: "#f43f5e",
+  Lisa: "#d946ef",
 };
 
 const gbp = new Intl.NumberFormat("en-GB", {

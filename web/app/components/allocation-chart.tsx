@@ -69,20 +69,23 @@ export default function AllocationChart({
 
   const stockSlices = useMemo(() => bucket(holdings, dim), [holdings, dim]);
 
-  // Combine self-managed stocks with managed account and cash as fixed extra slices
+  // For ticker/platform views include managed + cash as full-picture extras.
+  // For sector/market views only show self-managed stocks so categories stay meaningful.
   const chartData = useMemo((): Slice[] => {
     const offset = stockSlices.length;
     const extras: Slice[] = [];
-    if (managed && managed > 0) {
-      extras.push({ name: "JP Morgan Managed", value: managed, pct: 0, color: palette[offset % palette.length] });
-    }
-    if (cash && cash > 0) {
-      extras.push({ name: "Cash", value: cash, pct: 0, color: palette[(offset + extras.length) % palette.length] });
+    if (dim === "ticker" || dim === "platform") {
+      if (managed && managed > 0) {
+        extras.push({ name: "JP Morgan Managed", value: managed, pct: 0, color: palette[offset % palette.length] });
+      }
+      if (cash && cash > 0) {
+        extras.push({ name: "Cash", value: cash, pct: 0, color: palette[(offset + extras.length) % palette.length] });
+      }
     }
     const combined = [...stockSlices, ...extras];
     const grand = combined.reduce((acc, s) => acc + s.value, 0);
     return combined.map((s) => ({ ...s, pct: grand > 0 ? (s.value / grand) * 100 : 0 }));
-  }, [stockSlices, managed, cash]);
+  }, [stockSlices, managed, cash, dim]);
 
   const total = useMemo(() => chartData.reduce((acc, d) => acc + d.value, 0), [chartData]);
   const hasData = chartData.length > 0 && total > 0;
@@ -93,7 +96,9 @@ export default function AllocationChart({
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Allocation</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            All assets by {dimensionLabels[dim].toLowerCase()}
+            {dim === "sector" || dim === "market"
+              ? `Custom stocks by ${dimensionLabels[dim].toLowerCase()}`
+              : `All assets by ${dimensionLabels[dim].toLowerCase()}`}
           </p>
         </div>
         <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 self-start">

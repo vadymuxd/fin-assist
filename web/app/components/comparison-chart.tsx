@@ -13,13 +13,14 @@ import {
 import type { PensionSnapshot, PortfolioSnapshot } from "@/lib/queries";
 import { buildComparisonData } from "@/lib/queries";
 
-type SeriesKey = "customStocks" | "managed" | "spx" | "pensions";
+type SeriesKey = "customStocks" | "managed" | "spx" | "pensions" | "lisa";
 
 const SERIES: { key: SeriesKey; label: string; color: string }[] = [
   { key: "customStocks", label: "Custom Stocks", color: "#2563eb" },
   { key: "managed",      label: "Managed Funds", color: "#10b981" },
   { key: "spx",          label: "S&P 500",       color: "#0ea5e9" },
   { key: "pensions",     label: "Pensions",       color: "#f59e0b" },
+  { key: "lisa",         label: "Lisa",           color: "#d946ef" },
 ];
 
 function shortDate(iso: string): string {

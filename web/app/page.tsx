@@ -42,7 +42,7 @@ export default async function DashboardPage() {
       <PortfolioChart snapshots={snapshots} />
       <ComparisonChart portfolioSnapshots={snapshots} pensionSnapshots={pensionSnapshots} />
       <AllocationChart holdings={holdings} managed={deltas?.latest.managed} cash={deltas?.latest.cash} />
-      <HoldingsTable holdings={holdings} />
+      <HoldingsTable holdings={holdings} snapshots={snapshots} />
     </div>
   );
 }

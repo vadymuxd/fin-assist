@@ -1,12 +1,9 @@
+"use client";
+
+import { useState } from "react";
 import type { DashboardDeltas, Delta } from "@/lib/queries";
 
 const gbp = new Intl.NumberFormat("en-GB", {
-  style: "currency",
-  currency: "GBP",
-  maximumFractionDigits: 0,
-});
-
-const gbpSmall = new Intl.NumberFormat("en-GB", {
   style: "currency",
   currency: "GBP",
   maximumFractionDigits: 0,
@@ -107,14 +104,19 @@ function BreakdownChip({
     <div className="flex flex-col">
       <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{label}</div>
       <div className="text-sm font-medium tabular-nums text-gray-900 dark:text-gray-50">
-        {gbpSmall.format(value)}
+        {gbp.format(value)}
       </div>
       <div className="text-[10px] text-gray-400 dark:text-gray-500 tabular-nums">{pct.toFixed(0)}%</div>
     </div>
   );
 }
 
+type Owner = "Joint" | "Vadym" | "Lisa";
+const OWNERS: Owner[] = ["Joint", "Vadym", "Lisa"];
+
 export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null }) {
+  const [owner, setOwner] = useState<Owner>("Vadym");
+
   if (!deltas) {
     return (
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -123,22 +125,66 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
     );
   }
 
-  const { latest, baselineDate, daily, wow, mom, sinceBaseline } = deltas;
+  const { latest, baselineDate } = deltas;
+
+  const total =
+    owner === "Joint" ? (latest.joint_total ?? 0)
+    : owner === "Lisa" ? (latest.lisa_total ?? 0)
+    : latest.vadym_total;
+
+  const daily =
+    owner === "Joint" ? deltas.jointDaily
+    : owner === "Lisa" ? deltas.lisaDaily
+    : deltas.daily;
+
+  const wow =
+    owner === "Joint" ? deltas.jointWow
+    : owner === "Lisa" ? deltas.lisaWow
+    : deltas.wow;
+
+  const mom =
+    owner === "Joint" ? deltas.jointMom
+    : owner === "Lisa" ? deltas.lisaMom
+    : deltas.mom;
+
+  const sinceBaseline =
+    owner === "Joint" ? deltas.jointSinceBaseline
+    : owner === "Lisa" ? deltas.lisaSinceBaseline
+    : deltas.sinceBaseline;
+
   const stocks = latest.self_managed ?? 0;
   const cash = latest.cash ?? 0;
   const managed = latest.managed ?? 0;
 
   return (
     <div className="space-y-3 sm:space-y-4">
-      {/* Hero card: Grand Total + breakdown + Daily delta */}
+      {/* Hero card */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 p-5 sm:p-6 shadow-sm">
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Vadym Total
+            <div className="flex items-center gap-3 mb-2">
+              <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
+                {owner} Total
+              </div>
+              {/* Segmented control */}
+              <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+                {OWNERS.map((o) => (
+                  <button
+                    key={o}
+                    onClick={() => setOwner(o)}
+                    className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
+                      owner === o
+                        ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                        : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+                    }`}
+                  >
+                    {o}
+                  </button>
+                ))}
+              </div>
             </div>
-            <div className="mt-1 text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-              {gbp.format(latest.vadym_total)}
+            <div className="text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+              {gbp.format(total)}
             </div>
             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span>as of {shortDate(latest.date)}</span>
@@ -152,11 +198,13 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
               )}
             </div>
           </div>
-          <div className="grid grid-cols-3 gap-4 sm:gap-6">
-            <BreakdownChip label="Stocks" value={stocks} total={latest.vadym_total} />
-            <BreakdownChip label="Cash" value={cash} total={latest.vadym_total} />
-            <BreakdownChip label="Managed" value={managed} total={latest.vadym_total} />
-          </div>
+          {owner === "Vadym" && (
+            <div className="grid grid-cols-3 gap-4 sm:gap-6">
+              <BreakdownChip label="Stocks" value={stocks} total={total} />
+              <BreakdownChip label="Cash" value={cash} total={total} />
+              <BreakdownChip label="Managed" value={managed} total={total} />
+            </div>
+          )}
         </div>
       </div>
 
