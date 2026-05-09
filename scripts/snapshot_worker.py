@@ -37,7 +37,7 @@ SA_FILE  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.j
 SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
 
 # Row numbers in Investments (1-based)
-ROW_GRAND_TOTAL   = 7
+ROW_VADYM_TOTAL   = 7
 ROW_CASH          = 9
 ROW_STOCKS_TOTAL  = 11
 ROW_MANAGED_TOTAL = 28
@@ -46,6 +46,8 @@ ROW_FTSE100       = 33
 ROW_NASDAQ100     = 34
 ROW_MSCI_WORLD    = 35
 ROW_GOLD          = 36
+ROW_LISA_TOTAL    = None  # TODO: confirm row number after Investments sheet update
+ROW_JOINT_TOTAL   = None  # TODO: confirm row number after Investments sheet update
 COL_VALUE_IDX     = 6  # 0-based → col G
 
 MONTH_NAMES = {
@@ -135,7 +137,9 @@ def run_portfolio():
     print(f"  Opened: {sh.title} / Investments")
 
     totals = {
-        'grand_total':  read_cell(ws, ROW_GRAND_TOTAL,   COL_VALUE_IDX),
+        'vadym_total':  read_cell(ws, ROW_VADYM_TOTAL,   COL_VALUE_IDX),
+        'lisa_total':   read_cell(ws, ROW_LISA_TOTAL,    COL_VALUE_IDX) if ROW_LISA_TOTAL else None,
+        'joint_total':  read_cell(ws, ROW_JOINT_TOTAL,   COL_VALUE_IDX) if ROW_JOINT_TOTAL else None,
         'self_managed': read_cell(ws, ROW_STOCKS_TOTAL,  COL_VALUE_IDX),
         'managed':      read_cell(ws, ROW_MANAGED_TOTAL, COL_VALUE_IDX),
         'cash':         read_cell(ws, ROW_CASH,          COL_VALUE_IDX),
@@ -149,7 +153,11 @@ def run_portfolio():
     print("\nReading net deposits from InvTransactions...")
     totals['net_deposits'] = read_net_deposits(sh)
 
-    print(f"  Grand total:  £{totals['grand_total']:,.2f}")
+    print(f"  Vadym total:  £{totals['vadym_total']:,.2f}")
+    if totals['lisa_total'] is not None:
+        print(f"  Lisa total:   £{totals['lisa_total']:,.2f}")
+    if totals['joint_total'] is not None:
+        print(f"  Joint total:  £{totals['joint_total']:,.2f}")
     print(f"  Self-managed: £{totals['self_managed']:,.2f}")
     print(f"  Managed:      £{totals['managed']:,.2f}")
     print(f"  Cash:         £{totals['cash']:,.2f}")

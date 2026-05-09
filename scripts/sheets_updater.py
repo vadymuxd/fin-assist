@@ -188,7 +188,7 @@ def update_notion_snapshot(sh, results):
         row11 = ws.row_values(11)
         row28 = ws.row_values(28)
 
-        grand_total    = parse_float(row7[6])   if len(row7)  > 6  else 0
+        vadym_total    = parse_float(row7[6])   if len(row7)  > 6  else 0
         cash           = parse_float(row9[6])   if len(row9)  > 6  else 0
         stocks_total   = parse_float(row11[6])  if len(row11) > 6  else 0
         stocks_pnl     = parse_float(row11[11]) if len(row11) > 11 else 0
@@ -232,7 +232,7 @@ def update_notion_snapshot(sh, results):
             })
     except Exception as e:
         print(f"  Could not read summary rows: {e}")
-        grand_total = cash = stocks_total = stocks_pnl = stocks_pnl_pct = managed_total = 0
+        vadym_total = cash = stocks_total = stocks_pnl = stocks_pnl_pct = managed_total = 0
         positions = []
 
     if positions:
@@ -271,7 +271,7 @@ def update_notion_snapshot(sh, results):
         ['Self-Managed Stocks', f'£{stocks_total:,.2f}'],
         ['Managed Funds', f'£{managed_total:,.2f}'],
         ['Cash', f'£{cash:,.2f}'],
-        ['Grand Total', f'£{grand_total:,.2f}'],
+        ['Vadym Total', f'£{vadym_total:,.2f}'],
         ['Stocks P&L £', f'{pnl_sign}£{stocks_pnl:,.2f}'],
         ['Stocks P&L %', pnl_pct_str],
     ]))
@@ -327,7 +327,7 @@ def update_notion_snapshot(sh, results):
         timeout=15,
     )
     if resp.status_code == 200:
-        print(f"  Notion snapshot updated — Grand Total £{grand_total:,.2f}")
+        print(f"  Notion snapshot updated — Vadym Total £{vadym_total:,.2f}")
     else:
         print(f"  Notion write failed ({resp.status_code}): {resp.text[:300]}")
 
@@ -336,7 +336,7 @@ def update_notion_snapshot(sh, results):
 # Main
 # ---------------------------------------------------------------------------
 
-def send_bot_confirmation(grand_total):
+def send_bot_confirmation(vadym_total):
     """Send a brief snapshot confirmation to Telegram when triggered via bot command."""
     token   = os.getenv('TELEGRAM_BOT_TOKEN')
     chat_id = os.getenv('TELEGRAM_CHAT_ID')
@@ -345,7 +345,7 @@ def send_bot_confirmation(grand_total):
     now_str = datetime.now(timezone.utc).strftime('%d %b %Y, %H:%M UTC')
     text = (
         f'✅ <b>Portfolio snapshot refreshed</b>\n'
-        f'Grand Total: <b>£{grand_total:,.2f}</b>\n'
+        f'Vadym Total: <b>£{vadym_total:,.2f}</b>\n'
         f'<i>{now_str}</i>'
     )
     try:
@@ -395,12 +395,12 @@ def main():
 
         if do_bot:
             try:
-                ws       = sh.worksheet('Investments')
-                row7     = ws.row_values(7)
-                grand_total = parse_float(row7[6]) if len(row7) > 6 else 0.0
+                ws          = sh.worksheet('Investments')
+                row7        = ws.row_values(7)
+                vadym_total = parse_float(row7[6]) if len(row7) > 6 else 0.0
             except Exception:
-                grand_total = 0.0
-            send_bot_confirmation(grand_total)
+                vadym_total = 0.0
+            send_bot_confirmation(vadym_total)
 
     print("\nDone.")
 

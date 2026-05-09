@@ -143,8 +143,8 @@ def write_discoveries(run_id: str, run_time: datetime, candidates: list[dict]) -
 def write_portfolio_snapshot(date: str, totals: dict) -> bool:
     """
     Upsert one daily portfolio snapshot row.
-    totals: grand_total, self_managed, managed, cash, net_deposits,
-            spx, ftse, ndx, msci, gold
+    totals: vadym_total, lisa_total, joint_total, self_managed, managed, cash,
+            net_deposits, spx, ftse, ndx, msci, gold
     """
     row = {'date': date, **totals}
     ok = _upsert('portfolio_snapshots', [row], on_conflict='date')

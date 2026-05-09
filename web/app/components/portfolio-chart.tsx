@@ -67,7 +67,7 @@ function aggregate(snapshots: PortfolioSnapshot[], g: Granularity): PortfolioSna
 type Row = { date: string; Portfolio: number } & Partial<Record<BenchmarkLabel, number | null>>;
 
 function buildValueData(snapshots: PortfolioSnapshot[]): Row[] {
-  return snapshots.map((s) => ({ date: s.date, Portfolio: s.grand_total }));
+  return snapshots.map((s) => ({ date: s.date, Portfolio: s.vadym_total }));
 }
 
 function buildPerformanceData(
@@ -92,7 +92,7 @@ function buildPerformanceData(
   const rows: Row[] = snapshots.map((s) => {
     const r: Row = {
       date: s.date,
-      Portfolio: (s.grand_total / base.grand_total) * 100,
+      Portfolio: (s.vadym_total / base.vadym_total) * 100,
     };
     for (const label of activeWithData) {
       const k = benchmarkKeys[label];

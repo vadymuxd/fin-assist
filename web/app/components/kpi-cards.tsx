@@ -135,10 +135,10 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
         <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
           <div>
             <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
-              Grand Total
+              Vadym Total
             </div>
             <div className="mt-1 text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-              {gbp.format(latest.grand_total)}
+              {gbp.format(latest.vadym_total)}
             </div>
             <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
               <span>as of {shortDate(latest.date)}</span>
@@ -153,9 +153,9 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
             </div>
           </div>
           <div className="grid grid-cols-3 gap-4 sm:gap-6">
-            <BreakdownChip label="Stocks" value={stocks} total={latest.grand_total} />
-            <BreakdownChip label="Cash" value={cash} total={latest.grand_total} />
-            <BreakdownChip label="Managed" value={managed} total={latest.grand_total} />
+            <BreakdownChip label="Stocks" value={stocks} total={latest.vadym_total} />
+            <BreakdownChip label="Cash" value={cash} total={latest.vadym_total} />
+            <BreakdownChip label="Managed" value={managed} total={latest.vadym_total} />
           </div>
         </div>
       </div>

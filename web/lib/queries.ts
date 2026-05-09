@@ -17,7 +17,9 @@ export type Holding = {
 
 export type PortfolioSnapshot = {
   date: string;
-  grand_total: number;
+  vadym_total: number;
+  lisa_total: number | null;
+  joint_total: number | null;
   self_managed: number;
   managed: number;
   cash: number;
@@ -62,7 +64,7 @@ export type HoldingsAlert = {
 export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, grand_total, self_managed, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -71,7 +73,7 @@ export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
 export async function getLatestSnapshot(): Promise<PortfolioSnapshot | null> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, grand_total, self_managed, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
     .order("date", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -526,7 +528,7 @@ export type NetWorthPoint = {
 
 export async function getNetWorthData(): Promise<NetWorthPoint[]> {
   const [{ data: inv }, { data: sav }, { data: pen }, { data: mort }] = await Promise.all([
-    supabase.from("portfolio_snapshots").select("date, grand_total").order("date", { ascending: true }),
+    supabase.from("portfolio_snapshots").select("date, vadym_total, joint_total").order("date", { ascending: true }),
     supabase.from("savings_snapshots").select("date, total, personal_total, joint_total").order("date", { ascending: true }),
     supabase.from("pension_snapshots").select("date, total").order("date", { ascending: true }),
     supabase.from("mortgage_snapshots").select("date, equity_half").order("date", { ascending: true }),
@@ -550,11 +552,11 @@ export async function getNetWorthData(): Promise<NetWorthPoint[]> {
     const mortgageEquity = mortRow ? Number(mortRow.equity_half) : 0;
     return {
       date: i.date,
-      investments: i.grand_total,
+      investments: i.vadym_total,
       savings: savingsEff,
       pensions: pensionTotal,
       mortgage_equity: mortgageEquity,
-      net_worth: i.grand_total + savingsEff + pensionTotal + mortgageEquity,
+      net_worth: i.vadym_total + savingsEff + pensionTotal + mortgageEquity,
     };
   });
 }
@@ -604,8 +606,8 @@ function findClosestOnOrBefore(
 
 function delta(latest: PortfolioSnapshot, prev: PortfolioSnapshot | null) {
   if (!prev) return null;
-  const absolute = latest.grand_total - prev.grand_total;
-  const pct = prev.grand_total === 0 ? 0 : (absolute / prev.grand_total) * 100;
+  const absolute = latest.vadym_total - prev.vadym_total;
+  const pct = prev.vadym_total === 0 ? 0 : (absolute / prev.vadym_total) * 100;
   return { absolute, pct, fromDate: prev.date };
 }
 

@@ -276,7 +276,7 @@ def classify_alert(alert):
 # ── Section builders ───────────────────────────────────────────────────────────
 
 def build_portfolio_section(summary, portfolio_7d):
-    total = float(summary.get('grand_total') or 0)
+    total = float(summary.get('vadym_total') or 0)
     lines = ['━━━ <b>PORTFOLIO</b> ━━━']
     if portfolio_7d is not None:
         wow_gbp = total * portfolio_7d / 100
@@ -420,7 +420,7 @@ def build_recommendation(summary, portfolio_7d, bench_returns, alerts, discoveri
         f"{d['ticker']} (score {d.get('score')}): {(d.get('rationale') or '')[:60]}"
         for d in discoveries[:3]
     ]
-    total = float(summary.get('grand_total') or 0)
+    total = float(summary.get('vadym_total') or 0)
 
     prompt = f"""You are writing the closing paragraph of a weekly portfolio digest for a UK retail investor.
 
@@ -467,7 +467,7 @@ def main():
     alerts      = load_recent_alerts()
     discoveries = load_recent_discoveries()
 
-    print(f"  Portfolio total:  £{float(summary.get('grand_total') or 0):,.2f}")
+    print(f"  Portfolio total:  £{float(summary.get('vadym_total') or 0):,.2f}")
     print(f"  Holdings:         {len(holdings)} positions")
     print(f"  Alerts (7d):      {len(alerts)}")
     print(f"  Discoveries (7d): {len(discoveries)}")
