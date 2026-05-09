@@ -44,7 +44,7 @@ export default function SyncButton() {
         onClick={handleSync}
         disabled={state === "loading"}
         title={state === "error" && errorMsg ? errorMsg : undefined}
-        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colorClass}`}
+        className={`inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium cursor-pointer hover:text-gray-900 dark:hover:text-gray-50 transition-colors disabled:opacity-50 disabled:cursor-not-allowed ${colorClass}`}
       >
         <RefreshCw size={13} strokeWidth={2} className={state === "loading" ? "animate-spin" : ""} />
         {label}

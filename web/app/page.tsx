@@ -6,7 +6,6 @@ import AllocationChart from "./components/allocation-chart";
 import HoldingsTable from "./components/holdings-table";
 import Link from "next/link";
 import { Compass } from "lucide-react";
-import SyncButton from "./components/sync-button";
 
 export const revalidate = 300;
 
@@ -28,7 +27,6 @@ export default async function DashboardPage() {
               Updated {new Date(`${deltas.latest.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
             </span>
           )}
-          <SyncButton />
           <Link
             href="/insights"
             className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
