@@ -160,28 +160,12 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
     <div className="space-y-3 sm:space-y-4">
       {/* Hero card */}
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gradient-to-br from-white to-gray-50 dark:from-gray-900 dark:to-gray-950 p-5 sm:p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-4">
-          <div>
-            <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400 mb-1">
+        <div className="space-y-3">
+          {/* Label + segmented control always on the same row */}
+          <div className="flex items-center justify-between gap-3">
+            <div className="text-xs font-medium uppercase tracking-wide text-gray-500 dark:text-gray-400">
               {owner} Total
             </div>
-            <div className="text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-              {gbp.format(total)}
-            </div>
-            <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span>as of {shortDate(latest.date)}</span>
-              {daily && (
-                <>
-                  <span className="text-gray-300 dark:text-gray-700">•</span>
-                  <span className={`font-medium tabular-nums ${deltaColor(daily.pct)}`}>
-                    {daily.pct >= 0 ? "▲" : "▼"} {fmtAbs(daily.absolute)} ({fmtPct(daily.pct)}) today
-                  </span>
-                </>
-              )}
-            </div>
-          </div>
-          <div className="flex flex-col items-end gap-3">
-            {/* Segmented control */}
             <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
               {OWNERS.map((o) => (
                 <button
@@ -197,8 +181,27 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
                 </button>
               ))}
             </div>
+          </div>
+          {/* Amount + breakdown */}
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                {gbp.format(total)}
+              </div>
+              <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>as of {shortDate(latest.date)}</span>
+                {daily && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-700">•</span>
+                    <span className={`font-medium tabular-nums ${deltaColor(daily.pct)}`}>
+                      {daily.pct >= 0 ? "▲" : "▼"} {fmtAbs(daily.absolute)} ({fmtPct(daily.pct)}) today
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
             {owner === "Vadym" && (
-              <div className="grid grid-cols-3 gap-4 sm:gap-6">
+              <div className="grid grid-cols-3 gap-4 sm:gap-6 shrink-0">
                 <BreakdownChip label="Stocks" value={stocks} total={total} />
                 <BreakdownChip label="Cash" value={cash} total={total} />
                 <BreakdownChip label="Managed" value={managed} total={total} />
