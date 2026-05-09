@@ -285,7 +285,7 @@ def run_savings():
         ok = write_savings_snapshot(d, totals['total'], totals['vadym'], totals['lisa'], totals['joint'])
         if ok:
             print(f"  savings_snapshots {d} — £{totals['total']:,.2f} "
-                  f"(personal £{totals['personal']:,.2f} / joint £{totals['joint']:,.2f})")
+                  f"(vadym £{totals['vadym']:,.2f} / lisa £{totals['lisa']:,.2f} / joint £{totals['joint']:,.2f})")
         else:
             print(f"  ERROR: savings_snapshots write failed for {d}")
             errors += 1
@@ -313,12 +313,16 @@ def run_pensions():
     headers       = [h.strip() for h in all_rows[0]]
     headers_lower = [h.lower() for h in headers]
 
+    owner_col    = find_col(headers_lower, 'owner')
     provider_col = find_col(headers_lower, 'provider')
     account_col  = find_col(headers_lower, 'employer', 'account')
 
     if provider_col is None or account_col is None:
         print(f"  ERROR: missing 'Provider' or 'Employer'/'Account' column. Headers: {headers}")
         sys.exit(1)
+
+    if owner_col is None:
+        print("  No 'Owner' column — all rows default to 'vadym'.")
 
     month_cols = [(i, parse_month_header(h)) for i, h in enumerate(headers)]
     month_cols = [(i, d) for i, d in month_cols if d]
@@ -333,11 +337,18 @@ def run_pensions():
         def cell(idx):
             return row[idx].strip() if idx is not None and idx < len(row) else ''
 
+        owner    = cell(owner_col).lower() if owner_col is not None else 'vadym'
         provider = cell(provider_col)
         account  = cell(account_col)
 
-        if not provider or not account or provider.lower() in ('total', 'subtotal'):
+        # skip subtotal/total rows (owner or provider signals a summary row)
+        if not provider or not account:
             continue
+        if provider.lower() in ('total', 'subtotal') or 'total' in owner:
+            continue
+
+        if owner not in ('vadym', 'lisa'):
+            owner = 'vadym'
 
         for col_i, date_iso in month_cols:
             raw     = row[col_i].strip() if col_i < len(row) else ''
@@ -348,6 +359,7 @@ def run_pensions():
                 'date':         date_iso,
                 'provider':     provider,
                 'account_name': account,
+                'owner':        owner,
                 'balance_gbp':  balance,
             })
 
@@ -361,15 +373,22 @@ def run_pensions():
         sys.exit(1)
     print("  pension_accounts — done.")
 
-    date_totals: dict[str, float] = defaultdict(float)
+    date_totals: dict[str, dict[str, float]] = defaultdict(
+        lambda: {'total': 0.0, 'vadym': 0.0, 'lisa': 0.0}
+    )
     for row in account_rows:
-        date_totals[row['date']] += float(row['balance_gbp'])
+        d     = row['date']
+        v     = float(row['balance_gbp'])
+        owner = row['owner']
+        date_totals[d]['total'] += v
+        date_totals[d][owner]   += v
 
     errors = 0
-    for d, total in sorted(date_totals.items()):
-        ok = write_pension_snapshot(d, total)
+    for d, totals in sorted(date_totals.items()):
+        ok = write_pension_snapshot(d, totals['total'], totals['vadym'], totals['lisa'])
         if ok:
-            print(f"  pension_snapshots {d} — £{total:,.2f}")
+            print(f"  pension_snapshots {d} — £{totals['total']:,.2f} "
+                  f"(vadym £{totals['vadym']:,.2f} / lisa £{totals['lisa']:,.2f})")
         else:
             print(f"  ERROR: pension_snapshots write failed for {d}")
             errors += 1

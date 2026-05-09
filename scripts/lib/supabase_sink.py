@@ -215,7 +215,7 @@ def write_savings_snapshot(date: str, total: float, vadym: float, lisa: float, j
 def write_pension_accounts(rows: list[dict]) -> bool:
     """
     Upsert per-provider pension balance rows.
-    Each dict must have: date, provider, account_name, account_type, balance_gbp.
+    Each dict must have: date, provider, account_name, owner, balance_gbp.
     Unique constraint: (date, provider, account_name).
     """
     now = datetime.now(timezone.utc).isoformat()
@@ -231,15 +231,17 @@ def write_pension_accounts(rows: list[dict]) -> bool:
     return ok
 
 
-def write_pension_snapshot(date: str, total: float) -> bool:
+def write_pension_snapshot(date: str, total: float, vadym: float = 0.0, lisa: float = 0.0) -> bool:
     """
     Upsert one monthly pension aggregate row.
     date: ISO date string (YYYY-MM-DD).
     """
     row = {
-        'date': date,
-        'total': total,
-        'updated_at': datetime.now(timezone.utc).isoformat(),
+        'date':        date,
+        'total':       total,
+        'vadym_total': vadym,
+        'lisa_total':  lisa,
+        'updated_at':  datetime.now(timezone.utc).isoformat(),
     }
     ok = _upsert('pension_snapshots', [row], on_conflict='date')
     if ok:
