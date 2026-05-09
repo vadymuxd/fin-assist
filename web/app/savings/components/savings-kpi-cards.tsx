@@ -99,7 +99,7 @@ export default function SavingsKpiCards({ deltas }: { deltas: SavingsDeltasResul
 
   const { latest, baselineDate, daily, wow, mom, sinceStart } = deltas;
   const myJoint = latest.joint_total * JOINT_SHARE;
-  const myTotal = latest.personal_total + myJoint;
+  const myTotal = latest.vadym_total + myJoint;
 
   return (
     <div className="space-y-3 sm:space-y-4">
@@ -125,7 +125,7 @@ export default function SavingsKpiCards({ deltas }: { deltas: SavingsDeltasResul
             </div>
           </div>
           <div className="grid grid-cols-2 gap-4 sm:gap-6">
-            <BreakdownChip label="Personal" value={latest.personal_total} total={myTotal} />
+            <BreakdownChip label="Personal" value={latest.vadym_total} total={myTotal} />
             <BreakdownChip label="Joint (½)" value={myJoint} total={myTotal} />
           </div>
         </div>

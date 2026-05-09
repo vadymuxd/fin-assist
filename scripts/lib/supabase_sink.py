@@ -193,7 +193,7 @@ def write_savings_accounts(rows: list[dict]) -> bool:
     return ok
 
 
-def write_savings_snapshot(date: str, total: float, personal: float, joint: float) -> bool:
+def write_savings_snapshot(date: str, total: float, vadym: float, lisa: float, joint: float) -> bool:
     """
     Upsert one daily savings aggregate row.
     date: ISO date string (YYYY-MM-DD).
@@ -201,7 +201,8 @@ def write_savings_snapshot(date: str, total: float, personal: float, joint: floa
     row = {
         'date': date,
         'total': total,
-        'personal_total': personal,
+        'vadym_total': vadym,
+        'lisa_total': lisa,
         'joint_total': joint,
         'updated_at': datetime.now(timezone.utc).isoformat(),
     }

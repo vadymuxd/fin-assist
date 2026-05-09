@@ -227,13 +227,19 @@ def run_savings():
 
         if owner_col is not None:
             acct_type = type_lower or None
-            owner     = cell(owner_col).strip() or 'Personal'
-        elif type_lower in ('personal', 'joint'):
+            owner     = cell(owner_col).strip().lower() or 'vadym'
+        elif type_lower == 'vadym personal':
             acct_type = None
-            owner     = raw_type.strip()
+            owner     = 'vadym'
+        elif type_lower == 'lisa personal':
+            acct_type = None
+            owner     = 'lisa'
+        elif type_lower == 'joint':
+            acct_type = None
+            owner     = 'joint'
         else:
             acct_type = type_lower or None
-            owner     = 'Personal'
+            owner     = 'vadym'
 
         for col_i, date_iso in month_cols:
             raw     = row[col_i].strip() if col_i < len(row) else ''
@@ -259,19 +265,24 @@ def run_savings():
         sys.exit(1)
     print("  savings_accounts — done.")
 
-    date_totals: dict[str, dict[str, float]] = defaultdict(lambda: {'total': 0.0, 'personal': 0.0, 'joint': 0.0})
+    date_totals: dict[str, dict[str, float]] = defaultdict(
+        lambda: {'total': 0.0, 'vadym': 0.0, 'lisa': 0.0, 'joint': 0.0}
+    )
     for row in account_rows:
-        d = row['date']
-        v = float(row['balance_gbp'])
+        d     = row['date']
+        v     = float(row['balance_gbp'])
+        owner = row['owner'].strip().lower()
         date_totals[d]['total'] += v
-        if row['owner'].strip().lower() == 'joint':
+        if owner == 'joint':
             date_totals[d]['joint'] += v
+        elif owner == 'lisa':
+            date_totals[d]['lisa'] += v
         else:
-            date_totals[d]['personal'] += v
+            date_totals[d]['vadym'] += v
 
     errors = 0
     for d, totals in sorted(date_totals.items()):
-        ok = write_savings_snapshot(d, totals['total'], totals['personal'], totals['joint'])
+        ok = write_savings_snapshot(d, totals['total'], totals['vadym'], totals['lisa'], totals['joint'])
         if ok:
             print(f"  savings_snapshots {d} — £{totals['total']:,.2f} "
                   f"(personal £{totals['personal']:,.2f} / joint £{totals['joint']:,.2f})")

@@ -88,7 +88,7 @@ export default function SavingsChart({ snapshots }: { snapshots: SavingsSnapshot
     aggregated.map((s) => ({
       date: s.date,
       value:
-        filter === "Personal" ? s.personal_total
+        filter === "Personal" ? s.vadym_total
         : filter === "Joint" ? s.joint_total * JOINT_SHARE
         : effectiveSavingsTotal(s),
     })),

@@ -275,13 +275,14 @@ export const JOINT_SHARE = 0.5;
 
 /** Effective savings total attributable to Vadym (personal + half of joint) */
 export function effectiveSavingsTotal(s: SavingsSnapshot): number {
-  return s.personal_total + s.joint_total * JOINT_SHARE;
+  return s.vadym_total + s.joint_total * JOINT_SHARE;
 }
 
 export type SavingsSnapshot = {
   date: string;
   total: number;
-  personal_total: number;
+  vadym_total: number;
+  lisa_total: number | null;
   joint_total: number;
   updated_at: string;
 };
@@ -310,7 +311,7 @@ export type SavingsDeltasResult = {
 export async function getSavingsSnapshots(): Promise<SavingsSnapshot[]> {
   const { data, error } = await supabase
     .from("savings_snapshots")
-    .select("date, total, personal_total, joint_total, updated_at")
+    .select("date, total, vadym_total, lisa_total, joint_total, updated_at")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -529,7 +530,7 @@ export type NetWorthPoint = {
 export async function getNetWorthData(): Promise<NetWorthPoint[]> {
   const [{ data: inv }, { data: sav }, { data: pen }, { data: mort }] = await Promise.all([
     supabase.from("portfolio_snapshots").select("date, vadym_total, joint_total").order("date", { ascending: true }),
-    supabase.from("savings_snapshots").select("date, total, personal_total, joint_total").order("date", { ascending: true }),
+    supabase.from("savings_snapshots").select("date, total, vadym_total, lisa_total, joint_total").order("date", { ascending: true }),
     supabase.from("pension_snapshots").select("date, total").order("date", { ascending: true }),
     supabase.from("mortgage_snapshots").select("date, equity_half").order("date", { ascending: true }),
   ]);
