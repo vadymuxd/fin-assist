@@ -46,8 +46,8 @@ ROW_FTSE100       = 33
 ROW_NASDAQ100     = 34
 ROW_MSCI_WORLD    = 35
 ROW_GOLD          = 36
-ROW_LISA_TOTAL    = None  # TODO: confirm row number after Investments sheet update
-ROW_JOINT_TOTAL   = None  # TODO: confirm row number after Investments sheet update
+ROW_LISA_TOTAL    = 39
+ROW_JOINT_TOTAL   = 43
 COL_VALUE_IDX     = 6  # 0-based → col G
 
 MONTH_NAMES = {
