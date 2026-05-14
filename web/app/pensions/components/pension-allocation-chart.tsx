@@ -5,7 +5,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { PensionAccount } from "@/lib/queries";
 
 type Dimension   = "provider" | "account_name";
-type OwnerFilter = "Vadym" | "Lisa";
+type OwnerFilter = "All" | "Vadym" | "Lisa";
 
 const dimensionLabels: Record<Dimension, string> = {
   provider: "Provider",
@@ -34,8 +34,9 @@ const gbp = new Intl.NumberFormat("en-GB", {
 type Slice = { name: string; value: number; pct: number; color: string };
 
 function bucket(accounts: PensionAccount[], dim: Dimension, ownerFilter: OwnerFilter): Slice[] {
-  const ownerKey = ownerFilter.toLowerCase();
-  const filtered = accounts.filter((a) => (a.owner ?? "vadym").toLowerCase() === ownerKey);
+  const filtered = ownerFilter === "All"
+    ? accounts
+    : accounts.filter((a) => (a.owner ?? "vadym").toLowerCase() === ownerFilter.toLowerCase());
   const totals: Record<string, number> = {};
   for (const a of filtered) {
     const key = dim === "provider" ? a.provider : a.account_name;
@@ -56,7 +57,7 @@ function bucket(accounts: PensionAccount[], dim: Dimension, ownerFilter: OwnerFi
 
 export default function PensionAllocationChart({ accounts }: { accounts: PensionAccount[] }) {
   const [dim, setDim]               = useState<Dimension>("provider");
-  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("Vadym");
+  const [ownerFilter, setOwnerFilter] = useState<OwnerFilter>("All");
 
   const chartData = useMemo(() => bucket(accounts, dim, ownerFilter), [accounts, dim, ownerFilter]);
   const total = useMemo(() => chartData.reduce((acc, d) => acc + d.value, 0), [chartData]);
@@ -68,7 +69,7 @@ export default function PensionAllocationChart({ accounts }: { accounts: Pension
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Pension Allocation</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {ownerFilter} balances by {dimensionLabels[dim].toLowerCase()}
+            {ownerFilter === "All" ? "All" : ownerFilter} balances by {dimensionLabels[dim].toLowerCase()}
           </p>
         </div>
         <div className="flex items-center gap-2 self-start">
@@ -88,9 +89,9 @@ export default function PensionAllocationChart({ accounts }: { accounts: Pension
               </button>
             ))}
           </div>
-          {/* Right toggle: Vadym / Lisa */}
+          {/* Right toggle: All / Vadym / Lisa */}
           <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
-            {(["Vadym", "Lisa"] as OwnerFilter[]).map((o) => (
+            {(["All", "Vadym", "Lisa"] as OwnerFilter[]).map((o) => (
               <button
                 key={o}
                 onClick={() => setOwnerFilter(o)}
