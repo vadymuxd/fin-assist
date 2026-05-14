@@ -284,6 +284,10 @@ def rewrite_aggregate_formulas(ws):
     updates = [
         {'range': f'G{stocks}', 'values': [[f'=SUM(G{first}:G{last})']]},
         {'range': f'H{stocks}', 'values': [[f'=SUM(H{first}:H{last})']]},
+        # Col I (Tracking Started Value) drives the app's stocks-only performance %.
+        # Must be rewritten when rows are added/removed so I11 always sums the
+        # whole stocks range — otherwise the app under/overstates organic growth.
+        {'range': f'I{stocks}', 'values': [[f'=SUM(I{first}:I{last})']]},
         {'range': f'J{stocks}', 'values': [[f'=SUM(J{first}:J{last})']]},
         {'range': f'L{stocks}', 'values': [[f'=SUM(L{first}:L{last})']]},
     ]
