@@ -416,6 +416,8 @@ export function computeSavingsDeltas(
 export type PensionSnapshot = {
   date: string;
   total: number;
+  vadym_total: number;
+  lisa_total: number | null;
   updated_at: string;
 };
 
@@ -426,6 +428,7 @@ export type PensionAccount = {
   account_name: string;
   account_type: string | null;
   balance_gbp: number;
+  owner: string;
 };
 
 export type PensionDelta = { absolute: number; pct: number; fromDate: string };
@@ -433,16 +436,27 @@ export type PensionDelta = { absolute: number; pct: number; fromDate: string };
 export type PensionDeltasResult = {
   latest: PensionSnapshot;
   baselineDate: string;
+  // Joint (vadym+lisa combined)
   daily: PensionDelta | null;
   wow: PensionDelta | null;
   mom: PensionDelta | null;
   sinceStart: PensionDelta | null;
+  // Vadym
+  vadymDaily: PensionDelta | null;
+  vadymWow: PensionDelta | null;
+  vadymMom: PensionDelta | null;
+  vadymSinceStart: PensionDelta | null;
+  // Lisa
+  lisaDaily: PensionDelta | null;
+  lisaWow: PensionDelta | null;
+  lisaMom: PensionDelta | null;
+  lisaSinceStart: PensionDelta | null;
 };
 
 export async function getPensionSnapshots(): Promise<PensionSnapshot[]> {
   const { data, error } = await supabase
     .from("pension_snapshots")
-    .select("date, total, updated_at")
+    .select("date, total, vadym_total, lisa_total, updated_at")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -458,17 +472,23 @@ export async function getPensionAccounts(): Promise<PensionAccount[]> {
   if (!latest.data) return [];
   const { data, error } = await supabase
     .from("pension_accounts")
-    .select("id, date, provider, account_name, account_type, balance_gbp")
+    .select("id, date, provider, account_name, account_type, owner, balance_gbp")
     .eq("date", latest.data.date)
     .order("balance_gbp", { ascending: false });
   if (error) throw error;
   return data ?? [];
 }
 
-function pensionDelta(latest: PensionSnapshot, prev: PensionSnapshot | null): PensionDelta | null {
+function pensionDeltaField(
+  latest: PensionSnapshot,
+  prev: PensionSnapshot | null,
+  getVal: (s: PensionSnapshot) => number,
+): PensionDelta | null {
   if (!prev) return null;
-  const absolute = latest.total - prev.total;
-  const pct = prev.total === 0 ? 0 : (absolute / prev.total) * 100;
+  const latestVal = getVal(latest);
+  const prevVal = getVal(prev);
+  const absolute = latestVal - prevVal;
+  const pct = prevVal === 0 ? 0 : (absolute / prevVal) * 100;
   return { absolute, pct, fromDate: prev.date };
 }
 
@@ -478,14 +498,30 @@ export function computePensionDeltas(snapshots: PensionSnapshot[]): PensionDelta
   const baseline = sorted[0];
   const latest = sorted[sorted.length - 1];
   const prior = sorted.slice(0, -1);
-  const daily = sorted.length >= 2 ? pensionDelta(latest, sorted[sorted.length - 2]) : null;
-  const wowRaw = findOnOrBefore(prior, daysAgoISO(7));
-  const wowDelta = pensionDelta(latest, wowRaw);
-  const wow = wowDelta ? { ...wowDelta, fromDate: daysAgoISO(7) } : null;
-  const mom30p = findOnOrBefore(prior, daysAgoISO(30));
-  const mom = pensionDelta(latest, mom30p ?? (prior.length > 0 ? prior[0] : null));
-  const sinceStart = baseline.date !== latest.date ? pensionDelta(latest, baseline) : null;
-  return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
+  const prev1 = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
+  const wowSnap = findOnOrBefore(prior, daysAgoISO(7));
+  const momSnap = findOnOrBefore(prior, daysAgoISO(30));
+  const momFallback = prior.length > 0 ? prior[0] : null;
+
+  function ownerDeltas(getVal: (s: PensionSnapshot) => number) {
+    const d = prev1 ? pensionDeltaField(latest, prev1, getVal) : null;
+    const wowDelta = pensionDeltaField(latest, wowSnap, getVal);
+    const w = wowDelta ? { ...wowDelta, fromDate: daysAgoISO(7) } : null;
+    const m = pensionDeltaField(latest, momSnap ?? momFallback, getVal);
+    const ss = baseline.date !== latest.date ? pensionDeltaField(latest, baseline, getVal) : null;
+    return { daily: d, wow: w, mom: m, sinceStart: ss };
+  }
+
+  const joint = ownerDeltas((s) => s.total);
+  const vadym = ownerDeltas((s) => s.vadym_total);
+  const lisa  = ownerDeltas((s) => s.lisa_total ?? 0);
+
+  return {
+    latest, baselineDate: baseline.date,
+    daily: joint.daily, wow: joint.wow, mom: joint.mom, sinceStart: joint.sinceStart,
+    vadymDaily: vadym.daily, vadymWow: vadym.wow, vadymMom: vadym.mom, vadymSinceStart: vadym.sinceStart,
+    lisaDaily: lisa.daily, lisaWow: lisa.wow, lisaMom: lisa.mom, lisaSinceStart: lisa.sinceStart,
+  };
 }
 
 // ─── Mortgage ─────────────────────────────────────────────────────────────────
