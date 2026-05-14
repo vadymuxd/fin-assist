@@ -145,20 +145,28 @@ def _table(rows, has_column_header=True):
 
 def _archive_page_blocks(page_id, headers):
     """Delete all top-level blocks from a Notion page."""
+    import time
     resp = requests.get(
         f'https://api.notion.com/v1/blocks/{page_id}/children',
-        headers=headers, timeout=10,
+        headers=headers, timeout=30,
     )
     if resp.status_code != 200:
         print(f"  Could not fetch page blocks: {resp.text[:200]}")
         return
     for block in resp.json().get('results', []):
-        requests.patch(
-            f'https://api.notion.com/v1/blocks/{block["id"]}',
-            headers=headers,
-            json={'archived': True},
-            timeout=10,
-        )
+        for attempt in range(3):
+            try:
+                requests.patch(
+                    f'https://api.notion.com/v1/blocks/{block["id"]}',
+                    headers=headers,
+                    json={'archived': True},
+                    timeout=30,
+                )
+                break
+            except requests.exceptions.Timeout:
+                if attempt == 2:
+                    raise
+                time.sleep(2 ** attempt)
 
 
 def update_notion_snapshot(sh, results):
@@ -324,7 +332,7 @@ def update_notion_snapshot(sh, results):
         f'https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children',
         headers=headers,
         json={'children': blocks},
-        timeout=15,
+        timeout=30,
     )
     if resp.status_code == 200:
         print(f"  Notion snapshot updated — Vadym Total £{vadym_total:,.2f}")
