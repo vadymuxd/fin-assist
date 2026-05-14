@@ -594,18 +594,29 @@ export function computeMortgageDeltas(
 
 export type NetWorthPoint = {
   date: string;
+  // Joint (full combined) — default view
   net_worth: number;
   investments: number;
   savings: number;
   pensions: number;
-  mortgage_equity: number;
+  mortgage_equity: number;  // full equity (equity_half * 2)
+  // Vadym
+  vadym_net_worth: number;
+  vadym_investments: number;
+  vadym_savings: number;    // personal + half of joint savings
+  vadym_pensions: number;
+  // Lisa
+  lisa_net_worth: number;
+  lisa_investments: number;
+  lisa_savings: number;     // personal + half of joint savings
+  lisa_pensions: number;
 };
 
 export async function getNetWorthData(): Promise<NetWorthPoint[]> {
   const [{ data: inv }, { data: sav }, { data: pen }, { data: mort }] = await Promise.all([
-    supabase.from("portfolio_snapshots").select("date, vadym_total, joint_total").order("date", { ascending: true }),
-    supabase.from("savings_snapshots").select("date, total, vadym_total, lisa_total, joint_total").order("date", { ascending: true }),
-    supabase.from("pension_snapshots").select("date, total").order("date", { ascending: true }),
+    supabase.from("portfolio_snapshots").select("date, vadym_total, lisa_total, joint_total").order("date", { ascending: true }),
+    supabase.from("savings_snapshots").select("date, vadym_total, lisa_total, joint_total").order("date", { ascending: true }),
+    supabase.from("pension_snapshots").select("date, total, vadym_total, lisa_total").order("date", { ascending: true }),
     supabase.from("mortgage_snapshots").select("date, equity_half").order("date", { ascending: true }),
   ]);
   if (!inv || !inv.length) return [];
@@ -620,18 +631,44 @@ export async function getNetWorthData(): Promise<NetWorthPoint[]> {
   }
   return inv.map((i) => {
     const savRow = latestOnOrBefore(sav, i.date);
-    const savingsEff = savRow ? effectiveSavingsTotal(savRow as SavingsSnapshot) : 0;
     const penRow = latestOnOrBefore(pen, i.date);
-    const pensionTotal = penRow ? Number(penRow.total) : 0;
     const mortRow = latestOnOrBefore(mort, i.date);
-    const mortgageEquity = mortRow ? Number(mortRow.equity_half) : 0;
+
+    const equityHalf = mortRow ? Number(mortRow.equity_half) : 0;
+
+    const vadymInv = Number(i.vadym_total ?? 0);
+    const lisaInv  = Number(i.lisa_total ?? 0);
+    const jointInv = Number(i.joint_total ?? (vadymInv + lisaInv));
+
+    const savVadym = savRow ? Number(savRow.vadym_total ?? 0) : 0;
+    const savLisa  = savRow ? Number(savRow.lisa_total ?? 0) : 0;
+    const savJoint = savRow ? Number(savRow.joint_total ?? 0) : 0;
+    const vadymSav = savVadym + savJoint * JOINT_SHARE;
+    const lisaSav  = savLisa  + savJoint * JOINT_SHARE;
+    const jointSav = savVadym + savLisa + savJoint;
+
+    const vadymPen = penRow ? Number(penRow.vadym_total ?? 0) : 0;
+    const lisaPen  = penRow ? Number(penRow.lisa_total ?? 0) : 0;
+    const jointPen = penRow ? Number(penRow.total ?? 0) : 0;
+
+    const vadymNW = vadymInv + vadymSav + vadymPen + equityHalf;
+    const lisaNW  = lisaInv  + lisaSav  + lisaPen  + equityHalf;
+
     return {
       date: i.date,
-      investments: i.vadym_total,
-      savings: savingsEff,
-      pensions: pensionTotal,
-      mortgage_equity: mortgageEquity,
-      net_worth: i.vadym_total + savingsEff + pensionTotal + mortgageEquity,
+      net_worth: vadymNW + lisaNW,
+      investments: jointInv,
+      savings: jointSav,
+      pensions: jointPen,
+      mortgage_equity: equityHalf * 2,
+      vadym_net_worth: vadymNW,
+      vadym_investments: vadymInv,
+      vadym_savings: vadymSav,
+      vadym_pensions: vadymPen,
+      lisa_net_worth: lisaNW,
+      lisa_investments: lisaInv,
+      lisa_savings: lisaSav,
+      lisa_pensions: lisaPen,
     };
   });
 }

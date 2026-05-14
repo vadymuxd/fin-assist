@@ -1,7 +1,11 @@
 "use client";
 
+import { useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { NetWorthPoint } from "@/lib/queries";
+
+type Owner = "Joint" | "Vadym" | "Lisa";
+const OWNERS: Owner[] = ["Joint", "Vadym", "Lisa"];
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -9,14 +13,40 @@ const gbp = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 });
 
-const slices = [
-  { key: "investments" as const, name: "Investments", color: "#2563eb" },
-  { key: "savings" as const, name: "Savings", color: "#10b981" },
-  { key: "pensions" as const, name: "Pensions", color: "#f59e0b" },
-  { key: "mortgage_equity" as const, name: "Mortgage Equity (½)", color: "#f97316" },
-];
+type Slice = { name: string; value: number; pct: number; color: string };
+
+function getSlices(latest: NetWorthPoint, owner: Owner): Slice[] {
+  const equityHalf = latest.mortgage_equity / 2;
+
+  const raw =
+    owner === "Vadym" ? [
+      { name: "Investments",  value: latest.vadym_investments, color: "#2563eb" },
+      { name: "Savings",      value: latest.vadym_savings,     color: "#10b981" },
+      { name: "Pensions",     value: latest.vadym_pensions,    color: "#f59e0b" },
+      { name: "Mortgage (½)", value: equityHalf,               color: "#f97316" },
+    ]
+    : owner === "Lisa" ? [
+      { name: "Investments",  value: latest.lisa_investments,  color: "#2563eb" },
+      { name: "Savings",      value: latest.lisa_savings,      color: "#10b981" },
+      { name: "Pensions",     value: latest.lisa_pensions,     color: "#f59e0b" },
+      { name: "Mortgage (½)", value: equityHalf,               color: "#f97316" },
+    ]
+    : [
+      { name: "Investments",     value: latest.investments,     color: "#2563eb" },
+      { name: "Savings",         value: latest.savings,         color: "#10b981" },
+      { name: "Pensions",        value: latest.pensions,        color: "#f59e0b" },
+      { name: "Mortgage Equity", value: latest.mortgage_equity, color: "#f97316" },
+    ];
+
+  const total = raw.reduce((s, d) => s + d.value, 0);
+  return raw
+    .filter((d) => d.value > 0)
+    .map((d) => ({ ...d, pct: total > 0 ? (d.value / total) * 100 : 0 }));
+}
 
 export default function NetWorthAllocationChart({ data }: { data: NetWorthPoint[] }) {
+  const [owner, setOwner] = useState<Owner>("Joint");
+
   if (data.length === 0) {
     return (
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
@@ -30,20 +60,33 @@ export default function NetWorthAllocationChart({ data }: { data: NetWorthPoint[
 
   const sorted = [...data].sort((a, b) => a.date.localeCompare(b.date));
   const latest = sorted[sorted.length - 1];
-  const total = latest.net_worth;
-
-  const chartData = slices.map((s) => ({
-    name: s.name,
-    value: latest[s.key],
-    pct: total > 0 ? (latest[s.key] / total) * 100 : 0,
-    color: s.color,
-  }));
+  const chartData = getSlices(latest, owner);
+  const total = chartData.reduce((s, d) => s + d.value, 0);
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
-      <div className="mb-4">
-        <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Allocation</h2>
-        <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">By asset class</p>
+      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3 mb-4">
+        <div>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Allocation</h2>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+            {owner} net worth by asset class
+          </p>
+        </div>
+        <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 self-start">
+          {OWNERS.map((o) => (
+            <button
+              key={o}
+              onClick={() => setOwner(o)}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                owner === o
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+              }`}
+            >
+              {o}
+            </button>
+          ))}
+        </div>
       </div>
 
       <div className="grid grid-cols-1 sm:grid-cols-5 gap-4 items-center">

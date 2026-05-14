@@ -1,4 +1,10 @@
+"use client";
+
+import { useState } from "react";
 import type { NetWorthPoint } from "@/lib/queries";
+
+type Owner = "Joint" | "Vadym" | "Lisa";
+const OWNERS: Owner[] = ["Joint", "Vadym", "Lisa"];
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -32,11 +38,11 @@ function shortDate(iso: string) {
 
 type DeltaInfo = { absolute: number; pct: number; fromDate: string } | null;
 
-function computeDelta(latest: number, prev: NetWorthPoint | null): DeltaInfo {
-  if (!prev) return null;
-  const absolute = latest - prev.net_worth;
-  const pct = prev.net_worth === 0 ? 0 : (absolute / prev.net_worth) * 100;
-  return { absolute, pct, fromDate: prev.date };
+function computeDelta(latest: number, prevVal: number | null, prevDate: string | null): DeltaInfo {
+  if (prevVal === null || prevDate === null) return null;
+  const absolute = latest - prevVal;
+  const pct = prevVal === 0 ? 0 : (absolute / prevVal) * 100;
+  return { absolute, pct, fromDate: prevDate };
 }
 
 function daysAgoISO(days: number) {
@@ -51,15 +57,13 @@ function findOnOrBefore(points: NetWorthPoint[], target: string): NetWorthPoint 
   return c.length === 0 ? null : c[c.length - 1];
 }
 
-function DeltaCard({
-  label,
-  delta,
-  baselineDate,
-}: {
-  label: string;
-  delta: DeltaInfo;
-  baselineDate: string;
-}) {
+function getOwnerValue(p: NetWorthPoint, owner: Owner): number {
+  if (owner === "Vadym") return p.vadym_net_worth;
+  if (owner === "Lisa")  return p.lisa_net_worth;
+  return p.net_worth;
+}
+
+function DeltaCard({ label, delta, baselineDate }: { label: string; delta: DeltaInfo; baselineDate: string }) {
   return (
     <div className="bg-white dark:bg-gray-900 rounded-xl border border-gray-200 dark:border-gray-800 p-4 shadow-sm">
       <div className="flex items-center justify-between">
@@ -105,6 +109,8 @@ function BreakdownChip({ label, value, total, color }: { label: string; value: n
 }
 
 export default function NetWorthKpiCards({ data }: { data: NetWorthPoint[] }) {
+  const [owner, setOwner] = useState<Owner>("Joint");
+
   if (data.length === 0) {
     return (
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -118,31 +124,79 @@ export default function NetWorthKpiCards({ data }: { data: NetWorthPoint[] }) {
   const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
 
-  const wow = computeDelta(latest.net_worth, findOnOrBefore(prior, daysAgoISO(7)));
-  const mom30 = findOnOrBefore(prior, daysAgoISO(30));
-  const mom = computeDelta(latest.net_worth, mom30 ?? (prior.length > 0 ? prior[0] : null));
-  const sinceStart = baseline.date !== latest.date ? computeDelta(latest.net_worth, baseline) : null;
+  const latestVal = getOwnerValue(latest, owner);
+
+  const wowSnap = findOnOrBefore(prior, daysAgoISO(7));
+  const momSnap = findOnOrBefore(prior, daysAgoISO(30));
+  const momFallback = prior.length > 0 ? prior[0] : null;
+
+  const wow       = computeDelta(latestVal, wowSnap ? getOwnerValue(wowSnap, owner) : null, daysAgoISO(7));
+  const mom       = computeDelta(latestVal, momSnap ? getOwnerValue(momSnap, owner) : null, momSnap?.date ?? momFallback?.date ?? null);
+  const sinceStart = baseline.date !== latest.date
+    ? computeDelta(latestVal, getOwnerValue(baseline, owner), baseline.date)
+    : null;
+
+  const equityHalf = latest.mortgage_equity / 2;
+
+  const chips =
+    owner === "Vadym" ? [
+      { label: "Investments", value: latest.vadym_investments, color: "#2563eb" },
+      { label: "Savings",     value: latest.vadym_savings,     color: "#10b981" },
+      { label: "Pensions",    value: latest.vadym_pensions,    color: "#f59e0b" },
+      { label: "Mortgage (½)", value: equityHalf,              color: "#f97316" },
+    ]
+    : owner === "Lisa" ? [
+      { label: "Investments", value: latest.lisa_investments, color: "#2563eb" },
+      { label: "Savings",     value: latest.lisa_savings,     color: "#10b981" },
+      { label: "Pensions",    value: latest.lisa_pensions,    color: "#f59e0b" },
+      { label: "Mortgage (½)", value: equityHalf,             color: "#f97316" },
+    ]
+    : [
+      { label: "Investments", value: latest.investments,      color: "#2563eb" },
+      { label: "Savings",     value: latest.savings,          color: "#10b981" },
+      { label: "Pensions",    value: latest.pensions,         color: "#f59e0b" },
+      { label: "Mortgage",    value: latest.mortgage_equity,  color: "#f97316" },
+    ];
 
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="rounded-xl border border-violet-200 dark:border-violet-900/50 bg-gradient-to-br from-white to-violet-50/40 dark:from-gray-900 dark:to-violet-950/20 p-5 sm:p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-medium uppercase tracking-wide text-violet-600 dark:text-violet-400">
-              Net Worth
+              {owner} Net Worth
             </div>
-            <div className="mt-1 text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-              {gbp.format(latest.net_worth)}
-            </div>
-            <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-              as of {new Date(`${latest.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
+            <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+              {OWNERS.map((o) => (
+                <button
+                  key={o}
+                  onClick={() => setOwner(o)}
+                  className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
+                    owner === o
+                      ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+                  }`}
+                >
+                  {o}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
-            <BreakdownChip label="Investments" value={latest.investments} total={latest.net_worth} color="#2563eb" />
-            <BreakdownChip label="Savings" value={latest.savings} total={latest.net_worth} color="#10b981" />
-            <BreakdownChip label="Pensions" value={latest.pensions} total={latest.net_worth} color="#f59e0b" />
-            <BreakdownChip label="Mortgage (½)" value={latest.mortgage_equity} total={latest.net_worth} color="#f97316" />
+
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
+            <div>
+              <div className="text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                {gbp.format(latestVal)}
+              </div>
+              <div className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                as of {new Date(`${latest.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4 sm:gap-6">
+              {chips.map((c) => (
+                <BreakdownChip key={c.label} label={c.label} value={c.value} total={latestVal} color={c.color} />
+              ))}
+            </div>
           </div>
         </div>
       </div>

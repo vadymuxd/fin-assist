@@ -15,7 +15,7 @@ import {
 import type { NetWorthPoint } from "@/lib/queries";
 
 type Granularity = "D" | "W" | "M";
-type View = "total" | "breakdown";
+type Filter = "Joint" | "Vadym" | "Lisa" | "Trend" | "Breakdown";
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -23,12 +23,12 @@ const gbp = new Intl.NumberFormat("en-GB", {
   maximumFractionDigits: 0,
 });
 
-const seriesColor: Record<string, string> = {
-  Investments: "#2563eb",
-  Savings: "#10b981",
-  Pensions: "#f59e0b",
-  "Mortgage Equity": "#f97316",
-};
+const breakdownSeries = [
+  { key: "investments" as const,     name: "Investments",     color: "#2563eb" },
+  { key: "savings" as const,         name: "Savings",         color: "#10b981" },
+  { key: "pensions" as const,        name: "Pensions",        color: "#f59e0b" },
+  { key: "mortgage_equity" as const, name: "Mortgage Equity", color: "#f97316" },
+];
 
 function aggregate(data: NetWorthPoint[], g: Granularity): NetWorthPoint[] {
   if (g === "D" || data.length <= 1) return data;
@@ -86,34 +86,45 @@ function CustomTooltip({ active, payload, label }: { active?: boolean; payload?:
 
 export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
   const [granularity, setGranularity] = useState<Granularity>("D");
-  const [view, setView] = useState<View>("total");
+  const [filter, setFilter] = useState<Filter>("Joint");
 
   const rows = useMemo(() => aggregate(data, granularity), [data, granularity]);
+
+  const isTrend     = filter === "Trend";
+  const isBreakdown = filter === "Breakdown";
+
+  const singleDataKey =
+    filter === "Vadym" ? "vadym_net_worth"
+    : filter === "Lisa" ? "lisa_net_worth"
+    : "net_worth";
+
+  const subtitle =
+    isTrend     ? "Vadym vs Lisa net worth over time"
+    : isBreakdown ? "Investments + Savings + Pensions + Mortgage Equity"
+    : filter === "Vadym" ? "Vadym net worth over time"
+    : filter === "Lisa"  ? "Lisa net worth over time"
+    : "Combined net worth over time";
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
       <div className="flex flex-col sm:flex-row sm:items-start sm:justify-between gap-3 mb-4">
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Net Worth Over Time</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {view === "total"
-              ? "Total net worth over time"
-              : "Investments + Savings + Pensions + Mortgage Equity"}
-          </p>
+          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{subtitle}</p>
         </div>
-        <div className="flex items-center gap-2">
+        <div className="flex flex-wrap items-center gap-2">
           <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
-            {(["total", "breakdown"] as View[]).map((v) => (
+            {(["Joint", "Vadym", "Lisa", "Trend", "Breakdown"] as Filter[]).map((f) => (
               <button
-                key={v}
-                onClick={() => setView(v)}
+                key={f}
+                onClick={() => setFilter(f)}
                 className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
-                  view === v
+                  filter === f
                     ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
                     : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
                 }`}
               >
-                {v === "total" ? "Total" : "Breakdown"}
+                {f}
               </button>
             ))}
           </div>
@@ -144,9 +155,17 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
           <ResponsiveContainer width="100%" height="100%">
             <ComposedChart data={rows} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
-                <linearGradient id="netWorthFill" x1="0" y1="0" x2="0" y2="1">
+                <linearGradient id="nwJointFill" x1="0" y1="0" x2="0" y2="1">
                   <stop offset="0%" stopColor="#8b5cf6" stopOpacity={0.22} />
                   <stop offset="100%" stopColor="#8b5cf6" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="nwVadymFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#6366f1" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#6366f1" stopOpacity={0} />
+                </linearGradient>
+                <linearGradient id="nwLisaFill" x1="0" y1="0" x2="0" y2="1">
+                  <stop offset="0%" stopColor="#ec4899" stopOpacity={0.2} />
+                  <stop offset="100%" stopColor="#ec4899" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-200 dark:stroke-gray-800" vertical={false} />
@@ -178,27 +197,63 @@ export default function NetWorthChart({ data }: { data: NetWorthPoint[] }) {
                 )}
                 cursor={{ stroke: "#94a3b8", strokeDasharray: "3 3" }}
               />
-              {view === "breakdown" && (
+              {(isTrend || isBreakdown) && (
                 <Legend verticalAlign="bottom" height={28} iconType="circle" wrapperStyle={{ fontSize: 11, paddingTop: 4 }} />
               )}
-              <Area
-                type="monotone"
-                dataKey="net_worth"
-                name="Net Worth"
-                stroke="#8b5cf6"
-                strokeWidth={2.25}
-                fill="url(#netWorthFill)"
-                dot={false}
-                activeDot={{ r: 4 }}
-                isAnimationActive={false}
-              />
-              {view === "breakdown" && Object.entries(seriesColor).map(([name, color]) => (
-                <Line
-                  key={name}
+
+              {/* Single-line views */}
+              {!isTrend && !isBreakdown && (
+                <Area
                   type="monotone"
-                  dataKey={name === "Investments" ? "investments" : name === "Savings" ? "savings" : name === "Pensions" ? "pensions" : "mortgage_equity"}
-                  name={name}
-                  stroke={color}
+                  dataKey={singleDataKey}
+                  name={filter === "Vadym" ? "Vadym" : filter === "Lisa" ? "Lisa" : "Net Worth"}
+                  stroke={filter === "Vadym" ? "#6366f1" : filter === "Lisa" ? "#ec4899" : "#8b5cf6"}
+                  strokeWidth={2.25}
+                  fill={filter === "Vadym" ? "url(#nwVadymFill)" : filter === "Lisa" ? "url(#nwLisaFill)" : "url(#nwJointFill)"}
+                  dot={false}
+                  activeDot={{ r: 4 }}
+                  isAnimationActive={false}
+                />
+              )}
+
+              {/* Trend: Vadym vs Lisa dual-line */}
+              {isTrend && (
+                <>
+                  <Area
+                    type="monotone"
+                    dataKey="vadym_net_worth"
+                    name="Vadym"
+                    stroke="#6366f1"
+                    strokeWidth={2.25}
+                    fill="url(#nwVadymFill)"
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                    isAnimationActive={false}
+                    connectNulls
+                  />
+                  <Area
+                    type="monotone"
+                    dataKey="lisa_net_worth"
+                    name="Lisa"
+                    stroke="#ec4899"
+                    strokeWidth={2.25}
+                    fill="url(#nwLisaFill)"
+                    dot={false}
+                    activeDot={{ r: 4 }}
+                    isAnimationActive={false}
+                    connectNulls
+                  />
+                </>
+              )}
+
+              {/* Breakdown: 4 component lines (joint) */}
+              {isBreakdown && breakdownSeries.map((s) => (
+                <Line
+                  key={s.key}
+                  type="monotone"
+                  dataKey={s.key}
+                  name={s.name}
+                  stroke={s.color}
                   strokeWidth={1.5}
                   dot={false}
                   activeDot={{ r: 3 }}
