@@ -91,6 +91,20 @@ def write_holdings(positions: list[dict]) -> bool:
     return ok
 
 
+def delete_holding(ticker: str) -> bool:
+    """Remove a ticker from the holdings table (called when a position is fully sold)."""
+    client = _get_client()
+    if not client:
+        return False
+    try:
+        client.table('holdings').delete().eq('ticker', ticker).execute()
+        _trigger_revalidate()
+        return True
+    except Exception as e:
+        logger.warning(f'Supabase delete from holdings failed for {ticker}: {e}')
+        return False
+
+
 def write_holdings_alerts(run_id: str, run_time: datetime, alerts: list[dict]) -> bool:
     """
     Insert one row per ticker from a holdings_monitor run.
@@ -308,6 +322,28 @@ def write_prospect_alert(run_id: str, run_time: str, assessment: dict) -> bool:
         'surfaced_to_telegram': True,
     }
     ok = _insert('discoveries', [row])
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
+def write_transaction(trade: dict) -> bool:
+    """
+    Insert one row into the transactions table.
+    Only for DEPOSIT/WITHDRAWAL — BUY/SELL have no matching type in the constraint.
+    trade keys: date, domain, account_name, amount_gbp, type, notes, source
+    """
+    row = {
+        'date':             trade['date'],
+        'domain':           trade.get('domain', 'investments'),
+        'account_name':     trade.get('account_name', ''),
+        'amount_gbp':       trade['amount_gbp'],
+        'type':             trade['type'],
+        'notes':            trade.get('notes', ''),
+        'source':           trade.get('source', 'nl_claude'),
+        'synced_to_notion': True,
+    }
+    ok = _insert('transactions', [row])
     if ok:
         _trigger_revalidate()
     return ok

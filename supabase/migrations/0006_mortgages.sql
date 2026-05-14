@@ -1,5 +1,5 @@
 -- Monthly mortgage balance snapshot (one row per calendar month, on the 1st)
-CREATE TABLE mortgage_snapshots (
+CREATE TABLE IF NOT EXISTS mortgage_snapshots (
   id              BIGSERIAL PRIMARY KEY,
   date            DATE UNIQUE NOT NULL,
   balance         NUMERIC NOT NULL,           -- remaining balance after that month's payment
@@ -12,8 +12,9 @@ CREATE TABLE mortgage_snapshots (
   created_at      TIMESTAMPTZ DEFAULT NOW()
 );
 
-CREATE INDEX mortgage_snapshots_date_idx ON mortgage_snapshots (date DESC);
+CREATE INDEX IF NOT EXISTS mortgage_snapshots_date_idx ON mortgage_snapshots (date DESC);
 
 -- RLS: public SELECT (anon key), writes require service-role key
 ALTER TABLE mortgage_snapshots ENABLE ROW LEVEL SECURITY;
+DROP POLICY IF EXISTS "public read" ON mortgage_snapshots;
 CREATE POLICY "public read" ON mortgage_snapshots FOR SELECT USING (true);

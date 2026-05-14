@@ -36,19 +36,39 @@ SHEET_ID = os.getenv('PORTFOLIO_SHEET_ID')
 SA_FILE  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.json')
 SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
 
-# Row numbers in Investments (1-based)
-ROW_VADYM_TOTAL   = 7
-ROW_CASH          = 9
-ROW_STOCKS_TOTAL  = 11
-ROW_MANAGED_TOTAL = 28
-ROW_SP500         = 32
-ROW_FTSE100       = 33
-ROW_NASDAQ100     = 34
-ROW_MSCI_WORLD    = 35
-ROW_GOLD          = 36
-ROW_LISA_TOTAL    = 39
-ROW_JOINT_TOTAL   = 43
-COL_VALUE_IDX     = 6  # 0-based → col G
+COL_VALUE_IDX   = 6  # 0-based → col G (Current Value)
+COL_STARTED_IDX = 8  # 0-based → col I (Tracking Started Value)
+
+
+def find_investment_rows(ws):
+    """
+    Dynamically locate key summary rows in the Investments tab.
+    Returns a dict with 1-based row numbers. Robust to row inserts/deletes
+    in the stocks section caused by log_trades.py add/remove operations.
+    """
+    all_rows = ws.get_all_values()
+    rows = {}
+    for i, row in enumerate(all_rows, start=1):
+        a = (row[0] if row else '').strip().upper()
+        if a == 'VADYM TOTAL' and 'vadym_total' not in rows:
+            rows['vadym_total'] = i + 2        # label → header row → value row
+        elif 'CASH FOR INVESTMENTS' in a and 'cash' not in rows:
+            rows['cash'] = i + 1
+        elif 'SELF-MANAGED STOCKS' in a and 'stocks_total' not in rows:
+            rows['stocks_total'] = i + 1
+        elif 'MANAGED FUNDS' in a and 'managed_total' not in rows:
+            rows['managed_total'] = i + 1
+        elif 'BENCHMARK' in a and 'sp500' not in rows:
+            rows['sp500']      = i + 1
+            rows['ftse100']    = i + 2
+            rows['nasdaq100']  = i + 3
+            rows['msci_world'] = i + 4
+            rows['gold']       = i + 5
+        elif a == 'LISA TOTAL' and 'lisa_total' not in rows:
+            rows['lisa_total'] = i + 1
+        elif a == 'JOINT TOTAL' and 'joint_total' not in rows:
+            rows['joint_total'] = i + 1
+    return rows
 
 MONTH_NAMES = {
     'january': 1, 'february': 2, 'march': 3, 'april': 4,
@@ -136,18 +156,28 @@ def run_portfolio():
     ws = sh.worksheet('Investments')
     print(f"  Opened: {sh.title} / Investments")
 
+    r = find_investment_rows(ws)
+    print(f"  Row map: vadym={r.get('vadym_total')} cash={r.get('cash')} "
+          f"managed={r.get('managed_total')} lisa={r.get('lisa_total')} joint={r.get('joint_total')}")
+
     totals = {
-        'vadym_total':  read_cell(ws, ROW_VADYM_TOTAL,   COL_VALUE_IDX),
-        'lisa_total':   read_cell(ws, ROW_LISA_TOTAL,    COL_VALUE_IDX) if ROW_LISA_TOTAL else None,
-        'joint_total':  read_cell(ws, ROW_JOINT_TOTAL,   COL_VALUE_IDX) if ROW_JOINT_TOTAL else None,
-        'self_managed': read_cell(ws, ROW_STOCKS_TOTAL,  COL_VALUE_IDX),
-        'managed':      read_cell(ws, ROW_MANAGED_TOTAL, COL_VALUE_IDX),
-        'cash':         read_cell(ws, ROW_CASH,          COL_VALUE_IDX),
-        'spx':          read_cell(ws, ROW_SP500,         COL_VALUE_IDX),
-        'ftse':         read_cell(ws, ROW_FTSE100,       COL_VALUE_IDX),
-        'ndx':          read_cell(ws, ROW_NASDAQ100,     COL_VALUE_IDX),
-        'msci':         read_cell(ws, ROW_MSCI_WORLD,    COL_VALUE_IDX),
-        'gold':         read_cell(ws, ROW_GOLD,          COL_VALUE_IDX),
+        'vadym_total':          read_cell(ws, r['vadym_total'],   COL_VALUE_IDX),
+        'lisa_total':           read_cell(ws, r['lisa_total'],    COL_VALUE_IDX) if r.get('lisa_total')  else None,
+        'joint_total':          read_cell(ws, r['joint_total'],   COL_VALUE_IDX) if r.get('joint_total') else None,
+        'self_managed':         read_cell(ws, r['stocks_total'],  COL_VALUE_IDX),
+        # Sum of every held stock's "Tracking Started Value" (sheet col I, R11).
+        # Used by the web app to compute organic stocks performance:
+        # performance = self_managed / stocks_started_value - 1.
+        # Insulated from BUY/SELL inflows because each new position adds equal
+        # amounts to numerator and denominator.
+        'stocks_started_value': read_cell(ws, r['stocks_total'],  COL_STARTED_IDX),
+        'managed':              read_cell(ws, r['managed_total'], COL_VALUE_IDX),
+        'cash':                 read_cell(ws, r['cash'],          COL_VALUE_IDX),
+        'spx':                  read_cell(ws, r['sp500'],         COL_VALUE_IDX),
+        'ftse':                 read_cell(ws, r['ftse100'],       COL_VALUE_IDX),
+        'ndx':                  read_cell(ws, r['nasdaq100'],     COL_VALUE_IDX),
+        'msci':                 read_cell(ws, r['msci_world'],    COL_VALUE_IDX),
+        'gold':                 read_cell(ws, r['gold'],          COL_VALUE_IDX),
     }
 
     print("\nReading net deposits from InvTransactions...")
@@ -159,6 +189,7 @@ def run_portfolio():
     if totals['joint_total'] is not None:
         print(f"  Joint total:  £{totals['joint_total']:,.2f}")
     print(f"  Self-managed: £{totals['self_managed']:,.2f}")
+    print(f"  Stocks start: £{totals['stocks_started_value']:,.2f}")
     print(f"  Managed:      £{totals['managed']:,.2f}")
     print(f"  Cash:         £{totals['cash']:,.2f}")
     print(f"  Net deposits: £{totals['net_deposits']:,.2f}")

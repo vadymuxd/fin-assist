@@ -21,6 +21,12 @@ export type PortfolioSnapshot = {
   lisa_total: number | null;
   joint_total: number | null;
   self_managed: number;
+  /**
+   * Sum of each held stock's "Tracking Started Value" (sheet col I).
+   * Anchor for organic stocks performance: self_managed / stocks_started_value - 1.
+   * Insulated from new BUYs because cost basis is added to both sides equally.
+   */
+  stocks_started_value: number | null;
   managed: number;
   cash: number;
   net_deposits: number;
@@ -64,7 +70,7 @@ export type HoldingsAlert = {
 export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, vadym_total, lisa_total, joint_total, self_managed, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -73,7 +79,7 @@ export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
 export async function getLatestSnapshot(): Promise<PortfolioSnapshot | null> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, vadym_total, lisa_total, joint_total, self_managed, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
     .order("date", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -616,10 +622,17 @@ function findClosestOnOrBefore(
   return candidates[candidates.length - 1];
 }
 
-function delta(latest: PortfolioSnapshot, prev: PortfolioSnapshot | null) {
+function delta(latest: PortfolioSnapshot, prev: PortfolioSnapshot | null): Delta | null {
   if (!prev) return null;
   const absolute = latest.vadym_total - prev.vadym_total;
-  const pct = prev.vadym_total === 0 ? 0 : (absolute / prev.vadym_total) * 100;
+  // % is organic stocks P&L only: strip the change in tracking-started value
+  // (which moves when positions are added or sold) from the numerator. New
+  // BUYs add equal £ to self_managed AND stocks_started_value, so they cancel.
+  const ls = latest.stocks_started_value ?? 0;
+  const ps = prev.stocks_started_value ?? 0;
+  const stockBasisChange = ls - ps;
+  const stockValueChange = latest.self_managed - prev.self_managed;
+  const pct = prev.self_managed === 0 ? 0 : ((stockValueChange - stockBasisChange) / prev.self_managed) * 100;
   return { absolute, pct, fromDate: prev.date };
 }
 
@@ -694,11 +707,24 @@ export function buildComparisonData(
   const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
   const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
   const baseLisa = sorted.find((s) => s.lisa_total != null && s.lisa_total > 0)?.lisa_total ?? null;
+  // Anchor Custom Stocks to its own organic ratio at baseline (∼1.0 on tracking
+  // start) so the line shows organic stocks performance, not cost-basis growth.
+  const baseStockRatio =
+    base.stocks_started_value && base.stocks_started_value > 0
+      ? base.self_managed / base.stocks_started_value
+      : null;
   return sorted.map((s) => {
     const pensionRow = sortedPensions.filter((p) => p.date <= s.date).slice(-1)[0] ?? null;
+    const stockRatio =
+      s.stocks_started_value && s.stocks_started_value > 0
+        ? s.self_managed / s.stocks_started_value
+        : null;
     return {
       date: s.date,
-      customStocks: (s.self_managed / base.self_managed) * 100,
+      customStocks:
+        stockRatio != null && baseStockRatio != null
+          ? (stockRatio / baseStockRatio) * 100
+          : 100,
       managed:
         s.managed != null && base.managed != null && base.managed > 0
           ? (s.managed / base.managed) * 100

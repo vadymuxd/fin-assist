@@ -77,7 +77,16 @@ function buildPerformanceData(
   active: BenchmarkLabel[]
 ): { rows: Row[]; activeWithData: BenchmarkLabel[] } {
   if (snapshots.length === 0) return { rows: [], activeWithData: [] };
-  const base = snapshots[0];
+
+  // Portfolio line = stocks-only organic performance, indexed to 100.
+  // ratio = self_managed / stocks_started_value (col G / col I in the sheet).
+  // Cash and new BUYs both cancel out of this ratio, so it reflects only
+  // organic price movement on the stocks the user owns.
+  const stockValues: number[] = snapshots.map((s) => {
+    const started = s.stocks_started_value ?? 0;
+    return started > 0 ? (s.self_managed / started) * 100 : 100;
+  });
+
   // Anchor each benchmark to its first non-null point, so a series with a
   // late start (e.g. gold backfilled later) still indexes to 100 from its
   // own first sample rather than being dropped.
@@ -91,11 +100,8 @@ function buildPerformanceData(
     baseBench[label] = firstValid ? (firstValid[k] as number) : null;
   }
   const activeWithData = active.filter((l) => baseBench[l] != null);
-  const rows: Row[] = snapshots.map((s) => {
-    const r: Row = {
-      date: s.date,
-      Portfolio: (s.vadym_total / base.vadym_total) * 100,
-    };
+  const rows: Row[] = snapshots.map((s, i) => {
+    const r: Row = { date: s.date, Portfolio: stockValues[i] };
     for (const label of activeWithData) {
       const k = benchmarkKeys[label];
       const v = s[k];
