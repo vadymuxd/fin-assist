@@ -308,10 +308,26 @@ export type SavingsDelta = { absolute: number; pct: number; fromDate: string };
 export type SavingsDeltasResult = {
   latest: SavingsSnapshot;
   baselineDate: string;
+  // Vadym personal
   daily: SavingsDelta | null;
   wow: SavingsDelta | null;
   mom: SavingsDelta | null;
   sinceStart: SavingsDelta | null;
+  // Lisa
+  lisaDaily: SavingsDelta | null;
+  lisaWow: SavingsDelta | null;
+  lisaMom: SavingsDelta | null;
+  lisaSinceStart: SavingsDelta | null;
+  // Joint full (not halved)
+  jointDaily: SavingsDelta | null;
+  jointWow: SavingsDelta | null;
+  jointMom: SavingsDelta | null;
+  jointSinceStart: SavingsDelta | null;
+  // Total (all three combined)
+  totalDaily: SavingsDelta | null;
+  totalWow: SavingsDelta | null;
+  totalMom: SavingsDelta | null;
+  totalSinceStart: SavingsDelta | null;
 };
 
 export async function getSavingsSnapshots(): Promise<SavingsSnapshot[]> {
@@ -340,15 +356,16 @@ export async function getSavingsAccounts(): Promise<SavingsAccount[]> {
   return data ?? [];
 }
 
-function savingsDelta(
+function savingsDeltaField(
   latest: SavingsSnapshot,
   prev: SavingsSnapshot | null,
+  getVal: (s: SavingsSnapshot) => number,
 ): SavingsDelta | null {
   if (!prev) return null;
-  const latestEff = effectiveSavingsTotal(latest);
-  const prevEff = effectiveSavingsTotal(prev);
-  const absolute = latestEff - prevEff;
-  const pct = prevEff === 0 ? 0 : (absolute / prevEff) * 100;
+  const latestVal = getVal(latest);
+  const prevVal = getVal(prev);
+  const absolute = latestVal - prevVal;
+  const pct = prevVal === 0 ? 0 : (absolute / prevVal) * 100;
   return { absolute, pct, fromDate: prev.date };
 }
 
@@ -365,18 +382,33 @@ export function computeSavingsDeltas(
   const latest = sorted[sorted.length - 1];
   const baseline = sorted[0];
   const prior = sorted.slice(0, -1);
-  const daily = sorted.length >= 2 ? savingsDelta(latest, sorted[sorted.length - 2]) : null;
-  // WoW: compare against the best available snapshot on or before 7 days ago; label shows the
-  // semantic target date (daysAgoISO(7)) rather than the actual snapshot date so it reads
-  // "since 29 Apr" even when the nearest snapshot is from Apr 13.
-  const wowRaw = findOnOrBefore(prior, daysAgoISO(7));
-  const wowDelta = savingsDelta(latest, wowRaw);
-  const wow = wowDelta ? { ...wowDelta, fromDate: daysAgoISO(7) } : null;
-  // MoM: on-or-before 30 days ago, fall back to earliest snapshot (e.g. start date Apr 13)
-  const mom30 = findOnOrBefore(prior, daysAgoISO(30));
-  const mom = savingsDelta(latest, mom30 ?? (prior.length > 0 ? prior[0] : null));
-  const sinceStart = baseline.date !== latest.date ? savingsDelta(latest, baseline) : null;
-  return { latest, baselineDate: baseline.date, daily, wow, mom, sinceStart };
+  const prev1 = sorted.length >= 2 ? sorted[sorted.length - 2] : null;
+  const wowSnap = findOnOrBefore(prior, daysAgoISO(7));
+  const momSnap = findOnOrBefore(prior, daysAgoISO(30));
+  const momFallback = prior.length > 0 ? prior[0] : null;
+
+  function ownerDeltas(getVal: (s: SavingsSnapshot) => number) {
+    const daily = prev1 ? savingsDeltaField(latest, prev1, getVal) : null;
+    const wowDelta = savingsDeltaField(latest, wowSnap, getVal);
+    const wow = wowDelta ? { ...wowDelta, fromDate: daysAgoISO(7) } : null;
+    const mom = savingsDeltaField(latest, momSnap ?? momFallback, getVal);
+    const sinceStart = baseline.date !== latest.date ? savingsDeltaField(latest, baseline, getVal) : null;
+    return { daily, wow, mom, sinceStart };
+  }
+
+  const vadym = ownerDeltas((s) => s.vadym_total);
+  const lisa  = ownerDeltas((s) => s.lisa_total ?? 0);
+  const joint = ownerDeltas((s) => s.joint_total);
+  const total = ownerDeltas((s) => s.vadym_total + (s.lisa_total ?? 0) + s.joint_total);
+
+  return {
+    latest,
+    baselineDate: baseline.date,
+    daily: vadym.daily, wow: vadym.wow, mom: vadym.mom, sinceStart: vadym.sinceStart,
+    lisaDaily: lisa.daily, lisaWow: lisa.wow, lisaMom: lisa.mom, lisaSinceStart: lisa.sinceStart,
+    jointDaily: joint.daily, jointWow: joint.wow, jointMom: joint.mom, jointSinceStart: joint.sinceStart,
+    totalDaily: total.daily, totalWow: total.wow, totalMom: total.mom, totalSinceStart: total.sinceStart,
+  };
 }
 
 // ─── Pensions ─────────────────────────────────────────────────────────────────

@@ -1,4 +1,10 @@
-import { JOINT_SHARE, type SavingsDelta, type SavingsDeltasResult } from "@/lib/queries";
+"use client";
+
+import { useState } from "react";
+import { type SavingsDelta, type SavingsDeltasResult } from "@/lib/queries";
+
+type SavingsOwner = "Total" | "Vadym" | "Lisa" | "Joint";
+const OWNERS: SavingsOwner[] = ["Total", "Vadym", "Lisa", "Joint"];
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -89,6 +95,8 @@ function BreakdownChip({ label, value, total }: { label: string; value: number; 
 }
 
 export default function SavingsKpiCards({ deltas }: { deltas: SavingsDeltasResult | null }) {
+  const [owner, setOwner] = useState<SavingsOwner>("Total");
+
   if (!deltas) {
     return (
       <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-6 text-center text-sm text-gray-500 dark:text-gray-400">
@@ -97,36 +105,89 @@ export default function SavingsKpiCards({ deltas }: { deltas: SavingsDeltasResul
     );
   }
 
-  const { latest, baselineDate, daily, wow, mom, sinceStart } = deltas;
-  const myJoint = latest.joint_total * JOINT_SHARE;
-  const myTotal = latest.vadym_total + myJoint;
+  const { latest, baselineDate } = deltas;
+
+  const bigTotal = latest.vadym_total + (latest.lisa_total ?? 0) + latest.joint_total;
+
+  const amount =
+    owner === "Total" ? bigTotal
+    : owner === "Vadym" ? latest.vadym_total
+    : owner === "Lisa"  ? (latest.lisa_total ?? 0)
+    : latest.joint_total;
+
+  const daily =
+    owner === "Total" ? deltas.totalDaily
+    : owner === "Vadym" ? deltas.daily
+    : owner === "Lisa"  ? deltas.lisaDaily
+    : deltas.jointDaily;
+
+  const wow =
+    owner === "Total" ? deltas.totalWow
+    : owner === "Vadym" ? deltas.wow
+    : owner === "Lisa"  ? deltas.lisaWow
+    : deltas.jointWow;
+
+  const mom =
+    owner === "Total" ? deltas.totalMom
+    : owner === "Vadym" ? deltas.mom
+    : owner === "Lisa"  ? deltas.lisaMom
+    : deltas.jointMom;
+
+  const sinceStart =
+    owner === "Total" ? deltas.totalSinceStart
+    : owner === "Vadym" ? deltas.sinceStart
+    : owner === "Lisa"  ? deltas.lisaSinceStart
+    : deltas.jointSinceStart;
 
   return (
     <div className="space-y-3 sm:space-y-4">
       <div className="rounded-xl border border-emerald-200 dark:border-emerald-900/50 bg-gradient-to-br from-white to-emerald-50/40 dark:from-gray-900 dark:to-emerald-950/20 p-5 sm:p-6 shadow-sm">
-        <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between gap-4">
-          <div>
+        <div className="space-y-3">
+          <div className="flex items-center justify-between gap-3">
             <div className="text-xs font-medium uppercase tracking-wide text-emerald-600 dark:text-emerald-400">
-              Total Savings
+              {owner} Savings
             </div>
-            <div className="mt-1 text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
-              {gbp.format(myTotal)}
-            </div>
-            <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
-              <span>as of {new Date(`${latest.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</span>
-              {daily && (
-                <>
-                  <span className="text-gray-300 dark:text-gray-700">•</span>
-                  <span className={`font-medium tabular-nums ${deltaColor(daily.pct)}`}>
-                    {daily.pct >= 0 ? "▲" : "▼"} {fmtAbs(daily.absolute)} ({fmtPct(daily.pct)})
-                  </span>
-                </>
-              )}
+            <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+              {OWNERS.map((o) => (
+                <button
+                  key={o}
+                  onClick={() => setOwner(o)}
+                  className={`px-2.5 py-0.5 text-xs font-medium rounded transition-colors ${
+                    owner === o
+                      ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                      : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+                  }`}
+                >
+                  {o}
+                </button>
+              ))}
             </div>
           </div>
-          <div className="grid grid-cols-2 gap-4 sm:gap-6">
-            <BreakdownChip label="Personal" value={latest.vadym_total} total={myTotal} />
-            <BreakdownChip label="Joint (½)" value={myJoint} total={myTotal} />
+
+          <div className="flex items-end justify-between gap-4">
+            <div>
+              <div className="text-3xl sm:text-4xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                {gbp.format(amount)}
+              </div>
+              <div className="mt-1 flex items-center gap-2 text-xs text-gray-500 dark:text-gray-400">
+                <span>as of {new Date(`${latest.date}T00:00:00Z`).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric", timeZone: "UTC" })}</span>
+                {daily && (
+                  <>
+                    <span className="text-gray-300 dark:text-gray-700">•</span>
+                    <span className={`font-medium tabular-nums ${deltaColor(daily.pct)}`}>
+                      {daily.pct >= 0 ? "▲" : "▼"} {fmtAbs(daily.absolute)} ({fmtPct(daily.pct)})
+                    </span>
+                  </>
+                )}
+              </div>
+            </div>
+            {owner === "Total" && (
+              <div className="grid grid-cols-3 gap-4 sm:gap-6 shrink-0">
+                <BreakdownChip label="Vadym" value={latest.vadym_total} total={bigTotal} />
+                <BreakdownChip label="Lisa" value={latest.lisa_total ?? 0} total={bigTotal} />
+                <BreakdownChip label="Joint" value={latest.joint_total} total={bigTotal} />
+              </div>
+            )}
           </div>
         </div>
       </div>
