@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, PiggyBank, TrendingUp, Landmark, Home, type LucideIcon } from "lucide-react";
+import { LineChart, PiggyBank, TrendingUp, Landmark, Home, Lightbulb, type LucideIcon } from "lucide-react";
 import SyncButton from "./components/sync-button";
 
 type Tab = {
@@ -13,19 +13,28 @@ type Tab = {
 };
 
 const tabs: Tab[] = [
-  { label: "Investments", href: "/",          icon: LineChart,  activeColor: "text-blue-600 dark:text-blue-400"     },
-  { label: "Savings",     href: "/savings",   icon: PiggyBank,  activeColor: "text-emerald-500 dark:text-emerald-400" },
-  { label: "Pensions",    href: "/pensions",  icon: Landmark,   activeColor: "text-amber-500 dark:text-amber-400"   },
-  { label: "House",       href: "/mortgage",  icon: Home,       activeColor: "text-orange-500 dark:text-orange-400" },
-  { label: "Net Worth",   href: "/net-worth", icon: TrendingUp, activeColor: "text-violet-500 dark:text-violet-400" },
+  { label: "Investments", href: "/",                  icon: LineChart,  activeColor: "text-blue-600 dark:text-blue-400"     },
+  { label: "Savings",     href: "/savings",           icon: PiggyBank,  activeColor: "text-emerald-500 dark:text-emerald-400" },
+  { label: "Pensions",    href: "/pensions",          icon: Landmark,   activeColor: "text-amber-500 dark:text-amber-400"   },
+  { label: "House",       href: "/mortgage",          icon: Home,       activeColor: "text-orange-500 dark:text-orange-400" },
+  { label: "Insights",    href: "/mortgage/insights", icon: Lightbulb,  activeColor: "text-cyan-500 dark:text-cyan-400"     },
+  { label: "Net Worth",   href: "/net-worth",         icon: TrendingUp, activeColor: "text-violet-500 dark:text-violet-400" },
 ];
 
-function isActive(href: string, pathname: string) {
-  return href === "/" ? pathname === "/" : pathname.startsWith(href);
+// Longest matching prefix wins, so /mortgage/insights activates Insights, not House.
+function activeHref(pathname: string): string {
+  let best = "";
+  for (const { href } of tabs) {
+    const match =
+      href === "/" ? pathname === "/" : pathname === href || pathname.startsWith(`${href}/`);
+    if (match && href.length > best.length) best = href;
+  }
+  return best;
 }
 
 export default function Nav() {
   const pathname = usePathname();
+  const current = activeHref(pathname);
 
   return (
     <>
@@ -47,7 +56,7 @@ export default function Nav() {
             <SyncButton />
             <nav className="flex items-center gap-1 ml-auto">
               {tabs.map(({ label, href, icon: Icon, activeColor }) => {
-                const active = isActive(href, pathname);
+                const active = href === current;
                 return (
                   <Link
                     key={href}
@@ -98,7 +107,7 @@ export default function Nav() {
       >
         <div className="flex h-16">
           {tabs.map(({ label, href, icon: Icon, activeColor }) => {
-            const active = isActive(href, pathname);
+            const active = href === current;
             return (
               <Link
                 key={href}
