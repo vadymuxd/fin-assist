@@ -74,10 +74,16 @@ export default function InsightCard({
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
               {i.fixed_2yr_rate != null && (
-                <Chip label="2yr fix" value={`${i.fixed_2yr_rate.toFixed(2)}%`} />
+                <Chip label="2yr best-buy" value={`${i.fixed_2yr_rate.toFixed(2)}%`} />
               )}
               {i.fixed_5yr_rate != null && (
-                <Chip label="5yr fix" value={`${i.fixed_5yr_rate.toFixed(2)}%`} />
+                <Chip label="5yr best-buy" value={`${i.fixed_5yr_rate.toFixed(2)}%`} />
+              )}
+              {i.avg_2yr_rate != null && (
+                <Chip label="2yr avg" value={`${i.avg_2yr_rate.toFixed(2)}%`} />
+              )}
+              {i.avg_5yr_rate != null && (
+                <Chip label="5yr avg" value={`${i.avg_5yr_rate.toFixed(2)}%`} />
               )}
               {i.base_rate != null && (
                 <Chip label="BoE base" value={`${i.base_rate.toFixed(2)}%`} />

@@ -159,6 +159,8 @@ def save_insight(data: dict, report_md: str, telegram_text: str) -> None:
             'fixed_2yr_lender': d2.get('lender'),
             'fixed_5yr_rate':   d5.get('rate'),
             'fixed_5yr_lender': d5.get('lender'),
+            'avg_2yr_rate':     data.get('avg_2yr_rate'),
+            'avg_5yr_rate':     data.get('avg_5yr_rate'),
             'next_mpc':         (data.get('mpc_dates') or [None])[0],
             'triggered_by':     triggered,
             'data':             json.loads(json.dumps(data, default=str)),
@@ -210,6 +212,29 @@ def fetch_mortgage_news() -> list:
     return unique
 
 
+def _boe_avg_rates(quoted: dict) -> tuple[float | None, float | None]:
+    """
+    Market-average 2yr and 5yr fixed rates at ~85% LTV, derived from BoE quoted
+    series.  We interpolate the midpoint of the 75% and 90% LTV bands, which
+    bracket the 84% LTV at which Vadym & Lisa sit.  BoE data lags ~1–2 months
+    behind live best-buy deals but is the most authoritative market-wide average.
+    Returns (avg_2yr, avg_5yr) with None where data is missing.
+    """
+    if 'error' in quoted:
+        return None, None
+    by_label_ltv: dict[tuple, float] = {}
+    for s in quoted.get('series', []):
+        if s.get('rate') is not None:
+            by_label_ltv[(s['label'], s['ltv'])] = s['rate']
+    r2_75 = by_label_ltv.get(('2-year fixed', 75))
+    r2_90 = by_label_ltv.get(('2-year fixed', 90))
+    r5_75 = by_label_ltv.get(('5-year fixed', 75))
+    r5_90 = by_label_ltv.get(('5-year fixed', 90))
+    avg_2yr = round((r2_75 + r2_90) / 2, 2) if r2_75 and r2_90 else None
+    avg_5yr = round((r5_75 + r5_90) / 2, 2) if r5_75 and r5_90 else None
+    return avg_2yr, avg_5yr
+
+
 def gather_data() -> dict:
     """Collect every real figure the report needs into one dict."""
     balance = current_balance()
@@ -230,16 +255,25 @@ def gather_data() -> dict:
                 deal['est_payment']    = round(est)
                 deal['monthly_saving'] = round(CURRENT_PAYMENT - est)
 
+    avg_2yr, avg_5yr = _boe_avg_rates(quoted)
+    # Estimated monthly payments at average rates (same term, same balance).
+    avg_2yr_payment = round(monthly_payment(balance, avg_2yr / 100, term)) if avg_2yr and term else None
+    avg_5yr_payment = round(monthly_payment(balance, avg_5yr / 100, term)) if avg_5yr and term else None
+
     return {
-        'date':           TODAY,
-        'balance':        round(balance, 2),
-        'ltv':            round(balance / PROPERTY_VALUE * 100, 1),
-        'remaining_term': term,
-        'base_rate':      base_rate,
-        'quoted':         quoted,
-        'mpc_dates':      mpc_dates,
-        'best_buy':       best_buy,
-        'news':           news,
+        'date':            TODAY,
+        'balance':         round(balance, 2),
+        'ltv':             round(balance / PROPERTY_VALUE * 100, 1),
+        'remaining_term':  term,
+        'base_rate':       base_rate,
+        'quoted':          quoted,
+        'mpc_dates':       mpc_dates,
+        'best_buy':        best_buy,
+        'avg_2yr_rate':    avg_2yr,
+        'avg_5yr_rate':    avg_5yr,
+        'avg_2yr_payment': avg_2yr_payment,
+        'avg_5yr_payment': avg_5yr_payment,
+        'news':            news,
     }
 
 
@@ -256,12 +290,14 @@ def render_snapshot(data: dict) -> str:
         return '\n'.join(lines)
 
     lines += [
-        f"*Live best-buy deals — {bb['source']}, fetched {fmt_date(TODAY)}.*", '',
-        '| Product | Best Rate | Lender | Product Fee | Est. Monthly Payment\\* |',
+        f"*Live best-buy deals — {bb['source']}, fetched {fmt_date(TODAY)}. "
+        "Market averages from BoE quoted-rate series (lags ~1–2 months).*", '',
+        '| Product | Rate | Lender / Source | Product Fee | Est. Monthly Payment\\* |',
         '|---|---|---|---|---|',
     ]
-    for label, key in (('2-year fixed', 'fixed_2yr'), ('5-year fixed', 'fixed_5yr')):
-        deal = bb.get(key)
+    for label, key in (('2-year fixed (best-buy)', 'fixed_2yr'), ('5-year fixed (best-buy)', 'fixed_5yr')):
+        short_key = 'fixed_2yr' if '2-year' in label else 'fixed_5yr'
+        deal = bb.get(short_key)
         if deal:
             pay = f"~£{deal['est_payment']:,}" if 'est_payment' in deal else '—'
             lines.append(
@@ -269,6 +305,18 @@ def render_snapshot(data: dict) -> str:
                 f"{deal['fee_text'] or 'None'} | {pay} |")
         else:
             lines.append(f"| {label} | *none in this run's best-buy table* | — | — | — |")
+
+    avg_2yr = data.get('avg_2yr_rate')
+    avg_5yr = data.get('avg_5yr_rate')
+    avg_2yr_pay = data.get('avg_2yr_payment')
+    avg_5yr_pay = data.get('avg_5yr_payment')
+    for label, rate, pay in (
+        ('2-year fixed (market avg)', avg_2yr, avg_2yr_pay),
+        ('5-year fixed (market avg)', avg_5yr, avg_5yr_pay),
+    ):
+        rate_str = f"{rate:.2f}%" if rate else '—'
+        pay_str  = f"~£{pay:,}" if pay else '—'
+        lines.append(f"| {label} | {rate_str} | BoE quoted-rate midpoint | — | {pay_str} |")
 
     term = data['remaining_term']
     lines += [
@@ -464,6 +512,19 @@ def build_telegram_summary(data: dict, interpretation: str) -> str:
         lines.append(f"  vs current: {CURRENT_RATE * 100:.2f}%, £{CURRENT_PAYMENT:,.0f}/mo")
     else:
         lines.append('Best-buy rates: unavailable this run — check with Oliver.')
+
+    avg_2yr = data.get('avg_2yr_rate')
+    avg_5yr = data.get('avg_5yr_rate')
+    avg_2yr_pay = data.get('avg_2yr_payment')
+    avg_5yr_pay = data.get('avg_5yr_payment')
+    if avg_2yr or avg_5yr:
+        lines.append('Market avg (BoE quoted, ~85% LTV):')
+        if avg_2yr:
+            pay = f" → ~£{avg_2yr_pay:,}/mo" if avg_2yr_pay else ''
+            lines.append(f"  2yr fixed: {avg_2yr:.2f}%{pay}")
+        if avg_5yr:
+            pay = f" → ~£{avg_5yr_pay:,}/mo" if avg_5yr_pay else ''
+            lines.append(f"  5yr fixed: {avg_5yr:.2f}%{pay}")
 
     br = data['base_rate']
     if 'error' not in br:

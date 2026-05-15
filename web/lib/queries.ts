@@ -569,6 +569,8 @@ export type MortgageInsight = {
   fixed_2yr_lender: string | null;
   fixed_5yr_rate: number | null;
   fixed_5yr_lender: string | null;
+  avg_2yr_rate: number | null;
+  avg_5yr_rate: number | null;
   next_mpc: string | null;
   triggered_by: string;
 };
@@ -577,7 +579,7 @@ export async function getMortgageInsights(limit = 50): Promise<MortgageInsight[]
   const { data, error } = await supabase
     .from("mortgage_insights")
     .select(
-      "id, created_at, report_date, report_md, telegram_text, base_rate, fixed_2yr_rate, fixed_2yr_lender, fixed_5yr_rate, fixed_5yr_lender, next_mpc, triggered_by",
+      "id, created_at, report_date, report_md, telegram_text, base_rate, fixed_2yr_rate, fixed_2yr_lender, fixed_5yr_rate, fixed_5yr_lender, avg_2yr_rate, avg_5yr_rate, next_mpc, triggered_by",
     )
     .order("created_at", { ascending: false })
     .limit(limit);
