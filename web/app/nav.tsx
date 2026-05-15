@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { usePathname } from "next/navigation";
-import { LineChart, PiggyBank, TrendingUp, Landmark, Home, Lightbulb, type LucideIcon } from "lucide-react";
+import { LineChart, PiggyBank, TrendingUp, Landmark, Home, type LucideIcon } from "lucide-react";
 import SyncButton from "./components/sync-button";
 
 type Tab = {
@@ -17,7 +17,6 @@ const tabs: Tab[] = [
   { label: "Savings",     href: "/savings",           icon: PiggyBank,  activeColor: "text-emerald-500 dark:text-emerald-400" },
   { label: "Pensions",    href: "/pensions",          icon: Landmark,   activeColor: "text-amber-500 dark:text-amber-400"   },
   { label: "House",       href: "/mortgage",          icon: Home,       activeColor: "text-orange-500 dark:text-orange-400" },
-  { label: "Insights",    href: "/mortgage/insights", icon: Lightbulb,  activeColor: "text-cyan-500 dark:text-cyan-400"     },
   { label: "Net Worth",   href: "/net-worth",         icon: TrendingUp, activeColor: "text-violet-500 dark:text-violet-400" },
 ];
 
