@@ -536,6 +536,8 @@ export type MortgageSnapshot = {
   rate: number;
   lender: string;
   updated_at: string;
+  deal_expires: string | null;
+  deal_term_years: number | null;
 };
 
 export type MortgageDelta = { absolute: number; pct: number; fromDate: string };
@@ -550,7 +552,7 @@ export type MortgageDeltasResult = {
 export async function getMortgageSnapshots(): Promise<MortgageSnapshot[]> {
   const { data, error } = await supabase
     .from("mortgage_snapshots")
-    .select("date, balance, property_value, equity, equity_half, monthly_payment, rate, lender, updated_at")
+    .select("date, balance, property_value, equity, equity_half, monthly_payment, rate, lender, updated_at, deal_expires, deal_term_years")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -919,6 +921,5 @@ export function generateHalifaxSchedule(untilDate: string): HalifaxRow[] {
 export const COOP_LOAN = 570999;
 export const DEPOSIT = 60000;
 export const MORTGAGE_START = "2022-09-01";
-export const MORTGAGE_TERM_YEARS = 35;
 
 export { HALIFAX_LOAN, HALIFAX_PROPERTY };

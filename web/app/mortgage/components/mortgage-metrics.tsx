@@ -18,7 +18,6 @@ import {
   COOP_LOAN,
   DEPOSIT,
   MORTGAGE_START,
-  MORTGAGE_TERM_YEARS,
 } from "@/lib/queries";
 
 const gbp = new Intl.NumberFormat("en-GB", {
@@ -282,6 +281,27 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
         const startFmt = new Date(`${firstCoopDate}T00:00:00Z`).toLocaleDateString("en-GB", {
           month: "short", year: "numeric", timeZone: "UTC",
         });
+
+        const dealExpires = latest.deal_expires;
+        const dealTermYears = latest.deal_term_years;
+
+        const expiresFmt = dealExpires
+          ? new Date(`${dealExpires}T00:00:00Z`).toLocaleDateString("en-GB", {
+              day: "numeric", month: "short", year: "numeric", timeZone: "UTC",
+            })
+          : null;
+
+        const daysToExpiry = dealExpires
+          ? Math.ceil((new Date(`${dealExpires}T00:00:00Z`).getTime() - Date.now()) / 86400000)
+          : null;
+
+        const expiryUrgency =
+          daysToExpiry !== null && daysToExpiry <= 90
+            ? "text-rose-600 dark:text-rose-400"
+            : daysToExpiry !== null && daysToExpiry <= 180
+            ? "text-amber-600 dark:text-amber-400"
+            : "text-gray-700 dark:text-gray-300";
+
         return (
           <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
             <div className="flex items-start justify-between gap-4 mb-4">
@@ -289,6 +309,7 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
                 <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Current Deal</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
                   {latest.lender} · since {startFmt}
+                  {dealTermYears && <span> · {dealTermYears}-year mortgage</span>}
                 </p>
               </div>
               <div className="text-right shrink-0">
@@ -314,7 +335,7 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
             </div>
 
             {/* Stats row */}
-            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 grid grid-cols-3 gap-3">
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div>
                 <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Rate</div>
                 <div className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-300">
@@ -327,6 +348,17 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
                   {gbp.format(latest.monthly_payment)}
                 </div>
               </div>
+              {expiresFmt && (
+                <div>
+                  <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Fix expires</div>
+                  <div className={`text-sm font-semibold tabular-nums ${expiryUrgency}`}>
+                    {expiresFmt}
+                  </div>
+                  {daysToExpiry !== null && (
+                    <div className={`text-[10px] ${expiryUrgency}`}>{daysToExpiry} days</div>
+                  )}
+                </div>
+              )}
               <div>
                 <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Halifax paid off</div>
                 <div className="text-sm font-semibold tabular-nums text-orange-500 dark:text-orange-400">
@@ -342,14 +374,18 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
       {latest && (() => {
         const propertyValue = latest.property_value;
         const msStart = new Date(`${MORTGAGE_START}T00:00:00Z`);
-        const msEnd = new Date(msStart);
-        msEnd.setFullYear(msEnd.getFullYear() + MORTGAGE_TERM_YEARS);
+        // End date = Co-op start + deal_term_years (e.g. Oct 2024 + 32 = Oct 2056)
+        const coopStart = new Date(`${firstCoopDate}T00:00:00Z`);
+        const dealTermYears = latest.deal_term_years ?? 32;
+        const msEnd = new Date(coopStart);
+        msEnd.setFullYear(msEnd.getFullYear() + dealTermYears);
         const now = new Date();
         const totalMs = msEnd.getTime() - msStart.getTime();
         const elapsedMs = Math.min(now.getTime() - msStart.getTime(), totalMs);
+        const totalJourneyYears = totalMs / (1000 * 60 * 60 * 24 * 365.25);
         const yearsElapsed = elapsedMs / (1000 * 60 * 60 * 24 * 365.25);
-        const yearsRemaining = Math.max(0, MORTGAGE_TERM_YEARS - yearsElapsed);
-        const timePct = (yearsElapsed / MORTGAGE_TERM_YEARS) * 100;
+        const yearsRemaining = Math.max(0, totalJourneyYears - yearsElapsed);
+        const timePct = (yearsElapsed / totalJourneyYears) * 100;
 
         const endFmt = msEnd.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
         const startFmt = msStart.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
@@ -378,7 +414,7 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
               <div>
                 <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Mortgage Journey</h2>
                 <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                  {startFmt} → {endFmt} · {MORTGAGE_TERM_YEARS} years
+                  {startFmt} → {endFmt} · {Math.round(totalJourneyYears)} years
                 </p>
               </div>
               <div className="text-right shrink-0">
