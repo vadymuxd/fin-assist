@@ -4,22 +4,23 @@ digest_worker.py — Monday 08:00 BST weekly digest.
 
 Replaces: weekly_digest.py (which re-ran the full pipeline before sending).
 
-Reads exclusively from Supabase — no Google Sheets, no API pipeline re-runs.
-Data comes from the most recent daily_monitor.yml close run:
-  portfolio_snapshots  → grand total + breakdown
+Reads exclusively from Supabase — no Google Sheets, no live price API, so it
+never rate-limits. Data comes from the daily_monitor.yml close runs:
+  portfolio_snapshots  → total + net_deposits + benchmark index levels
   holdings             → current positions (qty, price, value)
   holdings_alerts      → actionable alerts from the past 7 days
   discoveries          → BUY prospects from the past 7 days
 
-yfinance 7-day returns and Claude recommendation are computed fresh each run.
+Portfolio and benchmark 7-day returns are computed by comparing the latest
+snapshot row to the one ~7 days earlier. Only the Claude recommendation
+paragraph makes a live API call.
 """
 
 import os
 import json
 import requests
 import anthropic
-import yfinance as yf
-from datetime import datetime, timezone, timedelta
+from datetime import datetime, date, timezone, timedelta
 from dotenv import load_dotenv
 
 from lib.supabase_sink import _get_client
@@ -30,12 +31,15 @@ TELEGRAM_TOKEN   = os.getenv('TELEGRAM_BOT_TOKEN')
 TELEGRAM_CHAT_ID = os.getenv('TELEGRAM_CHAT_ID')
 CLAUDE_API_KEY   = os.getenv('CLAUDE_API_KEY')
 
-BENCHMARKS = [
-    ('S&P 500',    '^GSPC'),
-    ('FTSE 100',   '^FTSE'),
-    ('NASDAQ 100', '^NDX'),
-    ('MSCI World', 'URTH'),
-    ('Gold',       'SGLN.L'),
+# Benchmark 7d returns come from portfolio_snapshots columns, which
+# daily_portfolio_snapshot.py writes every close run. No live price API —
+# the digest is now 100% Supabase-sourced and never rate-limited.
+BENCHMARK_COLS = [
+    ('S&P 500',    'spx'),
+    ('FTSE 100',   'ftse'),
+    ('NASDAQ 100', 'ndx'),
+    ('MSCI World', 'msci'),
+    ('Gold',       'gold'),
 ]
 
 TICKER_META = {
@@ -121,49 +125,72 @@ def send_telegram_chunks(message):
     return ok
 
 
-# ── yfinance returns ───────────────────────────────────────────────────────────
-
-_RETURN_CACHE = {}
-
-
-def prefetch_returns(symbols):
-    todo = sorted({s for s in symbols if s and s not in _RETURN_CACHE})
-    for sym in todo:
-        pct = None
-        try:
-            hist = yf.Ticker(sym).history(period='10d', auto_adjust=True)
-            if not hist.empty and 'Close' in hist.columns:
-                closes = hist['Close'].dropna()
-                if len(closes) >= 2:
-                    first = float(closes.iloc[0])
-                    last  = float(closes.iloc[-1])
-                    if first != 0:
-                        pct = (last - first) / first * 100
-        except Exception as e:
-            print(f"    7d return failed for {sym}: {e}")
-        _RETURN_CACHE[sym] = pct
-        print(f"    {sym}: {f'{pct:.2f}%' if pct is not None else 'n/a'}")
-
-
-def seven_day_return_pct(symbol):
-    if symbol not in _RETURN_CACHE:
-        prefetch_returns([symbol])
-    return _RETURN_CACHE.get(symbol)
-
-
 # ── Supabase readers ───────────────────────────────────────────────────────────
 
-def load_portfolio_summary():
-    """Latest portfolio_snapshots row."""
+def load_recent_snapshots(days=14):
+    """Portfolio snapshot rows from the last `days`, oldest first.
+    One row per trading day, each carrying vadym_total, net_deposits and the
+    benchmark index levels (spx/ftse/ndx/msci/gold)."""
     sb = _get_client()
     if not sb:
-        return {}
+        return []
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
     try:
-        resp = sb.table('portfolio_snapshots').select('*').order('date', desc=True).limit(1).execute()
-        return resp.data[0] if resp.data else {}
+        resp = (
+            sb.table('portfolio_snapshots')
+            .select('*')
+            .gte('date', cutoff)
+            .order('date')
+            .execute()
+        )
+        return resp.data or []
     except Exception as e:
         print(f"  portfolio_snapshots read failed: {e}")
-        return {}
+        return []
+
+
+def pick_prior_snapshot(snapshots, target_days=7):
+    """The snapshot row closest to `target_days` before the latest one —
+    the baseline for week-over-week comparison."""
+    if len(snapshots) < 2:
+        return None
+    latest_date  = date.fromisoformat(snapshots[-1]['date'])
+    target       = latest_date - timedelta(days=target_days)
+    on_or_before = [s for s in snapshots[:-1]
+                    if date.fromisoformat(s['date']) <= target]
+    return on_or_before[-1] if on_or_before else snapshots[0]
+
+
+def compute_portfolio_7d(latest, prior):
+    """Deposit-adjusted weekly return — strips new money so the figure is pure
+    market performance (matching what the old yfinance weighting produced)."""
+    if not latest or not prior:
+        return None
+    t_now  = float(latest.get('vadym_total') or 0)
+    t_then = float(prior.get('vadym_total') or 0)
+    if t_then <= 0:
+        return None
+    nd_now      = float(latest.get('net_deposits') or 0)
+    nd_then     = float(prior.get('net_deposits') or 0)
+    market_gain = (t_now - t_then) - (nd_now - nd_then)
+    return market_gain / t_then * 100
+
+
+def compute_benchmark_7d(latest, prior):
+    """7-day % change for each benchmark index, straight from snapshot columns."""
+    out = []
+    for name, col in BENCHMARK_COLS:
+        pct = None
+        if latest and prior:
+            try:
+                now  = float(latest.get(col) or 0)
+                then = float(prior.get(col) or 0)
+                if then > 0 and now > 0:
+                    pct = (now - then) / then * 100
+            except (TypeError, ValueError):
+                pct = None
+        out.append((name, pct))
+    return out
 
 
 def load_holdings():
@@ -232,27 +259,6 @@ def load_recent_discoveries():
     except Exception as e:
         print(f"  discoveries read failed: {e}")
         return []
-
-
-# ── Portfolio WoW ──────────────────────────────────────────────────────────────
-
-def compute_portfolio_7d_return(holdings):
-    total_value  = 0.0
-    weighted_sum = 0.0
-    for h in holdings:
-        ticker = h.get('ticker')
-        qty    = float(h.get('qty') or 0)
-        price  = float(h.get('current_price') or 0)
-        if ticker not in TICKER_META or qty <= 0 or price <= 0:
-            continue
-        yf_sym = TICKER_META[ticker][0]
-        ret    = seven_day_return_pct(yf_sym)
-        if ret is None:
-            continue
-        value         = qty * price
-        total_value  += value
-        weighted_sum += value * ret
-    return weighted_sum / total_value if total_value else None
 
 
 # ── Holdings classification ────────────────────────────────────────────────────
@@ -365,28 +371,18 @@ def build_sector_section(holdings):
     if total_value == 0:
         return ''
 
-    etf_returns = {
-        sector: seven_day_return_pct(etf)
-        for sector, (etf, _) in SECTOR_ETF.items()
-        if etf and sector in sector_value
-    }
-
     lines = [
-        '━━━ <b>SECTOR CONTEXT</b> ━━━',
-        '<i>Your allocation % · benchmark ETF 7d return</i>',
+        '━━━ <b>SECTOR ALLOCATION</b> ━━━',
         '<pre>',
     ]
     warn_sectors = []
     for sector, value in sorted(sector_value.items(), key=lambda x: -x[1]):
         pct_alloc = value / total_value * 100
         icon      = SECTOR_ETF.get(sector, (None, '📊'))[1]
-        etf, _    = SECTOR_ETF.get(sector, (None, None))
         warn      = '⚠' if pct_alloc >= SECTOR_CONCENTRATION_WARN else ' '
         if pct_alloc >= SECTOR_CONCENTRATION_WARN:
             warn_sectors.append(sector)
-        etf_pct = etf_returns.get(sector)
-        etf_str = f'{etf} {pct_str(etf_pct)}' if etf and etf_pct is not None else (etf or '')
-        lines.append(f'{f"{icon} {sector}".ljust(15)} {pct_alloc:>4.0f}%{warn}  {etf_str}')
+        lines.append(f'{f"{icon} {sector}".ljust(15)} {pct_alloc:>4.0f}%{warn}')
     lines.append('</pre>')
     if warn_sectors:
         lines.append(f'⚠ Concentration: {", ".join(warn_sectors)} &gt; {SECTOR_CONCENTRATION_WARN}%.')
@@ -462,32 +458,27 @@ def main():
     print("=== digest_worker ===")
 
     print("\nLoading data from Supabase...")
-    summary     = load_portfolio_summary()
+    snapshots   = load_recent_snapshots(14)
+    summary     = snapshots[-1] if snapshots else {}
+    prior       = pick_prior_snapshot(snapshots)
     holdings    = load_holdings()
     alerts      = load_recent_alerts()
     discoveries = load_recent_discoveries()
 
+    print(f"  Snapshots loaded: {len(snapshots)}"
+          f" ({snapshots[0]['date']}..{snapshots[-1]['date']})" if snapshots else "  Snapshots loaded: 0")
     print(f"  Portfolio total:  £{float(summary.get('vadym_total') or 0):,.2f}")
+    print(f"  WoW baseline:     {prior['date'] if prior else 'n/a'}")
     print(f"  Holdings:         {len(holdings)} positions")
     print(f"  Alerts (7d):      {len(alerts)}")
     print(f"  Discoveries (7d): {len(discoveries)}")
 
-    print("\nBatch-fetching yfinance 7-day returns...")
-    all_symbols = [sym for _, sym in BENCHMARKS]
-    for h in holdings:
-        t = h.get('ticker')
-        if t in TICKER_META:
-            all_symbols.append(TICKER_META[t][0])
-    for _, (etf, _) in SECTOR_ETF.items():
-        if etf:
-            all_symbols.append(etf)
-    prefetch_returns(all_symbols)
-
-    print("\nComputing portfolio WoW return...")
-    portfolio_7d = compute_portfolio_7d_return(holdings)
+    print("\nComputing WoW returns from snapshots...")
+    portfolio_7d  = compute_portfolio_7d(summary, prior)
+    bench_returns = compute_benchmark_7d(summary, prior)
     print(f"  Portfolio 7d: {f'{portfolio_7d:.2f}%' if portfolio_7d is not None else 'n/a'}")
-
-    bench_returns = [(name, seven_day_return_pct(sym)) for name, sym in BENCHMARKS]
+    for name, pct in bench_returns:
+        print(f"  {name}: {f'{pct:.2f}%' if pct is not None else 'n/a'}")
 
     print("\nBuilding sections...")
     header = (
