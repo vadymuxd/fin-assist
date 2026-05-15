@@ -28,9 +28,6 @@ from google.oauth2.service_account import Credentials
 
 from lib.market_sources import (
     fetch_av_market_sentiment,
-    fetch_marketaux_news,
-    fetch_yahoo_trending,
-    fetch_alpha_vantage_sentiment,
     finnhub_get,
     load_filters,
 )
@@ -39,6 +36,8 @@ from lib.supabase_sink import (
     get_recently_alerted_tickers,
     write_holding_alert,
     write_prospect_alert,
+    write_holding_prices,
+    get_holding_price_history,
 )
 
 load_dotenv()
@@ -51,9 +50,18 @@ SCOPES    = ['https://www.googleapis.com/auth/spreadsheets']
 
 POOL_PATH        = 'data/news_pool.json'
 ASSESSMENTS_PATH = 'data/assessments.json'
+THRESHOLDS_PATH  = 'config/thresholds.json'
 
 LONDON_TZ   = ZoneInfo('Europe/London')
 DEDUP_HOURS = 48
+
+SELL_THRESHOLD_DEFAULTS = {
+    'stop_loss_pct':               15.0,
+    'trailing_stop_pct':           12.0,
+    'concentration_pct':           30.0,
+    'trailing_high_lookback_days': 30,
+    'min_gain_for_trailing_pct':   15.0,
+}
 
 FINNHUB_KEY  = os.getenv('FINNHUB_API_KEY', '')
 FINNHUB_BASE = 'https://finnhub.io/api/v1'
@@ -105,6 +113,17 @@ def normalize_title(title):
 
 def escape_html(text):
     return str(text).replace('&', '&amp;').replace('<', '&lt;').replace('>', '&gt;')
+
+
+def load_sell_thresholds():
+    """Sell-signal thresholds from config/thresholds.json, with safe defaults."""
+    thr = dict(SELL_THRESHOLD_DEFAULTS)
+    try:
+        with open(THRESHOLDS_PATH) as f:
+            thr.update((json.load(f) or {}).get('sell_signals', {}))
+    except Exception as e:
+        print(f"  thresholds.json load failed ({e}) — using defaults")
+    return thr
 
 
 def send_telegram(text):
@@ -269,13 +288,15 @@ def fetch_yfinance_news(symbol):
 
 
 def fetch_holding_sentiment(symbol, exchange):
+    """Finnhub-only sentiment + analyst context for US/CA tickers.
+    The Alpha Vantage per-ticker fallback was removed — it burned ~15 AV calls
+    a day against the 25/day free cap and barely moved Claude's verdict. AV's
+    daily quota is now reserved entirely for the morning prospect scan."""
     sentiment    = {}
     analyst      = {}
     price_target = {}
     if exchange in ('US', 'CA'):
         sentiment    = finnhub_get('news-sentiment', {'symbol': symbol}) or {}
-        if not sentiment:
-            sentiment = fetch_alpha_vantage_sentiment(symbol)
         rec_raw      = finnhub_get('stock/recommendation', {'symbol': symbol}) or []
         analyst      = rec_raw[0] if rec_raw else {}
         price_target = finnhub_get('stock/price-target', {'symbol': symbol}) or {}
@@ -357,6 +378,15 @@ def run_fetch():
     holding_tickers = [p['ticker'] for p in positions]
     print(f"  {len(positions)} holdings: {', '.join(holding_tickers)}")
 
+    # Append today's prices for the trailing-stop signal. Upsert on (ticker,
+    # date) — re-running the same day just overwrites, so the close run's
+    # price is the one that sticks.
+    today  = datetime.now(LONDON_TZ).strftime('%Y-%m-%d')
+    prices = {p['ticker']: p['current_price'] for p in positions if p['current_price'] > 0}
+    if prices:
+        write_holding_prices(today, prices)
+        print(f"  Price history: recorded {len(prices)} prices for {today}")
+
     client = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY'))
 
     print("\nFetching per-holding news (no DB writes yet)...")
@@ -398,12 +428,19 @@ def run_fetch():
         deduped.append(a)
     print(f"  After title dedup: {len(deduped)}")
 
-    print("\nFetching market scan news...")
-    filters            = load_filters()
-    stopwords          = set(filters.get('ticker_stopwords', []))
-    av_mentions        = fetch_av_market_sentiment(stopwords, limit=50)
-    marketaux_mentions = fetch_marketaux_news(stopwords, limit=50)
-    yahoo_trending     = fetch_yahoo_trending('US')
+    # Prospect discovery signal: one Alpha Vantage market scan per day.
+    # AV free tier is 25 req/day — a single morning scan is rock-solid, three
+    # daily scans were not. Midday/close runs skip it; prospects are assessed
+    # on the morning run only (48h dedup means one scan a day is plenty).
+    is_morning  = datetime.now(LONDON_TZ).hour < 11
+    av_mentions = {}
+    if is_morning:
+        print("\nFetching AV market scan (morning run — prospect discovery)...")
+        filters     = load_filters()
+        stopwords   = set(filters.get('ticker_stopwords', []))
+        av_mentions = fetch_av_market_sentiment(stopwords, limit=50)
+    else:
+        print("\nSkipping AV market scan — prospect discovery runs on the morning run only.")
 
     print("\nCurating with Claude (validates ticker assignment)...")
     curated = curate_with_validation(client, deduped, holding_tickers)
@@ -460,12 +497,10 @@ def run_fetch():
     os.makedirs('data', exist_ok=True)
     with open(POOL_PATH, 'w') as f:
         json.dump({
-            'run_time':           now_iso,
-            'holdings':           holding_context,
-            'av_mentions':        {t: items for t, items in av_mentions.items()},
-            'marketaux_mentions': {t: items for t, items in marketaux_mentions.items()},
-            'yahoo_trending':     yahoo_trending,
-            'selected_news':      curated,
+            'run_time':      now_iso,
+            'holdings':      holding_context,
+            'av_mentions':   {t: items for t, items in av_mentions.items()},
+            'selected_news': curated,
         }, f, indent=2, default=str)
     print(f"\nNews pool saved → {POOL_PATH}")
 
@@ -507,35 +542,42 @@ def build_holding_prompt(ticker, name, position, data):
         )
     lines += [
         "",
+        "STEP 1 — score the position 1-10 for how it looks right now given the news:",
+        "  8-10 = strong, thesis intact or improving",
+        "  6-7  = comfortable hold",
+        "  5    = neutral, nothing notable in the news",
+        "  3-4  = concerns building (weak guidance, sector pressure, deteriorating fundamentals)",
+        "  1-2  = thesis broken, exit-worthy",
+        "",
+        "STEP 2 — map the score to an action. The score DRIVES the action:",
+        "  8-10 AND a concrete positive catalyst -> BUY_MORE",
+        "  5-7                                   -> NONE",
+        "  3-4                                   -> TRIM",
+        "  1-2                                   -> SELL",
+        "A score of 4 or below MUST produce TRIM or SELL — steady deterioration is a",
+        "valid reason to act even without one dramatic headline. Never return NONE",
+        "with a score of 4 or below.",
+        "Pure analyst-rating noise, macro mood or daily price wiggle is a score 5 (NONE).",
+        "",
         "Return ONLY a JSON object (no markdown):",
         '{',
-        '  "action": "<SELL|EXIT|TRIM|BUY_MORE|NONE>",',
         '  "score": <integer 1-10>,',
-        '  "event": "<specific event that triggered this, or empty string>",',
-        '  "rationale": "<1-2 sentences: what happened and why it matters for this holder>"',
+        '  "action": "<SELL|TRIM|BUY_MORE|NONE>",',
+        '  "event": "<short phrase: what drove this, or empty string>",',
+        '  "rationale": "<1-2 sentences: what is happening and why it matters for this holder>"',
         '}',
-        "",
-        "action rules — be conservative, default to NONE:",
-        "  NONE     = nothing concrete today, or only general noise",
-        "  BUY_MORE = strong positive catalyst, score ≥ 8, thesis still intact",
-        "  TRIM     = concerns building but not urgent, score ≤ 4",
-        "  SELL/EXIT = concrete bad event requiring immediate action, score ≤ 3",
-        "",
-        "If news is only about analyst ratings, macro mood, or daily price — return NONE.",
     ]
     return '\n'.join(lines)
 
 
-def build_prospect_prompt(ticker, av_items, marketaux_items):
+def build_prospect_prompt(ticker, av_items):
     lines = [
         f"Evaluate {ticker} as a potential BUY for a UK retail investor.",
         "Only recommend BUY if there is a concrete, specific investment reason today.",
         "",
-        "Evidence from market sources:",
+        "Evidence from the Alpha Vantage market news scan:",
     ]
-    for _, snippet in (av_items or [])[:3]:
-        lines.append(f"  - {snippet}")
-    for _, snippet in (marketaux_items or [])[:2]:
+    for _, snippet in (av_items or [])[:4]:
         lines.append(f"  - {snippet}")
     lines += [
         "",
@@ -554,6 +596,67 @@ def build_prospect_prompt(ticker, av_items, marketaux_items):
     return '\n'.join(lines)
 
 
+def compute_price_signal(position, total_portfolio, price_history, thr):
+    """
+    Deterministic sell signal from price data alone — no API, fires for every
+    holding (US, LSE, EU). Returns an assessment dict or None.
+
+    Priority: trailing-stop (protect a winner) > stop-loss (cut a loser) >
+    concentration (single-position risk). At most one signal per ticker.
+    """
+    ticker  = position.get('ticker', '')
+    qty     = position.get('qty', 0) or 0
+    avg_buy = position.get('avg_buy', 0) or 0
+    price   = position.get('current_price', 0) or 0
+    if qty <= 0 or price <= 0:
+        return None
+
+    pnl_pct  = ((price - avg_buy) / avg_buy * 100) if avg_buy else 0.0
+    value    = qty * price
+    conc_pct = (value / total_portfolio * 100) if total_portfolio else 0.0
+
+    # Trailing-stop — only for positions sitting on a real gain. This protects
+    # profit and is distinct from stop-loss (which cuts a losing position).
+    hist = price_history.get(ticker, [])
+    if hist and pnl_pct >= thr['min_gain_for_trailing_pct']:
+        rolling_high = max(hist + [price])
+        if rolling_high > 0:
+            drop = (rolling_high - price) / rolling_high * 100
+            if drop >= thr['trailing_stop_pct']:
+                return {
+                    'ticker': ticker, 'action': 'TRIM', 'score': 3, 'signal': 'price',
+                    'event': f'Down {drop:.0f}% from {len(hist)}d high',
+                    'rationale': (
+                        f'Fallen {drop:.1f}% from a recent high of £{rolling_high:.2f} '
+                        f'to £{price:.2f}, still {pnl_pct:+.0f}% vs cost — consider '
+                        f'trimming to lock in the gain.'
+                    ),
+                }
+
+    # Stop-loss — position is underwater past the threshold vs cost basis.
+    if avg_buy and pnl_pct <= -thr['stop_loss_pct']:
+        return {
+            'ticker': ticker, 'action': 'SELL', 'score': 2, 'signal': 'price',
+            'event': f'Down {abs(pnl_pct):.0f}% vs cost',
+            'rationale': (
+                f'{pnl_pct:.1f}% below the average buy of £{avg_buy:.2f} '
+                f'(now £{price:.2f}) — review whether the thesis still holds.'
+            ),
+        }
+
+    # Concentration — single position is too large a share of the portfolio.
+    if conc_pct >= thr['concentration_pct']:
+        return {
+            'ticker': ticker, 'action': 'TRIM', 'score': 4, 'signal': 'price',
+            'event': f'{conc_pct:.0f}% of portfolio',
+            'rationale': (
+                f'Now {conc_pct:.1f}% of the portfolio (£{value:,.0f}) — consider '
+                f'trimming to reduce single-position risk.'
+            ),
+        }
+    return None
+
+
 def run_assess():
     print("=== market_worker --mode assess ===")
 
@@ -564,15 +667,40 @@ def run_assess():
     with open(POOL_PATH) as f:
         pool = json.load(f)
 
-    run_time           = pool.get('run_time', datetime.now(timezone.utc).isoformat())
-    holdings           = pool.get('holdings', {})
-    av_mentions        = pool.get('av_mentions', {})
-    marketaux_mentions = pool.get('marketaux_mentions', {})
+    run_time    = pool.get('run_time', datetime.now(timezone.utc).isoformat())
+    holdings    = pool.get('holdings', {})
+    av_mentions = pool.get('av_mentions', {})
 
-    client      = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY'))
-    assessments = []
+    thr           = load_sell_thresholds()
+    price_history = get_holding_price_history(thr['trailing_high_lookback_days'])
+    client        = anthropic.Anthropic(api_key=os.getenv('CLAUDE_API_KEY'))
 
-    print(f"\nAssessing {len(holdings)} holdings...")
+    # one assessment dict per ticker, keyed by ticker
+    holding_assessments = {}
+
+    # ── Deterministic price-based sell signals (no API, every holding) ───────
+    total_portfolio = sum(
+        ((h.get('position') or {}).get('qty', 0) or 0)
+        * ((h.get('position') or {}).get('current_price', 0) or 0)
+        for h in holdings.values()
+    )
+    print(f"\nPrice-based sell signals (portfolio £{total_portfolio:,.0f})...")
+    for ticker, data in holdings.items():
+        position = data.get('position') or {}
+        signal   = compute_price_signal(position, total_portfolio, price_history, thr)
+        if signal:
+            signal.update({
+                'type':     'holding',
+                'name':     position.get('name', ticker),
+                'run_time': run_time,
+            })
+            holding_assessments[ticker] = signal
+            print(f"  {ticker}: {signal['action']} — {signal['event']}")
+    if not holding_assessments:
+        print("  none triggered")
+
+    # ── News-based assessment (Claude, holdings with headlines) ──────────────
+    print(f"\nNews assessment of {len(holdings)} holdings...")
     for ticker, data in holdings.items():
         position  = data.get('position', {})
         name      = position.get('name', ticker)
@@ -580,72 +708,67 @@ def run_assess():
         if not headlines:
             print(f"  {ticker}: no headlines — skip")
             continue
-        print(f"  {ticker} ({len(headlines)} headlines)...")
         result = call_claude(client, build_holding_prompt(ticker, name, position, data), ticker)
         if not result:
             continue
         action = result.get('action', 'NONE')
         score  = result.get('score', 5)
         if action == 'NONE':
-            print(f"    → NONE (score {score})")
+            print(f"  {ticker}: NONE (score {score})")
             continue
-        event = result.get('event', '').strip()
-        print(f"    → {action} | score {score} | {event or '(no specific event)'}")
-        assessments.append({
-            'type':      'holding',
-            'ticker':    ticker,
-            'name':      name,
-            'action':    action,
-            'score':     score,
-            'event':     event,
-            'rationale': result.get('rationale', '').strip(),
-            'run_time':  run_time,
-        })
+        event     = (result.get('event') or '').strip()
+        rationale = (result.get('rationale') or '').strip()
+        print(f"  {ticker}: {action} (score {score}) — {event or 'no event'}")
+        if ticker in holding_assessments:
+            # Price signal already fired — fold the news context into it.
+            if rationale:
+                holding_assessments[ticker]['rationale'] += f' News: {rationale}'
+            print(f"    (merged into price signal {holding_assessments[ticker]['action']})")
+        else:
+            holding_assessments[ticker] = {
+                'type': 'holding', 'ticker': ticker, 'name': name,
+                'action': action, 'score': score, 'signal': 'news',
+                'event': event, 'rationale': rationale, 'run_time': run_time,
+            }
 
-    held_tickers     = set(holdings.keys())
-    prospect_tickers = (set(av_mentions.keys()) | set(marketaux_mentions.keys())) - held_tickers
+    # ── Prospect discovery (AV market scan signal — morning run only) ────────
+    prospect_tickers = set(av_mentions.keys()) - set(holdings.keys())
 
     def signal_score(t):
-        av  = sum(s for s, _ in av_mentions.get(t, []))
-        mkt = sum(s for s, _ in marketaux_mentions.get(t, []))
-        return av * 3 + mkt * 2
+        return sum(s for s, _ in av_mentions.get(t, []))
 
     ranked = [t for t in sorted(prospect_tickers, key=signal_score, reverse=True)[:MAX_PROSPECTS]
-              if signal_score(t) >= 0.5]
+              if signal_score(t) > 0]
+    prospect_assessments = []
+    if ranked:
+        print(f"\nAssessing {len(ranked)} prospect(s)...")
+        for ticker in ranked:
+            result = call_claude(
+                client, build_prospect_prompt(ticker, av_mentions.get(ticker, [])), ticker,
+            )
+            if not result:
+                continue
+            rec   = result.get('recommendation', 'PASS')
+            score = result.get('score', 5)
+            if rec != 'BUY' or score < 7:
+                print(f"  {ticker}: {rec} (score {score}) — skip")
+                continue
+            print(f"  {ticker}: BUY (score {score})")
+            prospect_assessments.append({
+                'type': 'prospect', 'ticker': ticker, 'name': result.get('name', ticker),
+                'action': 'BUY', 'score': score, 'signal': 'news', 'event': '',
+                'rationale': result.get('thesis', '').strip(), 'run_time': run_time,
+            })
+    else:
+        print("\nNo prospect candidates this run (AV scan empty or midday/close run).")
 
-    print(f"\nAssessing {len(ranked)} prospect(s)...")
-    for ticker in ranked:
-        print(f"  {ticker} (signal={signal_score(ticker):.2f})...")
-        result = call_claude(
-            client,
-            build_prospect_prompt(ticker, av_mentions.get(ticker, []), marketaux_mentions.get(ticker, [])),
-            ticker,
-        )
-        if not result:
-            continue
-        rec   = result.get('recommendation', 'PASS')
-        score = result.get('score', 5)
-        if rec != 'BUY' or score < 7:
-            print(f"    → {rec} (score {score}) — skip")
-            continue
-        print(f"    → BUY (score {score})")
-        assessments.append({
-            'type':      'prospect',
-            'ticker':    ticker,
-            'name':      result.get('name', ticker),
-            'action':    'BUY',
-            'score':     score,
-            'event':     '',
-            'rationale': result.get('thesis', '').strip(),
-            'run_time':  run_time,
-        })
-
+    assessments = list(holding_assessments.values()) + prospect_assessments
     os.makedirs('data', exist_ok=True)
     with open(ASSESSMENTS_PATH, 'w') as f:
         json.dump(assessments, f, indent=2)
     print(f"\n{len(assessments)} actionable assessment(s) saved → {ASSESSMENTS_PATH}")
     if not assessments:
-        print("  All holdings HOLD, all prospects PASS — no alerts today.")
+        print("  No sell signals, no prospects — quiet run.")
 
 
 # ── Mode: dispatch ────────────────────────────────────────────────────────────
@@ -657,11 +780,15 @@ def format_telegram(new_alerts):
     prospects = [a for a in new_alerts if a['type'] == 'prospect']
 
     if holdings:
-        lines += [f'⚠️ <b>HOLDINGS ALERT</b> — {now_str}', '']
+        lines += [f'⚠️ <b>HOLDINGS — SELL SIGNALS</b> — {now_str}', '']
         for a in holdings:
             action = a['action']
             emoji  = '🔴' if action in ('SELL', 'EXIT', 'TRIM') else '🟢'
-            lines.append(f'{emoji} <b>{escape_html(a["ticker"])}</b> — {escape_html(a.get("event") or "event detected")}')
+            tag    = '📉 price' if a.get('signal') == 'price' else '📰 news'
+            lines.append(
+                f'{emoji} <b>{escape_html(a["ticker"])}</b> — '
+                f'{escape_html(a.get("event") or "signal")}  <i>({tag})</i>'
+            )
             lines.append(f'   Action: <b>{escape_html(action)}</b> | Score {a["score"]}/10')
             if a.get('rationale'):
                 lines.append(f'   {escape_html(a["rationale"])}')

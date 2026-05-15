@@ -6,5 +6,12 @@
   "overrides": {
     "RHM.DE": { "spike_pct": 4.0, "drop_pct": 4.0 },
     "BAESF": { "spike_pct": 4.0, "drop_pct": 4.0 }
+  },
+  "sell_signals": {
+    "stop_loss_pct": 15.0,
+    "trailing_stop_pct": 12.0,
+    "concentration_pct": 30.0,
+    "trailing_high_lookback_days": 30,
+    "min_gain_for_trailing_pct": 15.0
   }
 }

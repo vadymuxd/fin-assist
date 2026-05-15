@@ -349,6 +349,52 @@ def write_transaction(trade: dict) -> bool:
     return ok
 
 
+def write_holding_prices(date: str, prices: dict) -> bool:
+    """
+    Upsert per-ticker closing prices for one date into holding_price_history.
+    prices: {ticker: price}. Re-running the same day overwrites the row.
+    Fails open — if the table is missing the trailing-stop signal just stays
+    quiet, stop-loss and concentration signals are unaffected.
+    """
+    rows = [
+        {'ticker': t, 'date': date, 'price': p}
+        for t, p in prices.items()
+        if p and p > 0
+    ]
+    return _upsert('holding_price_history', rows, on_conflict='ticker,date')
+
+
+def get_holding_price_history(days: int = 30) -> dict:
+    """
+    Return {ticker: [price, ...]} for the last `days`, oldest first.
+    Used to compute a rolling high for the trailing-stop sell signal.
+    Fails open: returns {} on any error (e.g. table not yet migrated).
+    """
+    client = _get_client()
+    if not client:
+        return {}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).date().isoformat()
+    history: dict = {}
+    try:
+        resp = (
+            client.table('holding_price_history')
+            .select('ticker,date,price')
+            .gte('date', cutoff)
+            .order('date')
+            .execute()
+        )
+        for row in (resp.data or []):
+            try:
+                price = float(row['price'])
+            except (ValueError, TypeError, KeyError):
+                continue
+            history.setdefault(row['ticker'], []).append(price)
+    except Exception as e:
+        logger.warning(f'holding_price_history read failed: {e}')
+        return {}
+    return history
+
+
 def purge_stale_market_scan_news(days: int = 30) -> int:
     """
     Delete market_scan news older than `days`. Per-holding news is kept
