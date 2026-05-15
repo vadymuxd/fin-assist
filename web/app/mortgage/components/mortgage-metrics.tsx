@@ -12,7 +12,14 @@ import {
   YAxis,
 } from "recharts";
 import type { MortgageSnapshot } from "@/lib/queries";
-import { generateHalifaxSchedule, HALIFAX_LOAN, COOP_LOAN } from "@/lib/queries";
+import {
+  generateHalifaxSchedule,
+  HALIFAX_LOAN,
+  COOP_LOAN,
+  DEPOSIT,
+  MORTGAGE_START,
+  MORTGAGE_TERM_YEARS,
+} from "@/lib/queries";
 
 const gbp = new Intl.NumberFormat("en-GB", {
   style: "currency",
@@ -119,13 +126,9 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
 
   const halifaxEndBalance = halifaxSchedule.at(-1)?.balance ?? HALIFAX_LOAN;
   const halifaxPaid = HALIFAX_LOAN - halifaxEndBalance;
-  const halifaxPaidPct = (halifaxPaid / HALIFAX_LOAN) * 100;
 
   const coopPaid = latest ? COOP_LOAN - latest.balance : 0;
   const coopPaidPct = (coopPaid / COOP_LOAN) * 100;
-
-  const totalPaid = latest ? HALIFAX_LOAN - latest.balance : 0;
-  const totalPaidPct = (totalPaid / HALIFAX_LOAN) * 100;
 
   if (snapshots.length < 2) return null;
 
@@ -274,91 +277,180 @@ export default function MortgageMetrics({ snapshots }: { snapshots: MortgageSnap
         </div>
       </div>
 
-      {/* Payoff progress — 3 progress bars */}
-      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
-        <div className="mb-5">
-          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Payoff Progress</h2>
-          <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            How much of each loan has been paid off
-          </p>
-        </div>
-        <div className="space-y-5">
-          {/* Halifax bar */}
-          <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-medium text-gray-700 dark:text-gray-300">
-                Halifax <span className="font-normal text-gray-400 dark:text-gray-500">(Sep 2022 – remortgage)</span>
-              </span>
-              <span className="tabular-nums text-gray-500 dark:text-gray-400">
-                <span className="font-semibold text-orange-600 dark:text-orange-400">{gbp.format(halifaxPaid)}</span>
-                {" of "}
-                {gbp.format(HALIFAX_LOAN)}
-                <span className="ml-2 font-semibold text-gray-700 dark:text-gray-300">{halifaxPaidPct.toFixed(1)}%</span>
-              </span>
+      {/* ── Tile: Current Deal ────────────────────────────────── */}
+      {latest && (() => {
+        const startFmt = new Date(`${firstCoopDate}T00:00:00Z`).toLocaleDateString("en-GB", {
+          month: "short", year: "numeric", timeZone: "UTC",
+        });
+        return (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-4 mb-4">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Current Deal</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {latest.lender} · since {startFmt}
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Balance</div>
+                <div className="text-lg font-semibold tabular-nums text-rose-600 dark:text-rose-400">{gbp.format(latest.balance)}</div>
+              </div>
             </div>
-            <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-              <div className="h-full rounded-full bg-orange-400 transition-all" style={{ width: `${halifaxPaidPct}%` }} />
-            </div>
-          </div>
 
-          {/* Co-op bar */}
-          <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-medium text-gray-700 dark:text-gray-300">
-                Co-operative Bank <span className="font-normal text-gray-400 dark:text-gray-500">(current)</span>
-              </span>
-              <span className="tabular-nums text-gray-500 dark:text-gray-400">
+            {/* Co-op payoff bar */}
+            <div className="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 mb-1.5">
+              <span>
+                Paid off:{" "}
                 <span className="font-semibold text-blue-600 dark:text-blue-400">{gbp.format(coopPaid)}</span>
-                {" of "}
-                {gbp.format(COOP_LOAN)}
-                <span className="ml-2 font-semibold text-gray-700 dark:text-gray-300">{coopPaidPct.toFixed(1)}%</span>
+                <span className="ml-1 text-gray-400">({coopPaidPct.toFixed(1)}%)</span>
               </span>
+              <span>Started at {gbp.format(COOP_LOAN)}</span>
             </div>
             <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-              <div className="h-full rounded-full bg-blue-500 transition-all" style={{ width: `${coopPaidPct}%` }} />
+              <div
+                className="h-full rounded-full bg-blue-500"
+                style={{ width: `${coopPaidPct}%` }}
+              />
             </div>
-          </div>
 
-          {/* Total bar */}
-          <div>
-            <div className="flex items-center justify-between text-xs mb-2">
-              <span className="font-medium text-gray-700 dark:text-gray-300">
-                Total Journey <span className="font-normal text-gray-400 dark:text-gray-500">(Halifax start → now)</span>
-              </span>
-              <span className="tabular-nums text-gray-500 dark:text-gray-400">
-                <span className="font-semibold text-emerald-600 dark:text-emerald-400">{gbp.format(totalPaid)}</span>
-                {" of "}
-                {gbp.format(HALIFAX_LOAN)}
-                <span className="ml-2 font-semibold text-gray-700 dark:text-gray-300">{totalPaidPct.toFixed(1)}%</span>
-              </span>
-            </div>
-            <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden">
-              <div className="h-full rounded-full bg-gradient-to-r from-orange-400 to-emerald-400 transition-all" style={{ width: `${totalPaidPct}%` }} />
+            {/* Stats row */}
+            <div className="mt-4 pt-4 border-t border-gray-100 dark:border-gray-800 grid grid-cols-3 gap-3">
+              <div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Rate</div>
+                <div className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+                  {(latest.rate * 100).toFixed(2)}%
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Monthly</div>
+                <div className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+                  {gbp.format(latest.monthly_payment)}
+                </div>
+              </div>
+              <div>
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Halifax paid off</div>
+                <div className="text-sm font-semibold tabular-nums text-orange-500 dark:text-orange-400">
+                  {gbp.format(halifaxPaid)}
+                </div>
+              </div>
             </div>
           </div>
-        </div>
+        );
+      })()}
 
-        {latest && (
-          <div className="mt-5 grid grid-cols-2 sm:grid-cols-4 gap-3 pt-4 border-t border-gray-100 dark:border-gray-800">
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Halifax Start</div>
-              <div className="text-sm font-semibold tabular-nums text-gray-700 dark:text-gray-300">{gbp.format(HALIFAX_LOAN)}</div>
+      {/* ── Tile: Mortgage Journey ─────────────────────────────── */}
+      {latest && (() => {
+        const propertyValue = latest.property_value;
+        const msStart = new Date(`${MORTGAGE_START}T00:00:00Z`);
+        const msEnd = new Date(msStart);
+        msEnd.setFullYear(msEnd.getFullYear() + MORTGAGE_TERM_YEARS);
+        const now = new Date();
+        const totalMs = msEnd.getTime() - msStart.getTime();
+        const elapsedMs = Math.min(now.getTime() - msStart.getTime(), totalMs);
+        const yearsElapsed = elapsedMs / (1000 * 60 * 60 * 24 * 365.25);
+        const yearsRemaining = Math.max(0, MORTGAGE_TERM_YEARS - yearsElapsed);
+        const timePct = (yearsElapsed / MORTGAGE_TERM_YEARS) * 100;
+
+        const endFmt = msEnd.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+        const startFmt = msStart.toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+
+        const depositPct  = (DEPOSIT     / propertyValue) * 100;
+        const halifaxPct  = (halifaxPaid / propertyValue) * 100;
+        const coopPaidPct2 = (coopPaid   / propertyValue) * 100;
+
+        const midFmt = new Date(
+          (msStart.getTime() + msEnd.getTime()) / 2,
+        ).toLocaleDateString("en-GB", { month: "short", year: "numeric" });
+
+        function Legend({ color, label, value }: { color: string; label: string; value: string }) {
+          return (
+            <span className="inline-flex items-baseline gap-1 text-[11px]">
+              <span className={`inline-block w-2.5 h-2.5 rounded-sm ${color} shrink-0 self-center`} />
+              <span className="text-gray-500 dark:text-gray-400">{label}</span>
+              <span className="font-semibold tabular-nums text-gray-700 dark:text-gray-300">{value}</span>
+            </span>
+          );
+        }
+
+        return (
+          <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
+            <div className="flex items-start justify-between gap-3 mb-5">
+              <div>
+                <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Mortgage Journey</h2>
+                <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
+                  {startFmt} → {endFmt} · {MORTGAGE_TERM_YEARS} years
+                </p>
+              </div>
+              <div className="text-right shrink-0">
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">LTV</div>
+                <div className="text-lg font-semibold tabular-nums text-gray-700 dark:text-gray-300">
+                  {((latest.balance / propertyValue) * 100).toFixed(1)}%
+                </div>
+              </div>
             </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Total Paid</div>
-              <div className="text-sm font-semibold tabular-nums text-emerald-600 dark:text-emerald-400">{gbp.format(totalPaid)}</div>
+
+            {/* ── Money bar ── */}
+            <div className="mb-5">
+              <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">
+                <span>£0</span>
+                <span>{gbp.format(propertyValue / 2)}</span>
+                <span>{gbp.format(propertyValue)}</span>
+              </div>
+              <div className="relative h-7 rounded-lg bg-gray-100 dark:bg-gray-800 overflow-hidden flex">
+                {/* Deposit */}
+                <div
+                  className="h-full bg-slate-400 dark:bg-slate-500 flex items-center justify-center"
+                  style={{ width: `${depositPct}%` }}
+                  title={`Deposit ${gbp.format(DEPOSIT)}`}
+                />
+                {/* Halifax paid */}
+                <div
+                  className="h-full bg-orange-400 flex items-center justify-center"
+                  style={{ width: `${halifaxPct}%` }}
+                  title={`Halifax paid ${gbp.format(halifaxPaid)}`}
+                />
+                {/* Co-op paid */}
+                <div
+                  className="h-full bg-blue-500 flex items-center justify-center"
+                  style={{ width: `${coopPaidPct2}%` }}
+                  title={`Co-op paid ${gbp.format(coopPaid)}`}
+                />
+                {/* Remaining is the bar background */}
+              </div>
+              <div className="flex flex-wrap items-center gap-x-4 gap-y-1 mt-2">
+                <Legend color="bg-slate-400 dark:bg-slate-500" label="Deposit" value={gbp.format(DEPOSIT)} />
+                <Legend color="bg-orange-400" label="Halifax" value={gbp.format(halifaxPaid)} />
+                <Legend color="bg-blue-500" label="Co-op" value={gbp.format(coopPaid)} />
+                <Legend color="bg-gray-200 dark:bg-gray-700" label="Remaining" value={gbp.format(latest.balance)} />
+              </div>
             </div>
+
+            {/* ── Time bar ── */}
             <div>
-              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Remaining</div>
-              <div className="text-sm font-semibold tabular-nums text-rose-600 dark:text-rose-400">{gbp.format(latest.balance)}</div>
-            </div>
-            <div>
-              <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">Lender</div>
-              <div className="text-sm font-medium tabular-nums text-gray-700 dark:text-gray-300">{latest.lender}</div>
+              <div className="flex justify-between text-[10px] text-gray-400 dark:text-gray-500 mb-1.5">
+                <span>{startFmt}</span>
+                <span>{midFmt}</span>
+                <span>{endFmt}</span>
+              </div>
+              <div className="h-3 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden" suppressHydrationWarning>
+                <div
+                  className="h-full rounded-full bg-indigo-400"
+                  style={{ width: `${timePct}%` }}
+                  suppressHydrationWarning
+                />
+              </div>
+              <div className="flex justify-between text-[10px] mt-1.5" suppressHydrationWarning>
+                <span className="text-indigo-500 dark:text-indigo-400 font-medium" suppressHydrationWarning>
+                  {yearsElapsed.toFixed(1)} yrs elapsed
+                </span>
+                <span className="text-gray-400 dark:text-gray-500" suppressHydrationWarning>
+                  {yearsRemaining.toFixed(1)} yrs remaining
+                </span>
+              </div>
             </div>
           </div>
-        )}
-      </div>
+        );
+      })()}
     </div>
   );
 }

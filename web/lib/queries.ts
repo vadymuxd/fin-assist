@@ -917,5 +917,8 @@ export function generateHalifaxSchedule(untilDate: string): HalifaxRow[] {
 }
 
 export const COOP_LOAN = 570999;
+export const DEPOSIT = 60000;
+export const MORTGAGE_START = "2022-09-01";
+export const MORTGAGE_TERM_YEARS = 35;
 
 export { HALIFAX_LOAN, HALIFAX_PROPERTY };
