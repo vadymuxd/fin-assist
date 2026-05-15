@@ -5,7 +5,7 @@
   "remaining_term": 354,
   "base_rate": {
     "rate": 3.75,
-    "as_of": "2026-05-13",
+    "as_of": "2026-05-14",
     "last_change": "2025-12-18",
     "previous_rate": 4.0
   },
@@ -85,5 +85,31 @@
     },
     "product_count": 10
   },
-  "news": []
+  "avg_2yr_rate": 5.3,
+  "avg_5yr_rate": 5.12,
+  "avg_2yr_payment": 3085,
+  "avg_5yr_payment": 3024,
+  "news": [
+    {
+      "title": "Your voice 2026: insights from the Bank of England\u2019s outreach programmes",
+      "description": "This report is a summary of what we have learnt over the past 12 months and how we have used those insights.",
+      "source": "bankofengland.co.uk",
+      "published": "2026-05-12",
+      "url": "https://www.bankofengland.co.uk/about/get-involved/citizens-panels/your-voice-2026-insights-from-the-boe-outreach-programmes"
+    },
+    {
+      "title": "Chip Stock Strength Lifts the Broader Market",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is up +0.18%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is down -0.58%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is up +0.60%. June E-mini S&P futures (ESM26 ) are up +0.12%, and June E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-05-13",
+      "url": "https://finance.yahoo.com/news/chip-stock-strength-lifts-broader-152610275.html"
+    },
+    {
+      "title": "Futures, Yields And Oil All Rise As Trump Arrives In China",
+      "description": "ZeroHedge - On a long enough timeline, the survival rate for everyone drops to zero",
+      "source": "zerohedge.com",
+      "published": "2026-05-13",
+      "url": "https://www.zerohedge.com/markets/futures-yields-and-oil-all-rise-trump-arrives-china"
+    }
+  ]
 }
