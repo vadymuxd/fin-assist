@@ -127,10 +127,16 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
 
   const { latest, baselineDate } = deltas;
 
+  const stocks = latest.self_managed ?? 0;
+  const cash = latest.cash ?? 0;
+  const managed = latest.managed ?? 0;
+
+  // Use self_managed + managed + cash — same components as the Allocation chart —
+  // so both totals agree. vadym_total / joint_total from the sheet exclude cash.
   const total =
     owner === "Joint" ? (latest.joint_total ?? 0)
     : owner === "Lisa" ? (latest.lisa_total ?? 0)
-    : latest.vadym_total;
+    : stocks + managed + cash;
 
   const daily =
     owner === "Joint" ? deltas.jointDaily
@@ -151,10 +157,6 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
     owner === "Joint" ? deltas.jointSinceBaseline
     : owner === "Lisa" ? deltas.lisaSinceBaseline
     : deltas.sinceBaseline;
-
-  const stocks = latest.self_managed ?? 0;
-  const cash = latest.cash ?? 0;
-  const managed = latest.managed ?? 0;
 
   return (
     <div className="space-y-3 sm:space-y-4">

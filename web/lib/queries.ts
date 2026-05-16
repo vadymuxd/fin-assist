@@ -645,7 +645,7 @@ export type NetWorthPoint = {
 
 export async function getNetWorthData(): Promise<NetWorthPoint[]> {
   const [{ data: inv }, { data: sav }, { data: pen }, { data: mort }] = await Promise.all([
-    supabase.from("portfolio_snapshots").select("date, vadym_total, lisa_total, joint_total").order("date", { ascending: true }),
+    supabase.from("portfolio_snapshots").select("date, vadym_total, lisa_total, joint_total, self_managed, managed, cash").order("date", { ascending: true }),
     supabase.from("savings_snapshots").select("date, vadym_total, lisa_total, joint_total").order("date", { ascending: true }),
     supabase.from("pension_snapshots").select("date, total, vadym_total, lisa_total").order("date", { ascending: true }),
     supabase.from("mortgage_snapshots").select("date, equity_half").order("date", { ascending: true }),
@@ -667,7 +667,7 @@ export async function getNetWorthData(): Promise<NetWorthPoint[]> {
 
     const equityHalf = mortRow ? Number(mortRow.equity_half) : 0;
 
-    const vadymInv = Number(i.vadym_total ?? 0);
+    const vadymInv = Number(i.self_managed ?? 0) + Number(i.managed ?? 0) + Number(i.cash ?? 0);
     const lisaInv  = Number(i.lisa_total ?? 0);
     const jointInv = Number(i.joint_total ?? (vadymInv + lisaInv));
 
