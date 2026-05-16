@@ -51,6 +51,25 @@ def parse_float(val):
 # Sheet writers
 # ---------------------------------------------------------------------------
 
+def find_inv_rows(ws):
+    """Dynamically locate key summary rows by scanning col A labels.
+    Mirrors snapshot_worker.find_investment_rows() so both scripts stay
+    correct after log_trades.py inserts/removes stock rows."""
+    all_rows = ws.get_all_values()
+    rows = {}
+    for i, row in enumerate(all_rows, start=1):
+        a = (row[0] if row else '').strip().upper()
+        if a == 'VADYM TOTAL' and 'vadym_total' not in rows:
+            rows['vadym_total'] = i + 2
+        elif 'CASH FOR INVESTMENTS' in a and 'cash' not in rows:
+            rows['cash'] = i + 1
+        elif 'SELF-MANAGED STOCKS' in a and 'stocks_total' not in rows:
+            rows['stocks_total'] = i + 1
+        elif 'MANAGED FUNDS' in a and 'managed_total' not in rows:
+            rows['managed_total'] = i + 1
+    return rows
+
+
 def write_scores_to_inv26(sh, results):
     """
     Write Score (K), Recommendation (L), Last Updated (M) to Investments.
@@ -183,25 +202,24 @@ def update_notion_snapshot(sh, results):
     headers = _notion_headers(notion_key)
     run_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
-    # --- Read summary totals from Investments ---
-    # Row 7 = Grand Total row (col G = current value total)
-    # Row 9 = Cash row (col G = cash value)
-    # Row 11 = Self-managed stocks totals (col G = stocks total, L = P&L £, M = P&L %)
-    # Row 28 = Managed Funds totals (col G = managed total)
-    # All values are 0-based index into row_values()
     try:
         ws = sh.worksheet('Investments')
-        row7  = ws.row_values(7)
-        row9  = ws.row_values(9)
-        row11 = ws.row_values(11)
-        row28 = ws.row_values(28)
+        inv_rows = find_inv_rows(ws)
 
-        vadym_total    = parse_float(row7[6])   if len(row7)  > 6  else 0
-        cash           = parse_float(row9[6])   if len(row9)  > 6  else 0
-        stocks_total   = parse_float(row11[6])  if len(row11) > 6  else 0
-        stocks_pnl     = parse_float(row11[11]) if len(row11) > 11 else 0
-        stocks_pnl_pct = parse_float(row11[12]) if len(row11) > 12 else 0
-        managed_total  = parse_float(row28[6])  if len(row28) > 6  else 0
+        def _rv(row_num):
+            return ws.row_values(row_num) if row_num else []
+
+        r_vadym   = _rv(inv_rows.get('vadym_total'))
+        r_cash    = _rv(inv_rows.get('cash'))
+        r_stocks  = _rv(inv_rows.get('stocks_total'))
+        r_managed = _rv(inv_rows.get('managed_total'))
+
+        vadym_total    = parse_float(r_vadym[6])    if len(r_vadym)   > 6  else 0
+        cash           = parse_float(r_cash[6])     if len(r_cash)    > 6  else 0
+        stocks_total   = parse_float(r_stocks[6])   if len(r_stocks)  > 6  else 0
+        stocks_pnl     = parse_float(r_stocks[11])  if len(r_stocks)  > 11 else 0
+        stocks_pnl_pct = parse_float(r_stocks[12])  if len(r_stocks)  > 12 else 0
+        managed_total  = parse_float(r_managed[6])  if len(r_managed) > 6  else 0
 
         # Read individual stock positions (col A=Ticker, B=Name, C=Platform,
         # D=Qty, E=Avg Buy, F=Current Price, G=Current Value, L=P&L£, M=P&L%)
@@ -404,8 +422,9 @@ def main():
         if do_bot:
             try:
                 ws          = sh.worksheet('Investments')
-                row7        = ws.row_values(7)
-                vadym_total = parse_float(row7[6]) if len(row7) > 6 else 0.0
+                inv_rows    = find_inv_rows(ws)
+                r_vadym     = ws.row_values(inv_rows['vadym_total'])
+                vadym_total = parse_float(r_vadym[6]) if len(r_vadym) > 6 else 0.0
             except Exception:
                 vadym_total = 0.0
             send_bot_confirmation(vadym_total)
