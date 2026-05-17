@@ -1,0 +1,115 @@
+{
+  "date": "2026-05-17",
+  "balance": 551720.71,
+  "ltv": 83.6,
+  "remaining_term": 354,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-05-14",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-04-30",
+    "prev_as_of": "2026-03-31",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 5.14,
+        "prev_rate": 4.45
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.46,
+        "prev_rate": 4.79
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 5.0,
+        "prev_rate": 4.43
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 5.23,
+        "prev_rate": 4.72
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-06-18",
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "best_buy": {
+    "source": "Moneyfacts",
+    "page": "https://moneyfactscompare.co.uk/mortgages/85-ltv-mortgages/",
+    "fixed_2yr": {
+      "rate": 4.66,
+      "lender": "Nationwide BS",
+      "fee": 999.0,
+      "fee_text": "Reservation \u00a3999",
+      "max_ltv": 85,
+      "revert": "reverting to 6.49%",
+      "description": "4.66% Fixed for 2 years",
+      "est_payment": 2870,
+      "monthly_saving": 202
+    },
+    "fixed_5yr": {
+      "rate": 4.68,
+      "lender": "first direct",
+      "fee": 490.0,
+      "fee_text": "Booking \u00a3490",
+      "max_ltv": 85,
+      "revert": "reverting to 6.24%",
+      "description": "4.68% Fixed for 5 years",
+      "est_payment": 2877,
+      "monthly_saving": 195
+    },
+    "product_count": 10
+  },
+  "avg_2yr_rate": 5.3,
+  "avg_5yr_rate": 5.12,
+  "avg_2yr_payment": 3085,
+  "avg_5yr_payment": 3024,
+  "news": [
+    {
+      "title": "Global bonds battered as flaring inflation spooks investors",
+      "description": "Global bond markets are experiencing significant interest rate hikes, driven by escalating energy prices from the Iran conflict and persistent inflation. This is impacting everything from homebuying to corporate borrowing, with benchmark U.S. Treasury yields reaching yearly highs. Investors are now anticipating further rate increases from central banks worldwide, a stark shift from earlier expectations of cuts.",
+      "source": "economictimes.indiatimes.com",
+      "published": "2026-05-16",
+      "url": "https://economictimes.indiatimes.com/markets/bonds/global-bonds-battered-as-flaring-inflation-spooks-investors/articleshow/131131944.cms"
+    },
+    {
+      "title": "Your voice 2026: insights from the Bank of England\u2019s outreach programmes",
+      "description": "This report is a summary of what we have learnt over the past 12 months and how we have used those insights.",
+      "source": "bankofengland.co.uk",
+      "published": "2026-05-12",
+      "url": "https://www.bankofengland.co.uk/about/get-involved/citizens-panels/your-voice-2026-insights-from-the-boe-outreach-programmes"
+    },
+    {
+      "title": "Chip Stock Strength Lifts the Broader Market",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is up +0.18%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is down -0.58%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is up +0.60%. June E-mini S&P futures (ESM26 ) are up +0.12%, and June E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-05-13",
+      "url": "https://finance.yahoo.com/news/chip-stock-strength-lifts-broader-152610275.html"
+    }
+  ]
+}
