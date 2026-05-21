@@ -1,0 +1,499 @@
+#!/usr/bin/env python3
+"""
+sync_worker.py — Phase 16 orchestrator.
+
+Reads the Notion Financial Updates DB, routes each row by (Type, Domain),
+writes the appropriate Sheets cells/columns and Supabase transactions,
+triggers snapshot_worker for each affected domain, then marks rows synced.
+
+Pipeline per row:
+  1. Fetch unsynced rows (Status=confirmed AND Sheets Written=false)
+  2. Route per (Type, Domain) — handlers update Sheets directly
+  3. Mark Sheets Written=true on the Notion row
+  4. After all rows processed: run snapshot_worker for affected domains
+  5. Mark Status=synced + Supabase Written=true + Synced At=today
+  6. Send Telegram summary
+
+CLI:
+  --dry-run            Read Notion only, log planned actions, no writes
+  --id <notion_id>     Sync one specific row by Notion page id
+  (default)            Sync all rows where Status=confirmed AND Sheets Written=false
+"""
+
+import os
+import sys
+import argparse
+import subprocess
+from datetime import date
+from dotenv import load_dotenv
+import gspread
+from google.oauth2.service_account import Credentials
+
+from lib.sheets_layout import find_investment_rows
+from lib.notion_writer import notion_headers
+from lib.notion_db import (
+    fetch_unsynced_financial_updates,
+    extract_financial_update,
+    query_database,
+    update_page_properties,
+    mark_row_synced,
+    mark_row_failed,
+    mark_sheets_written,
+    prop_select,
+    prop_checkbox,
+    FINANCIAL_UPDATES_DB_ID,
+)
+from lib.supabase_sink import write_transaction
+
+
+load_dotenv()
+
+SHEET_ID = os.getenv('PORTFOLIO_SHEET_ID')
+SA_FILE  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.json')
+SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
+
+COL_VALUE_IDX = 7  # col G (1-based) for cash/managed/lisa value cells in Investments tab
+
+
+# ── Sheet utilities ──────────────────────────────────────────────────────────
+
+def open_sheet():
+    creds = Credentials.from_service_account_file(SA_FILE, scopes=SCOPES)
+    return gspread.authorize(creds).open_by_key(SHEET_ID)
+
+
+def parse_float(val):
+    if val is None or str(val).strip() == '':
+        return 0.0
+    try:
+        return float(str(val).replace('£', '').replace(',', '').strip())
+    except (ValueError, TypeError):
+        return 0.0
+
+
+def today_header():
+    """Today as 'Mon D, YYYY' (e.g. 'May 21, 2026') — matches Savings/Pensions sheet format."""
+    t = date.today()
+    return t.strftime('%b ') + str(t.day) + t.strftime(', %Y')
+
+
+def find_or_create_date_column(ws, header_text):
+    """Return 1-based column index of the column whose header matches `header_text`.
+    Creates a new column at the end if not found.
+    """
+    headers = ws.row_values(1)
+    for i, h in enumerate(headers, start=1):
+        if h.strip() == header_text.strip():
+            return i, False  # found, not created
+    new_col = len(headers) + 1
+    ws.update_cell(1, new_col, header_text)
+    return new_col, True
+
+
+import re as _re
+
+
+def _normalise(s):
+    """Strip everything except a–z and 0–9 (lowercase). So 'Legal & General' / 'Pension Bee'
+    match 'LegalGeneral' / 'PensionBee' — same account, different naming convention."""
+    return _re.sub(r'[^a-z0-9]', '', (s or '').lower())
+
+
+def find_savings_row(ws, account_name):
+    """Match a Savings Balance row to a Notion Account string.
+
+    Strategy:
+      1. Prefer rows where target contains BOTH bank AND account name (best signal).
+      2. If exactly one row matches by account name alone, accept it (handles
+         users who omit the bank prefix).
+      3. Otherwise return None (ambiguous — can't tell which 'Cash ISA' they mean).
+    """
+    rows = ws.get_all_values()
+    target = _normalise(account_name)
+    if not target:
+        return None, None, None
+
+    both_matches = []
+    account_only = []
+
+    for i, row in enumerate(rows[1:], start=2):
+        if len(row) < 2:
+            continue
+        bank    = _normalise(row[0])
+        account = _normalise(row[1])
+        if not account:
+            continue
+        # Skip aggregate rows like 'Total' (bank='total', account='')
+        if bank == 'total':
+            continue
+        if bank in target and account in target:
+            both_matches.append((i, row[0].strip(), row[1].strip()))
+        elif account in target:
+            account_only.append((i, row[0].strip(), row[1].strip()))
+
+    if len(both_matches) == 1:
+        return both_matches[0]
+    if len(both_matches) > 1:
+        return None, None, None  # ambiguous bank-and-account match
+    if len(account_only) == 1:
+        return account_only[0]
+    return None, None, None
+
+
+def find_pensions_row(ws, account_name):
+    """Match a Pensions row to a Notion Account string.
+
+    Same lenient strategy as savings:
+      1. Prefer rows where target contains BOTH provider AND employer.
+      2. Fall back to unique provider-only or employer-only match.
+    """
+    rows = ws.get_all_values()
+    target = _normalise(account_name)
+    if not target:
+        return None, None, None
+
+    both_matches = []
+    one_side    = []
+
+    for i, row in enumerate(rows[1:], start=2):
+        if len(row) < 3:
+            continue
+        provider = _normalise(row[1])
+        employer = _normalise(row[2])
+        if not provider or not employer:
+            continue
+        if provider in target and employer in target:
+            both_matches.append((i, row[1].strip(), row[2].strip()))
+        elif provider in target or employer in target:
+            one_side.append((i, row[1].strip(), row[2].strip()))
+
+    if len(both_matches) == 1:
+        return both_matches[0]
+    if len(both_matches) > 1:
+        return None, None, None
+    if len(one_side) == 1:
+        return one_side[0]
+    return None, None, None
+
+
+def find_investments_balance_row(ws, account_name):
+    """For Investments BALANCE_UPDATE, map Account text → row in Investments tab.
+
+    Returns (row_1based, label) where label is one of cash/managed/lisa.
+    """
+    rows = find_investment_rows(ws)
+    a = (account_name or '').lower()
+
+    if 'lisa' in a or 'hsbc gic' in a or 'gic isa' in a:
+        return rows.get('lisa_total'), 'lisa'
+    if 'cash' in a or 't212 cash' in a or 'freetrade cash' in a:
+        return rows.get('cash'), 'cash'
+    if 'managed' in a or 'nutmeg' in a or 'jp morgan' in a or 'j.p. morgan' in a or 'alpha' in a:
+        return rows.get('managed_total'), 'managed'
+    return None, None
+
+
+# ── Handlers — per (Type, Domain) ────────────────────────────────────────────
+
+def handle_balance_update(entry, sh):
+    """BALANCE_UPDATE — write new balance to Sheets. No transactions write."""
+    domain = entry['domain']
+    new_balance = entry['new_balance']
+    if new_balance is None:
+        raise ValueError("BALANCE_UPDATE missing New Balance £")
+
+    if domain == 'savings':
+        ws = sh.worksheet('Savings Balance')
+        row, bank, account = find_savings_row(ws, entry['account'])
+        if not row:
+            raise ValueError(f"Savings account not found in sheet: {entry['account']!r}")
+        col, created = find_or_create_date_column(ws, today_header())
+        ws.update_cell(row, col, new_balance)
+        return f"Savings · {bank} {account} · row {row} col {col}{' (new)' if created else ''} = £{new_balance:,.2f}"
+
+    if domain == 'pensions':
+        ws = sh.worksheet('Pensions')
+        row, provider, employer = find_pensions_row(ws, entry['account'])
+        if not row:
+            raise ValueError(f"Pension not found in sheet: {entry['account']!r}")
+        col, created = find_or_create_date_column(ws, today_header())
+        ws.update_cell(row, col, new_balance)
+        return f"Pensions · {provider} {employer} · row {row} col {col}{' (new)' if created else ''} = £{new_balance:,.2f}"
+
+    if domain == 'investments':
+        ws = sh.worksheet('Investments')
+        row, label = find_investments_balance_row(ws, entry['account'])
+        if not row:
+            raise ValueError(f"Investments balance row not found for: {entry['account']!r}")
+        ws.update_cell(row, COL_VALUE_IDX, new_balance)
+        return f"Investments · {label} · row {row} col G = £{new_balance:,.2f}"
+
+    raise ValueError(f"Unknown domain for BALANCE_UPDATE: {domain!r}")
+
+
+def handle_savings_cashflow(entry, sh):
+    """DEPOSIT / WITHDRAWAL / TRANSFER on savings — write new balance(s) + Supabase transactions."""
+    ws = sh.worksheet('Savings Balance')
+    typ = entry['type']
+    amount = entry['amount']
+    if amount is None:
+        raise ValueError(f"{typ} missing Amount £")
+
+    msg_parts = []
+    col, _ = find_or_create_date_column(ws, today_header())
+
+    def adjust(account_name, delta):
+        row, bank, account = find_savings_row(ws, account_name)
+        if not row:
+            raise ValueError(f"Savings account not found in sheet: {account_name!r}")
+        # Read latest non-empty balance from prior date columns to compute new balance
+        headers = ws.row_values(1)
+        row_vals = ws.row_values(row)
+        prior = 0.0
+        for i in range(len(headers) - 1, 2, -1):  # scan from latest col backward, skip Bank/Account/Type
+            if i + 1 == col:
+                continue  # skip today's column itself
+            if i < len(row_vals):
+                v = parse_float(row_vals[i])
+                if v:
+                    prior = v
+                    break
+        new_balance = prior + delta
+        ws.update_cell(row, col, new_balance)
+        return new_balance, f"{bank} {account}"
+
+    if typ in ('DEPOSIT', 'WITHDRAWAL'):
+        delta = amount if typ == 'DEPOSIT' else -amount
+        new_balance, label = adjust(entry['account'], delta)
+        write_transaction({
+            'date':         entry['event_date'] or date.today().isoformat(),
+            'domain':       'savings',
+            'account_name': entry['account'],
+            'amount_gbp':   amount,
+            'type':         typ.lower(),
+            'notes':        entry['notes'] or entry['title'] or '',
+            'source':       'nl_claude',
+        })
+        msg_parts.append(f"Savings · {label} {typ}: prior + £{delta:+,.2f} → £{new_balance:,.2f}")
+
+    elif typ == 'TRANSFER':
+        if not (entry['from_account'] and entry['to_account']):
+            raise ValueError("TRANSFER missing From Account or To Account")
+        new_from, lbl_from = adjust(entry['from_account'], -amount)
+        new_to,   lbl_to   = adjust(entry['to_account'],   +amount)
+        write_transaction({
+            'date':         entry['event_date'] or date.today().isoformat(),
+            'domain':       'savings',
+            'account_name': f"{entry['from_account']} → {entry['to_account']}",
+            'amount_gbp':   amount,
+            'type':         'transfer',
+            'notes':        entry['notes'] or entry['title'] or '',
+            'source':       'nl_claude',
+        })
+        msg_parts.append(f"Savings TRANSFER £{amount:,.2f}: {lbl_from} → £{new_from:,.2f} · {lbl_to} → £{new_to:,.2f}")
+
+    else:
+        raise ValueError(f"Unsupported savings cashflow type: {typ!r}")
+
+    return ' · '.join(msg_parts)
+
+
+def handle_investments_action(entry, sh):
+    """DEPOSIT / WITHDRAWAL / BUY / SELL on investments — delegate to log_trades helpers."""
+    import log_trades
+
+    ws_inv = sh.worksheet('Investments')
+    ws_tx  = sh.worksheet('InvTransactions')
+
+    trade = {
+        'date':     entry['event_date'] or date.today().isoformat(),
+        'ticker':   (entry['ticker'] or 'CASH').upper(),
+        'name':     entry['ticker'] or 'Cash',
+        'action':   entry['type'],
+        'qty':      entry['qty'] or 0,
+        'price':    entry['price'] or 0,
+        'total':    entry['amount'] or (entry['qty'] or 0) * (entry['price'] or 0),
+        'platform': entry['account'] or 'T212',
+        'notes':    entry['notes'] or entry['title'] or '',
+    }
+
+    log_trades.append_to_inv_transactions(ws_tx, trade)
+
+    if entry['type'] in ('DEPOSIT', 'WITHDRAWAL'):
+        # update Cash row (col G) directly — log_trades.update_cash only handles BUY/SELL
+        layout = find_investment_rows(ws_inv)
+        cash_row = layout['cash_row']
+        cash_vals = ws_inv.row_values(cash_row)
+        prior = parse_float(cash_vals[6]) if len(cash_vals) > 6 else 0.0
+        delta = trade['total'] if entry['type'] == 'DEPOSIT' else -trade['total']
+        ws_inv.update_cell(cash_row, COL_VALUE_IDX, prior + delta)
+        write_transaction({
+            'date':         trade['date'],
+            'domain':       'investments',
+            'account_name': trade['platform'],
+            'amount_gbp':   trade['total'],
+            'type':         entry['type'].lower(),
+            'notes':        trade['notes'],
+            'source':       'nl_claude',
+        })
+        return f"Investments {entry['type']} £{trade['total']:,.2f} on {trade['platform']} (cash {prior:,.2f} → {prior + delta:,.2f})"
+
+    if entry['type'] == 'BUY':
+        layout = find_investment_rows(ws_inv)
+        col_a = ws_inv.col_values(1)
+        try:
+            row_idx = col_a.index(trade['ticker']) + 1
+            log_trades.update_existing_position(ws_inv, row_idx, trade)
+        except ValueError:
+            log_trades.add_new_position(ws_inv, trade, layout)
+        log_trades.update_cash(ws_inv, trade, layout)
+        log_trades.rewrite_aggregate_formulas(ws_inv)
+        return f"Investments BUY {trade['qty']} {trade['ticker']} @ £{trade['price']:.4f} on {trade['platform']}"
+
+    if entry['type'] == 'SELL':
+        layout = find_investment_rows(ws_inv)
+        col_a = ws_inv.col_values(1)
+        try:
+            row_idx = col_a.index(trade['ticker']) + 1
+        except ValueError:
+            raise ValueError(f"SELL of {trade['ticker']} but no holding row found")
+        remaining = log_trades.update_existing_position(ws_inv, row_idx, trade)
+        if remaining <= 0:
+            log_trades.remove_position_row(ws_inv, trade['ticker'])
+        log_trades.update_cash(ws_inv, trade, layout)
+        log_trades.rewrite_aggregate_formulas(ws_inv)
+        return f"Investments SELL {trade['qty']} {trade['ticker']} @ £{trade['price']:.4f} on {trade['platform']}"
+
+    raise ValueError(f"Unsupported investments action: {entry['type']!r}")
+
+
+# ── Orchestrator ─────────────────────────────────────────────────────────────
+
+def process_entry(entry, sh):
+    """Route one entry to the right handler. Returns a 1-line result string on success."""
+    typ    = entry['type']
+    domain = entry['domain']
+
+    if typ == 'BALANCE_UPDATE':
+        return handle_balance_update(entry, sh)
+
+    if domain == 'savings' and typ in ('DEPOSIT', 'WITHDRAWAL', 'TRANSFER'):
+        return handle_savings_cashflow(entry, sh)
+
+    if domain == 'investments' and typ in ('DEPOSIT', 'WITHDRAWAL', 'BUY', 'SELL'):
+        return handle_investments_action(entry, sh)
+
+    raise ValueError(f"Unsupported (Type, Domain) combination: ({typ}, {domain})")
+
+
+def run_snapshot_worker(domain):
+    """Spawn snapshot_worker for one domain. Returns True on success."""
+    cmd = ['python3', 'scripts/snapshot_worker.py', '--domain', domain]
+    print(f"\n  Running: {' '.join(cmd)}")
+    try:
+        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
+        if result.returncode != 0:
+            print(f"  ⚠ snapshot_worker --domain {domain} failed:\n{result.stderr[:500]}")
+            return False
+        print(f"  snapshot_worker --domain {domain} → OK")
+        return True
+    except subprocess.TimeoutExpired:
+        print(f"  ⚠ snapshot_worker --domain {domain} timed out")
+        return False
+
+
+def send_telegram(summary):
+    token   = os.getenv('TELEGRAM_BOT_TOKEN')
+    chat_id = os.getenv('TELEGRAM_CHAT_ID')
+    if not token or not chat_id:
+        return
+    import requests
+    requests.post(
+        f'https://api.telegram.org/bot{token}/sendMessage',
+        json={'chat_id': chat_id, 'text': summary, 'parse_mode': 'HTML'},
+        timeout=10,
+    )
+
+
+def main():
+    parser = argparse.ArgumentParser(description='Phase 16 sync_worker — Notion Financial Updates → Sheets + Supabase')
+    parser.add_argument('--dry-run', action='store_true', help='Log planned actions, no writes')
+    parser.add_argument('--id', help='Sync one specific Notion page by id')
+    args = parser.parse_args()
+
+    print(f"=== sync_worker — {date.today()} ===")
+
+    headers = notion_headers()
+
+    if args.id:
+        # Fetch one row directly
+        import requests
+        resp = requests.get(
+            f'https://api.notion.com/v1/pages/{args.id}',
+            headers=headers, timeout=30,
+        )
+        if resp.status_code != 200:
+            print(f"  ⚠ Could not fetch page {args.id}: {resp.text[:200]}")
+            sys.exit(1)
+        pages = [resp.json()]
+    else:
+        pages = fetch_unsynced_financial_updates(headers)
+
+    if not pages:
+        print("  No unsynced rows found. Done.")
+        return
+
+    print(f"  {len(pages)} unsynced row(s) to process")
+
+    sh = open_sheet()
+    successes  = []
+    failures   = []
+    domains    = set()
+
+    for page in pages:
+        entry = extract_financial_update(page)
+        label = f"[{entry['type']} · {entry['domain']} · {entry['account'] or entry['from_account']}]"
+
+        if args.dry_run:
+            print(f"\n  DRY-RUN {label}: would process {entry['title']}")
+            continue
+
+        try:
+            result_msg = process_entry(entry, sh)
+            print(f"\n  ✓ {label} {result_msg}")
+            mark_sheets_written(entry['id'], headers)
+            successes.append(entry)
+            domains.add(entry['domain'])
+        except Exception as e:
+            err = f"{type(e).__name__}: {e}"
+            print(f"\n  ✗ {label} {err}")
+            mark_row_failed(entry['id'], err, headers)
+            failures.append((entry, err))
+
+    if args.dry_run:
+        print("\nDry run complete — no writes performed.")
+        return
+
+    # Run snapshot_worker for each affected domain
+    for domain in domains:
+        run_snapshot_worker(domain)
+
+    # Mark all successful entries as fully synced
+    for entry in successes:
+        mark_row_synced(entry['id'], headers)
+
+    # Telegram summary
+    parts = [f"<b>sync_worker</b> · {date.today()}"]
+    if successes:
+        parts.append(f"✅ {len(successes)} synced")
+    if failures:
+        parts.append(f"⚠️ {len(failures)} failed")
+    if not successes and not failures:
+        parts.append("(nothing to sync)")
+    send_telegram(' · '.join(parts))
+
+    print(f"\nDone — {len(successes)} synced, {len(failures)} failed.")
+
+
+if __name__ == '__main__':
+    main()

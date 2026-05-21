@@ -80,21 +80,26 @@ jobs:
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: python3 scripts/market_worker.py --mode dispatch
 
-      # ── Close-run only: all domain snapshots → Supabase + Notion update ─────────
-      - name: Snapshots + Notion update (close run only)
+      # ── Close-run only: drain Notion NL queue → Sheets → Supabase → Notion ──────
+      - name: sync_worker + snapshots + Notion (close run only)
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
           NOTION_API_KEY:                 ${{ secrets.NOTION_API_KEY }}
           SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
           SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
           APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: |
           HOUR=$(date -u +"%H")
           if [ "$HOUR" -ge "15" ]; then
+            # Phase 16: drain Notion Financial Updates first so subsequent
+            # snapshot picks up any Sheets changes from NL entries.
+            python3 scripts/sync_worker.py
             python3 scripts/snapshot_worker.py --domain all
             python3 scripts/sheets_updater.py --snapshot
           else
-            echo "Skipping snapshots — close-run only (current hour UTC: $HOUR)"
+            echo "Skipping close-run steps (current hour UTC: $HOUR)"
           fi

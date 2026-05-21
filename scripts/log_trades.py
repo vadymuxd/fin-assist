@@ -43,6 +43,7 @@ import gspread
 from google.oauth2.service_account import Credentials
 
 from lib.supabase_sink import write_transaction, delete_holding, write_sectors
+from lib.sheets_layout import find_investment_rows
 
 load_dotenv()
 
@@ -68,34 +69,9 @@ def connect_sheets():
     return gc.open_by_key(SHEET_ID)
 
 
-# ── Investments tab layout (dynamic, label-driven) ────────────────────────────
-
-def find_layout(ws):
-    """
-    Scan the Investments tab for key row markers.
-    Returns dict with: cash_row, stocks_total_row, first_stock_row,
-    t212_total_row, freetrade_total_row, managed_funds_row.
-    """
-    all_rows = ws.get_all_values()
-    layout = {}
-    for i, row in enumerate(all_rows, start=1):
-        a = (row[0] if row else '').strip().upper()
-        c = (row[2] if len(row) > 2 else '').strip().upper()
-
-        if 'CASH FOR INVESTMENTS' in a and 'cash_row' not in layout:
-            layout['cash_row'] = i + 1
-        elif 'SELF-MANAGED STOCKS' in a and 'stocks_total_row' not in layout:
-            layout['stocks_total_row'] = i + 1
-            layout['first_stock_row']  = i + 2
-        elif c.startswith('TOTAL T212') and 't212_total_row' not in layout:
-            layout['t212_total_row'] = i
-        elif c.startswith('TOTAL FREE') and 'freetrade_total_row' not in layout:
-            # handles "Freetrade" and the existing "Freedtrade" typo
-            layout['freetrade_total_row'] = i
-        elif 'MANAGED FUNDS' in a and 'managed_funds_row' not in layout:
-            layout['managed_funds_row'] = i
-            break
-    return layout
+# ── Investments tab layout — uses shared lib.sheets_layout.find_investment_rows
+# Re-exported as find_layout for backwards compatibility with this file's callers.
+find_layout = find_investment_rows
 
 
 def last_stock_row(ws, layout):

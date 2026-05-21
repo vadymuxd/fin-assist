@@ -1,6 +1,6 @@
 # /log-trades — Log investment trades to all stores
 
-The user has provided one or more trades. Parse them, look up any unknown tickers, confirm, then write to InvTransactions (Sheets), Investments tab (Sheets), Supabase, and Notion Portfolio Snapshot.
+The user has provided one or more trades. Parse them, look up any unknown tickers, confirm, then write to InvTransactions (Sheets), Investments tab (Sheets), Supabase, and Notion Investments Context.
 
 The script auto-manages the Investments tab structure:
 - BUY of an unknown ticker → inserts a new row in the stocks section
@@ -99,7 +99,7 @@ And summarise:
 - Tickers without `price_formula` that will be added to `update_manual_prices.py`
 - New tickers with their `sector`/`market` that will be upserted into Supabase `sectors`
 - Supabase transactions to insert (DEPOSIT/WITHDRAWAL only)
-- Notion Portfolio Snapshot rebuild
+- Notion Investments Context rebuild
 
 Wait for user confirmation.
 
@@ -125,7 +125,7 @@ The script handles InvTransactions, Investments tab inserts/updates/deletes, cas
 python3 scripts/snapshot_worker.py --domain portfolio
 ```
 
-### 5d. Rebuild Notion Portfolio Snapshot
+### 5d. Rebuild Notion Investments Context
 ```
 python3 scripts/sheets_updater.py --snapshot
 ```

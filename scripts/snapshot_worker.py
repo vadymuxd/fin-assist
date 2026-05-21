@@ -22,12 +22,24 @@ from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 
+from datetime import datetime, timezone
+
 from lib.supabase_sink import (
     write_portfolio_snapshot,
     write_savings_accounts,
     write_savings_snapshot,
     write_pension_accounts,
     write_pension_snapshot,
+)
+from lib.sheets_layout import find_investment_rows
+from lib.notion_writer import (
+    paragraph,
+    heading2,
+    table,
+    divider,
+    rebuild_page,
+    SAVINGS_CONTEXT_ID,
+    PENSIONS_CONTEXT_ID,
 )
 
 load_dotenv()
@@ -39,36 +51,6 @@ SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
 COL_VALUE_IDX   = 6  # 0-based → col G (Current Value)
 COL_STARTED_IDX = 8  # 0-based → col I (Tracking Started Value)
 
-
-def find_investment_rows(ws):
-    """
-    Dynamically locate key summary rows in the Investments tab.
-    Returns a dict with 1-based row numbers. Robust to row inserts/deletes
-    in the stocks section caused by log_trades.py add/remove operations.
-    """
-    all_rows = ws.get_all_values()
-    rows = {}
-    for i, row in enumerate(all_rows, start=1):
-        a = (row[0] if row else '').strip().upper()
-        if a == 'VADYM TOTAL' and 'vadym_total' not in rows:
-            rows['vadym_total'] = i + 2        # label → header row → value row
-        elif 'CASH FOR INVESTMENTS' in a and 'cash' not in rows:
-            rows['cash'] = i + 1
-        elif 'SELF-MANAGED STOCKS' in a and 'stocks_total' not in rows:
-            rows['stocks_total'] = i + 1
-        elif 'MANAGED FUNDS' in a and 'managed_total' not in rows:
-            rows['managed_total'] = i + 1
-        elif 'BENCHMARK' in a and 'sp500' not in rows:
-            rows['sp500']      = i + 1
-            rows['ftse100']    = i + 2
-            rows['nasdaq100']  = i + 3
-            rows['msci_world'] = i + 4
-            rows['gold']       = i + 5
-        elif a == 'LISA TOTAL' and 'lisa_total' not in rows:
-            rows['lisa_total'] = i + 1
-        elif a == 'JOINT TOTAL' and 'joint_total' not in rows:
-            rows['joint_total'] = i + 1
-    return rows
 
 MONTH_NAMES = {
     'january': 1, 'february': 2, 'march': 3, 'april': 4,
@@ -205,6 +187,135 @@ def run_portfolio():
         sys.exit(1)
 
 
+# ── Notion Context writers (called after each domain run) ─────────────────────
+
+def update_savings_context(account_rows):
+    """Rebuild Notion Savings Context page with latest per-account balances.
+
+    For each account, picks the most-recent non-null balance across all snapshot
+    dates (rather than filtering to a global latest date — which would hide
+    accounts that haven't been updated on that exact date).
+    """
+    if not account_rows:
+        return
+
+    # Pick most-recent value per (bank, account_name) — handles sparse updates
+    # where some accounts have today's value and others only have last month's.
+    per_account = {}
+    for r in account_rows:
+        key = (r['bank'], r['account_name'])
+        if key not in per_account or r['date'] > per_account[key]['date']:
+            per_account[key] = r
+    latest = list(per_account.values())
+    latest_date = max(r['date'] for r in latest)
+
+    by_owner = {'vadym': [], 'lisa': [], 'joint': []}
+    for r in latest:
+        owner = r['owner'].lower()
+        if owner in by_owner:
+            by_owner[owner].append(r)
+
+    vadym_total = sum(r['balance_gbp'] for r in by_owner['vadym'])
+    lisa_total  = sum(r['balance_gbp'] for r in by_owner['lisa'])
+    joint_total = sum(r['balance_gbp'] for r in by_owner['joint'])
+    grand_total = vadym_total + lisa_total + joint_total
+
+    run_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    blocks = [
+        paragraph(f'⚠️ Auto-updated by snapshot_worker.py — {run_time}'),
+        paragraph('Source of truth: Google Sheet → Savings Balance tab'),
+        divider(),
+        heading2(f'Summary — as of {latest_date}'),
+        table([
+            ['Owner', 'Total £'],
+            ['Vadym Personal', f'£{vadym_total:,.0f}'],
+            ['Joint',          f'£{joint_total:,.0f}'],
+            ['Lisa Personal',  f'£{lisa_total:,.0f}'],
+            ['Grand Total',    f'£{grand_total:,.0f}'],
+        ]),
+        divider(),
+    ]
+
+    for owner_label, owner_key in [('Vadym Personal', 'vadym'), ('Joint', 'joint'), ('Lisa Personal', 'lisa')]:
+        rows = by_owner[owner_key]
+        if not rows:
+            continue
+        total = sum(r['balance_gbp'] for r in rows)
+        blocks.append(heading2(f'{owner_label} — £{total:,.0f}'))
+        registry = [['Bank', 'Account', 'Balance £']]
+        for r in sorted(rows, key=lambda x: (x['bank'], x['account_name'])):
+            registry.append([r['bank'], r['account_name'], f"£{r['balance_gbp']:,.0f}"])
+        registry.append(['Total', '', f'£{total:,.0f}'])
+        blocks.append(table(registry))
+        blocks.append(divider())
+
+    blocks.append(paragraph('Source of truth: Google Sheet → Savings Balance tab'))
+
+    if rebuild_page(SAVINGS_CONTEXT_ID, blocks):
+        print(f"  Notion Savings Context updated — grand total £{grand_total:,.0f}")
+
+
+def update_pensions_context(account_rows):
+    """Rebuild Notion Pensions Context page with latest per-account balances.
+
+    Same per-account-latest logic as update_savings_context — ensures accounts
+    that haven't been updated today still show their most recent value.
+    """
+    if not account_rows:
+        return
+
+    per_account = {}
+    for r in account_rows:
+        key = (r['provider'], r['account_name'])
+        if key not in per_account or r['date'] > per_account[key]['date']:
+            per_account[key] = r
+    latest = list(per_account.values())
+    latest_date = max(r['date'] for r in latest)
+
+    by_owner = {'vadym': [], 'lisa': []}
+    for r in latest:
+        owner = r['owner'].lower()
+        if owner in by_owner:
+            by_owner[owner].append(r)
+
+    vadym_total      = sum(r['balance_gbp'] for r in by_owner['vadym'])
+    lisa_total       = sum(r['balance_gbp'] for r in by_owner['lisa'])
+    household_total  = vadym_total + lisa_total
+
+    run_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
+    blocks = [
+        paragraph(f'⚠️ Auto-updated by snapshot_worker.py — {run_time}'),
+        paragraph('Source of truth: Google Sheet → Pensions tab'),
+        divider(),
+        heading2(f'Summary — as of {latest_date}'),
+        table([
+            ['Owner',                  'Total £'],
+            ['Vadym',                  f'£{vadym_total:,.0f}'],
+            ['Lisa',                   f'£{lisa_total:,.0f}'],
+            ['Household Joint Total',  f'£{household_total:,.0f}'],
+        ]),
+        divider(),
+    ]
+
+    for owner_label, owner_key in [('Vadym', 'vadym'), ('Lisa', 'lisa')]:
+        rows = by_owner[owner_key]
+        if not rows:
+            continue
+        total = sum(r['balance_gbp'] for r in rows)
+        blocks.append(heading2(f'{owner_label} — Total £{total:,.0f}'))
+        registry = [['Provider', 'Employer', 'Balance £']]
+        for r in sorted(rows, key=lambda x: -x['balance_gbp']):
+            registry.append([r['provider'], r['account_name'], f"£{r['balance_gbp']:,.0f}"])
+        registry.append(['Total', '', f'£{total:,.0f}'])
+        blocks.append(table(registry))
+        blocks.append(divider())
+
+    blocks.append(paragraph('Source of truth: Google Sheet → Pensions tab'))
+
+    if rebuild_page(PENSIONS_CONTEXT_ID, blocks):
+        print(f"  Notion Pensions Context updated — household total £{household_total:,.0f}")
+
+
 # ── Domain: savings ────────────────────────────────────────────────────────────
 
 def run_savings():
@@ -296,20 +407,36 @@ def run_savings():
         sys.exit(1)
     print("  savings_accounts — done.")
 
-    date_totals: dict[str, dict[str, float]] = defaultdict(
-        lambda: {'total': 0.0, 'vadym': 0.0, 'lisa': 0.0, 'joint': 0.0}
-    )
-    for row in account_rows:
-        d     = row['date']
-        v     = float(row['balance_gbp'])
-        owner = row['owner'].strip().lower()
-        date_totals[d]['total'] += v
-        if owner == 'joint':
-            date_totals[d]['joint'] += v
-        elif owner == 'lisa':
-            date_totals[d]['lisa'] += v
-        else:
-            date_totals[d]['vadym'] += v
+    # Build per-date snapshots with carry-forward: for each snapshot date D,
+    # use each account's value on D if present, otherwise its most recent value
+    # before D. Required because sync_worker may add a date column with only
+    # one account's balance (the NL-updated one), leaving others empty.
+    all_dates = sorted({r['date'] for r in account_rows})
+    by_acct: dict[tuple, dict[str, float]] = defaultdict(dict)
+    acct_owner: dict[tuple, str] = {}
+    for r in account_rows:
+        key = (r['bank'], r['account_name'])
+        by_acct[key][r['date']] = float(r['balance_gbp'])
+        acct_owner[key] = r['owner'].strip().lower()
+
+    date_totals: dict[str, dict[str, float]] = {
+        d: {'total': 0.0, 'vadym': 0.0, 'lisa': 0.0, 'joint': 0.0} for d in all_dates
+    }
+    for d in all_dates:
+        for key, dates_to_vals in by_acct.items():
+            # Latest date ≤ d for this account
+            valid_dates = [vd for vd in dates_to_vals if vd <= d]
+            if not valid_dates:
+                continue
+            v = dates_to_vals[max(valid_dates)]
+            owner = acct_owner[key]
+            date_totals[d]['total'] += v
+            if owner == 'joint':
+                date_totals[d]['joint'] += v
+            elif owner == 'lisa':
+                date_totals[d]['lisa'] += v
+            else:
+                date_totals[d]['vadym'] += v
 
     errors = 0
     for d, totals in sorted(date_totals.items()):
@@ -323,6 +450,10 @@ def run_savings():
 
     if errors:
         sys.exit(1)
+
+    print("\nRefreshing Notion Savings Context...")
+    update_savings_context(account_rows)
+
     print("\nAll done.")
 
 
@@ -404,15 +535,29 @@ def run_pensions():
         sys.exit(1)
     print("  pension_accounts — done.")
 
-    date_totals: dict[str, dict[str, float]] = defaultdict(
-        lambda: {'total': 0.0, 'vadym': 0.0, 'lisa': 0.0}
-    )
-    for row in account_rows:
-        d     = row['date']
-        v     = float(row['balance_gbp'])
-        owner = row['owner']
-        date_totals[d]['total'] += v
-        date_totals[d][owner]   += v
+    # Per-date totals with carry-forward (same pattern as savings — handles
+    # sparse date columns from NL-driven sync_worker writes).
+    all_dates = sorted({r['date'] for r in account_rows})
+    by_acct: dict[tuple, dict[str, float]] = defaultdict(dict)
+    acct_owner: dict[tuple, str] = {}
+    for r in account_rows:
+        key = (r['provider'], r['account_name'])
+        by_acct[key][r['date']] = float(r['balance_gbp'])
+        acct_owner[key] = r['owner']
+
+    date_totals: dict[str, dict[str, float]] = {
+        d: {'total': 0.0, 'vadym': 0.0, 'lisa': 0.0} for d in all_dates
+    }
+    for d in all_dates:
+        for key, dates_to_vals in by_acct.items():
+            valid_dates = [vd for vd in dates_to_vals if vd <= d]
+            if not valid_dates:
+                continue
+            v = dates_to_vals[max(valid_dates)]
+            owner = acct_owner[key]
+            date_totals[d]['total'] += v
+            if owner in ('vadym', 'lisa'):
+                date_totals[d][owner] += v
 
     errors = 0
     for d, totals in sorted(date_totals.items()):
@@ -426,6 +571,10 @@ def run_pensions():
 
     if errors:
         sys.exit(1)
+
+    print("\nRefreshing Notion Pensions Context...")
+    update_pensions_context(account_rows)
+
     print("\nAll done.")
 
 

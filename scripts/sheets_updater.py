@@ -6,7 +6,7 @@ Reads data/analysis_results.json (written by holdings_monitor.py) and:
   1. Writes Score (col K), Recommendation (col L), Last Updated (col M)
      to matching rows in Investments
 
-Also handles the daily Notion Portfolio Snapshot update (after 15:30 UTC run).
+Also handles the daily Notion Investments Context update (after 15:30 UTC run).
 That block only runs when --snapshot flag is passed or when called from the
 16:30 BST GitHub Actions workflow.
 
@@ -24,6 +24,16 @@ from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 from lib.supabase_sink import write_holdings
+from lib.sheets_layout import find_investment_rows as find_inv_rows
+from lib.notion_writer import (
+    notion_headers,
+    paragraph,
+    heading2,
+    divider,
+    table,
+    rebuild_page,
+    INVESTMENTS_CONTEXT_ID,
+)
 
 load_dotenv()
 
@@ -50,25 +60,6 @@ def parse_float(val):
 # ---------------------------------------------------------------------------
 # Sheet writers
 # ---------------------------------------------------------------------------
-
-def find_inv_rows(ws):
-    """Dynamically locate key summary rows by scanning col A labels.
-    Mirrors snapshot_worker.find_investment_rows() so both scripts stay
-    correct after log_trades.py inserts/removes stock rows."""
-    all_rows = ws.get_all_values()
-    rows = {}
-    for i, row in enumerate(all_rows, start=1):
-        a = (row[0] if row else '').strip().upper()
-        if a == 'VADYM TOTAL' and 'vadym_total' not in rows:
-            rows['vadym_total'] = i + 2
-        elif 'CASH FOR INVESTMENTS' in a and 'cash' not in rows:
-            rows['cash'] = i + 1
-        elif 'SELF-MANAGED STOCKS' in a and 'stocks_total' not in rows:
-            rows['stocks_total'] = i + 1
-        elif 'MANAGED FUNDS' in a and 'managed_total' not in rows:
-            rows['managed_total'] = i + 1
-    return rows
-
 
 def write_scores_to_inv26(sh, results):
     """
@@ -103,94 +94,16 @@ def write_scores_to_inv26(sh, results):
 
 
 # ---------------------------------------------------------------------------
-# Notion portfolio snapshot (daily, after close run)
+# Notion Investments Context (daily, after close run)
 # ---------------------------------------------------------------------------
 
-NOTION_PAGE_ID = '33f416f2-7566-81ce-b7e8-dd7b68101342'  # Portfolio Snapshot page
-NOTION_VERSION = '2022-06-28'
-
-
-def _notion_headers(key):
-    return {
-        'Authorization': f'Bearer {key}',
-        'Notion-Version': NOTION_VERSION,
-        'Content-Type': 'application/json',
-    }
-
-
-def _rt(text, bold=False):
-    """Build a Notion rich_text object."""
-    obj = {'type': 'text', 'text': {'content': str(text)}}
-    if bold:
-        obj['annotations'] = {'bold': True}
-    return obj
-
-
-def _paragraph(text, bold=False):
-    return {'object': 'block', 'type': 'paragraph',
-            'paragraph': {'rich_text': [_rt(text, bold)]}}
-
-
-def _heading2(text):
-    return {'object': 'block', 'type': 'heading_2',
-            'heading_2': {'rich_text': [_rt(text)]}}
-
-
-def _divider():
-    return {'object': 'block', 'type': 'divider', 'divider': {}}
-
-
-def _table(rows, has_column_header=True):
-    """Build a Notion table block with rows as children.
-    rows: list of lists of str — first row is the header if has_column_header=True.
-    Notion API requires table_row children inside the 'table' object.
-    """
-    table_rows = [
-        {'object': 'block', 'type': 'table_row',
-         'table_row': {'cells': [[_rt(cell)] for cell in row]}}
-        for row in rows
-    ]
-    return {
-        'object': 'block',
-        'type': 'table',
-        'table': {
-            'table_width': len(rows[0]),
-            'has_column_header': has_column_header,
-            'has_row_header': False,
-            'children': table_rows,
-        },
-    }
-
-
-def _archive_page_blocks(page_id, headers):
-    """Delete all top-level blocks from a Notion page."""
-    import time
-    resp = requests.get(
-        f'https://api.notion.com/v1/blocks/{page_id}/children',
-        headers=headers, timeout=30,
-    )
-    if resp.status_code != 200:
-        print(f"  Could not fetch page blocks: {resp.text[:200]}")
-        return
-    for block in resp.json().get('results', []):
-        for attempt in range(3):
-            try:
-                requests.patch(
-                    f'https://api.notion.com/v1/blocks/{block["id"]}',
-                    headers=headers,
-                    json={'archived': True},
-                    timeout=30,
-                )
-                break
-            except requests.exceptions.Timeout:
-                if attempt == 2:
-                    raise
-                time.sleep(2 ** attempt)
+# Investments Context page ID — also exported via lib.notion_writer for shared use
+NOTION_PAGE_ID = INVESTMENTS_CONTEXT_ID
 
 
 def update_notion_snapshot(sh, results):
     """
-    Rebuild the Portfolio Snapshot Notion page with current portfolio totals
+    Rebuild the Investments Context Notion page with current portfolio totals
     and latest FAS scores. Runs after the 15:30 UTC (16:30 BST) close run.
     Uses the Notion REST API directly — no MCP required.
     """
@@ -199,7 +112,7 @@ def update_notion_snapshot(sh, results):
         print("  NOTION_API_KEY not set — skipping snapshot")
         return
 
-    headers = _notion_headers(notion_key)
+    headers = notion_headers(notion_key)
     run_time = datetime.now(timezone.utc).strftime('%Y-%m-%d %H:%M UTC')
 
     try:
@@ -285,14 +198,14 @@ def update_notion_snapshot(sh, results):
     blocks = []
 
     # Header
-    blocks.append(_paragraph(f'⚠️ Auto-updated by sheets_updater.py — {run_time}'))
-    blocks.append(_paragraph('Source of truth: Google Sheet Investments'))
-    blocks.append(_divider())
+    blocks.append(paragraph(f'⚠️ Auto-updated by sheets_updater.py — {run_time}'))
+    blocks.append(paragraph('Source of truth: Google Sheet Investments'))
+    blocks.append(divider())
 
     # Summary table
-    blocks.append(_heading2('Summary'))
+    blocks.append(heading2('Summary'))
     pnl_pct_str = f'{pnl_sign}{stocks_pnl_pct:.1f}%' if stocks_pnl_pct else 'n/a'
-    blocks.append(_table([
+    blocks.append(table([
         ['Metric', 'Value'],
         ['Self-Managed Stocks', f'£{stocks_total:,.2f}'],
         ['Managed Funds', f'£{managed_total:,.2f}'],
@@ -301,11 +214,11 @@ def update_notion_snapshot(sh, results):
         ['Stocks P&L £', f'{pnl_sign}£{stocks_pnl:,.2f}'],
         ['Stocks P&L %', pnl_pct_str],
     ]))
-    blocks.append(_divider())
+    blocks.append(divider())
 
     # Individual positions table
     if positions:
-        blocks.append(_heading2('Stock Positions'))
+        blocks.append(heading2('Stock Positions'))
         pos_rows = [['Ticker', 'Name', 'Platform', 'Value £', 'Since Apr 13 £', 'Since Apr 13 %', 'Total P&L £', 'Total P&L %']]
         for p in sorted(positions, key=lambda x: x['tracking_pct'], reverse=True):
             ts = '+' if p['tracking_pnl'] >= 0 else ''
@@ -320,12 +233,12 @@ def update_notion_snapshot(sh, results):
                 f"{tp}£{p['total_pnl']:,.2f}",
                 f"{tp}{p['total_pnl_pct']:.1f}%",
             ])
-        blocks.append(_table(pos_rows))
-        blocks.append(_divider())
+        blocks.append(table(pos_rows))
+        blocks.append(divider())
 
     # FAS Scores table (if results available)
     if results:
-        blocks.append(_heading2('FAS Scores (latest run)'))
+        blocks.append(heading2('FAS Scores (latest run)'))
         score_rows = [['Ticker', 'Score', 'Rec', 'Confidence', 'Reason']]
         for ticker, r in sorted(results.items(), key=lambda x: x[1].get('score', 5), reverse=True):
             score_rows.append([
@@ -335,27 +248,15 @@ def update_notion_snapshot(sh, results):
                 r.get('confidence', ''),
                 (r.get('reason', '') or '')[:120],
             ])
-        blocks.append(_table(score_rows))
-        blocks.append(_divider())
+        blocks.append(table(score_rows))
+        blocks.append(divider())
 
     # Footer
-    blocks.append(_paragraph('Source of truth: Google Sheet Investments'))
+    blocks.append(paragraph('Source of truth: Google Sheet Investments'))
 
     # --- Write to Notion ---
-    print(f"  Archiving existing page blocks...")
-    _archive_page_blocks(NOTION_PAGE_ID, headers)
-
-    print(f"  Writing {len(blocks)} new blocks to Portfolio Snapshot...")
-    resp = requests.patch(
-        f'https://api.notion.com/v1/blocks/{NOTION_PAGE_ID}/children',
-        headers=headers,
-        json={'children': blocks},
-        timeout=30,
-    )
-    if resp.status_code == 200:
-        print(f"  Notion snapshot updated — Vadym Total £{vadym_total:,.2f}")
-    else:
-        print(f"  Notion write failed ({resp.status_code}): {resp.text[:300]}")
+    if rebuild_page(NOTION_PAGE_ID, blocks, headers):
+        print(f"  Notion Investments Context updated — Vadym Total £{vadym_total:,.2f}")
 
 
 # ---------------------------------------------------------------------------
@@ -416,7 +317,7 @@ def main():
         write_scores_to_inv26(sh, results)
 
     if do_snapshot:
-        print("\nUpdating Notion portfolio snapshot...")
+        print("\nUpdating Notion Investments Context...")
         update_notion_snapshot(sh, results)
 
         if do_bot:
