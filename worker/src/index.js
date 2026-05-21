@@ -149,11 +149,23 @@ async function handleConversation(text, chatId, env) {
   const { cleanReply, updates } = parseFinancialUpdates(rawReply);
 
   let suffix = '';
+  let anyWritten = false;
   for (const payload of updates) {
     const ok = await createFinancialUpdate(payload, env);
+    if (ok) anyWritten = true;
     suffix += ok
-      ? `\n\n✓ Recorded to Notion (Status=confirmed). Will sync to Sheets + Supabase on next /sync.`
+      ? `\n\n✓ Recorded to Notion. Auto-syncing to Sheets + Supabase…`
       : `\n\n⚠️ Failed to record to Notion. Try again or add the row manually.`;
+  }
+
+  // Phase 16: if any Financial Updates rows got written, immediately trigger
+  // bot_sync.yml so the user sees the change in the web app within ~1 minute
+  // (instead of waiting for the daily 16:30 BST run or a manual Sync click).
+  if (anyWritten) {
+    const dispatched = await triggerWorkflow('bot_sync.yml', env);
+    suffix += dispatched
+      ? `\n→ Sync triggered. Telegram will confirm when complete (~1–2 min).`
+      : `\n→ Sync auto-trigger failed — click Sync in the app or send /sync.`;
   }
 
   await sendTelegram(chatId, cleanReply + suffix, env.TELEGRAM_BOT_TOKEN);

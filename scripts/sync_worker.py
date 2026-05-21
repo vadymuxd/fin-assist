@@ -90,6 +90,71 @@ def find_or_create_date_column(ws, header_text):
     return new_col, True
 
 
+def _is_date_header(h):
+    """True if header matches the 'Mon D, YYYY' format used by Savings + Pensions tabs."""
+    return bool(_re.match(r'^[A-Za-z]+ \d{1,2}, \d{4}$', (h or '').strip()))
+
+
+def _parse_date_header(h):
+    """Parse 'Mon D, YYYY' header to a date for chronological sorting."""
+    from datetime import datetime
+    for fmt in ('%b %d, %Y', '%B %d, %Y'):
+        try:
+            return datetime.strptime((h or '').strip(), fmt).date()
+        except ValueError:
+            continue
+    return None
+
+
+def carry_forward_column(ws, target_col):
+    """Fill empty cells in target_col with each row's most-recent prior value
+    from other date columns. Idempotent — skips non-empty cells. Returns count
+    of cells written.
+
+    Used after sync_worker creates a new date column so the column reflects a
+    complete household snapshot (not just the one NL-updated account), which is
+    what snapshot_worker + the web app expect.
+    """
+    all_rows = ws.get_all_values()
+    if not all_rows:
+        return 0
+    headers = all_rows[0]
+
+    # Date columns to the left of target_col, ordered chronologically
+    prior_cols = []
+    for col_i, h in enumerate(headers, start=1):
+        if col_i == target_col or not _is_date_header(h):
+            continue
+        d = _parse_date_header(h)
+        if d:
+            prior_cols.append((col_i, d))
+    prior_cols.sort(key=lambda x: x[1])  # oldest → newest
+
+    batch = []
+    for row_idx, row in enumerate(all_rows[1:], start=2):
+        # Skip if target cell already populated
+        if target_col - 1 < len(row) and row[target_col - 1].strip():
+            continue
+        # Skip subtotal/total rows (empty bank+account)
+        first_non_empty = next((c.strip() for c in row[:3] if c.strip()), '')
+        if not first_non_empty or first_non_empty.lower() in ('total', 'joint total', 'subtotal'):
+            continue
+        # Find most-recent non-empty source cell; carry-forward zero too
+        # (a £0 balance is meaningful — an empty pot, not missing data).
+        for col_i, _ in reversed(prior_cols):
+            if col_i - 1 < len(row) and row[col_i - 1].strip():
+                val = parse_float(row[col_i - 1])
+                batch.append({
+                    'range': gspread.utils.rowcol_to_a1(row_idx, target_col),
+                    'values': [[val]],
+                })
+                break
+
+    if batch:
+        ws.batch_update(batch, value_input_option='USER_ENTERED')
+    return len(batch)
+
+
 import re as _re
 
 
@@ -209,7 +274,9 @@ def handle_balance_update(entry, sh):
             raise ValueError(f"Savings account not found in sheet: {entry['account']!r}")
         col, created = find_or_create_date_column(ws, today_header())
         ws.update_cell(row, col, new_balance)
-        return f"Savings · {bank} {account} · row {row} col {col}{' (new)' if created else ''} = £{new_balance:,.2f}"
+        cf_count = carry_forward_column(ws, col) if created else 0
+        cf_note = f' (new, +{cf_count} carry-fwd)' if created else ''
+        return f"Savings · {bank} {account} · row {row} col {col}{cf_note} = £{new_balance:,.2f}"
 
     if domain == 'pensions':
         ws = sh.worksheet('Pensions')
@@ -218,7 +285,9 @@ def handle_balance_update(entry, sh):
             raise ValueError(f"Pension not found in sheet: {entry['account']!r}")
         col, created = find_or_create_date_column(ws, today_header())
         ws.update_cell(row, col, new_balance)
-        return f"Pensions · {provider} {employer} · row {row} col {col}{' (new)' if created else ''} = £{new_balance:,.2f}"
+        cf_count = carry_forward_column(ws, col) if created else 0
+        cf_note = f' (new, +{cf_count} carry-fwd)' if created else ''
+        return f"Pensions · {provider} {employer} · row {row} col {col}{cf_note} = £{new_balance:,.2f}"
 
     if domain == 'investments':
         ws = sh.worksheet('Investments')
@@ -240,7 +309,7 @@ def handle_savings_cashflow(entry, sh):
         raise ValueError(f"{typ} missing Amount £")
 
     msg_parts = []
-    col, _ = find_or_create_date_column(ws, today_header())
+    col, col_created = find_or_create_date_column(ws, today_header())
 
     def adjust(account_name, delta):
         row, bank, account = find_savings_row(ws, account_name)
@@ -294,6 +363,12 @@ def handle_savings_cashflow(entry, sh):
 
     else:
         raise ValueError(f"Unsupported savings cashflow type: {typ!r}")
+
+    # If we created a fresh date column for this cashflow, carry-forward all
+    # untouched account rows so the snapshot stays complete.
+    if col_created:
+        cf_count = carry_forward_column(ws, col)
+        msg_parts.append(f"carry-fwd: {cf_count} rows")
 
     return ' · '.join(msg_parts)
 
