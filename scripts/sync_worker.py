@@ -490,6 +490,47 @@ def send_telegram(summary):
     )
 
 
+def _entry_summary_line(entry):
+    """One-line description of a synced entry for the Telegram digest."""
+    typ    = entry['type']
+    acct   = entry['account'] or f"{entry['from_account']} → {entry['to_account']}"
+    if typ == 'BALANCE_UPDATE':
+        return f"• {acct} → £{entry['new_balance']:,.0f}"
+    if typ in ('DEPOSIT', 'WITHDRAWAL'):
+        sign = '+' if typ == 'DEPOSIT' else '−'
+        return f"• {acct} · {typ.title()} {sign}£{entry['amount']:,.0f}"
+    if typ == 'TRANSFER':
+        return f"• {entry['from_account']} → {entry['to_account']} · £{entry['amount']:,.0f}"
+    if typ in ('BUY', 'SELL'):
+        return f"• {typ} {entry['qty']} {entry['ticker']} @ £{entry['price']:.2f} on {acct}"
+    return f"• {typ} · {acct}"
+
+
+def build_telegram_summary(successes, failures):
+    """Build the single rich Telegram message sent at the end of bot_sync.yml.
+
+    Includes per-entry detail so the user sees exactly what was recorded.
+    """
+    today = date.today().isoformat()
+    lines = [f"<b>✅ Sync complete</b> · {today}"]
+
+    if successes:
+        lines.append("")
+        lines.append(f"<b>📥 Recorded ({len(successes)}):</b>")
+        for entry in successes:
+            lines.append(_entry_summary_line(entry))
+    if failures:
+        lines.append("")
+        lines.append(f"<b>⚠️ Failed ({len(failures)}):</b>")
+        for entry, err in failures:
+            label = entry['account'] or entry['from_account'] or entry['type']
+            lines.append(f"• {label} — {err[:100]}")
+    if not successes and not failures:
+        lines.append("Nothing pending — Sheets + Supabase + Notion Context refreshed.")
+
+    return '\n'.join(lines)
+
+
 def main():
     parser = argparse.ArgumentParser(description='Phase 16 sync_worker — Notion Financial Updates → Sheets + Supabase')
     parser.add_argument('--dry-run', action='store_true', help='Log planned actions, no writes')
@@ -515,7 +556,8 @@ def main():
         pages = fetch_unsynced_financial_updates(headers)
 
     if not pages:
-        print("  No unsynced rows found. Done.")
+        print("  No unsynced rows found.")
+        send_telegram(build_telegram_summary([], []))
         return
 
     print(f"  {len(pages)} unsynced row(s) to process")
@@ -557,15 +599,8 @@ def main():
     for entry in successes:
         mark_row_synced(entry['id'], headers)
 
-    # Telegram summary
-    parts = [f"<b>sync_worker</b> · {date.today()}"]
-    if successes:
-        parts.append(f"✅ {len(successes)} synced")
-    if failures:
-        parts.append(f"⚠️ {len(failures)} failed")
-    if not successes and not failures:
-        parts.append("(nothing to sync)")
-    send_telegram(' · '.join(parts))
+    # One rich Telegram message — replaces the curl step previously in bot_sync.yml
+    send_telegram(build_telegram_summary(successes, failures))
 
     print(f"\nDone — {len(successes)} synced, {len(failures)} failed.")
 

@@ -64,12 +64,5 @@ jobs:
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: python3 scripts/sheets_updater.py --snapshot
 
-      - name: Send Telegram confirmation
-        env:
-          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
-        run: |
-          curl -s -X POST "https://api.telegram.org/bot${TELEGRAM_BOT_TOKEN}/sendMessage" \
-            -d chat_id="${TELEGRAM_CHAT_ID}" \
-            -d text="✅ <b>Sync complete</b>%0ANotion NL queue → Sheets → Supabase (portfolio, savings, pensions) + Notion Context pages refreshed." \
-            -d parse_mode="HTML"
+# Telegram confirmation is sent by sync_worker.py itself (one rich message
+# with per-entry details — see build_telegram_summary). No duplicate curl.
