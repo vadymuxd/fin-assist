@@ -271,10 +271,12 @@ def handle_balance_update(entry, sh):
         row, bank, account = find_savings_row(ws, entry['account'])
         if not row:
             raise ValueError(f"Savings account not found in sheet: {entry['account']!r}")
-        col, created = find_or_create_date_column(ws, today_header())
+        col, _created = find_or_create_date_column(ws, today_header())
         ws.update_cell(row, col, new_balance)
-        cf_count = carry_forward_column(ws, col) if created else 0
-        cf_note = f' (new, +{cf_count} carry-fwd)' if created else ''
+        # Always carry-forward — idempotent, only fills empty cells. Self-heals
+        # sparse columns left by earlier runs (e.g. pre-fix Phase 16 syncs).
+        cf_count = carry_forward_column(ws, col)
+        cf_note = f' (+{cf_count} carry-fwd)' if cf_count else ''
         return f"Savings · {bank} {account} · row {row} col {col}{cf_note} = £{new_balance:,.2f}"
 
     if domain == 'pensions':
@@ -282,10 +284,10 @@ def handle_balance_update(entry, sh):
         row, provider, employer = find_pensions_row(ws, entry['account'])
         if not row:
             raise ValueError(f"Pension not found in sheet: {entry['account']!r}")
-        col, created = find_or_create_date_column(ws, today_header())
+        col, _created = find_or_create_date_column(ws, today_header())
         ws.update_cell(row, col, new_balance)
-        cf_count = carry_forward_column(ws, col) if created else 0
-        cf_note = f' (new, +{cf_count} carry-fwd)' if created else ''
+        cf_count = carry_forward_column(ws, col)
+        cf_note = f' (+{cf_count} carry-fwd)' if cf_count else ''
         return f"Pensions · {provider} {employer} · row {row} col {col}{cf_note} = £{new_balance:,.2f}"
 
     if domain == 'investments':
@@ -308,13 +310,15 @@ def handle_savings_cashflow(entry, sh):
         raise ValueError(f"{typ} missing Amount £")
 
     msg_parts = []
-    col, col_created = find_or_create_date_column(ws, today_header())
+    col, _col_created = find_or_create_date_column(ws, today_header())
 
     def adjust(account_name, delta):
         row, bank, account = find_savings_row(ws, account_name)
         if not row:
             raise ValueError(f"Savings account not found in sheet: {account_name!r}")
-        # Read latest non-empty balance from prior date columns to compute new balance
+        # Read latest non-empty balance from prior date columns to compute new
+        # balance. Skip NULL/empty cells (no data), but accept literal £0 as a
+        # real balance and stop scanning — a paid-off pot is meaningful data.
         headers = ws.row_values(1)
         row_vals = ws.row_values(row)
         prior = 0.0
@@ -322,10 +326,11 @@ def handle_savings_cashflow(entry, sh):
             if i + 1 == col:
                 continue  # skip today's column itself
             if i < len(row_vals):
-                v = parse_float(row_vals[i])
-                if v is not None:
-                    prior = v
-                    break
+                raw = (row_vals[i] or '').strip()
+                if not raw:
+                    continue  # cell is NULL/empty — keep scanning
+                prior = parse_float(raw)
+                break
         new_balance = prior + delta
         ws.update_cell(row, col, new_balance)
         return new_balance, f"{bank} {account}"
@@ -363,10 +368,11 @@ def handle_savings_cashflow(entry, sh):
     else:
         raise ValueError(f"Unsupported savings cashflow type: {typ!r}")
 
-    # If we created a fresh date column for this cashflow, carry-forward all
-    # untouched account rows so the snapshot stays complete.
-    if col_created:
-        cf_count = carry_forward_column(ws, col)
+    # Always carry-forward — idempotent (only fills empty cells). Self-heals
+    # sparse columns left by earlier runs (e.g. pre-fix Phase 16 syncs that
+    # created the date column without carry-forward).
+    cf_count = carry_forward_column(ws, col)
+    if cf_count:
         msg_parts.append(f"carry-fwd: {cf_count} rows")
 
     return ' · '.join(msg_parts)
