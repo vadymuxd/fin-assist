@@ -1,0 +1,115 @@
+{
+  "date": "2026-05-24",
+  "balance": 551720.71,
+  "ltv": 83.6,
+  "remaining_term": 354,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-05-21",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-04-30",
+    "prev_as_of": "2026-03-31",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 5.14,
+        "prev_rate": 4.45
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.46,
+        "prev_rate": 4.79
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 5.0,
+        "prev_rate": 4.43
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 5.23,
+        "prev_rate": 4.72
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-06-18",
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "best_buy": {
+    "source": "Moneyfacts",
+    "page": "https://moneyfactscompare.co.uk/mortgages/85-ltv-mortgages/",
+    "fixed_2yr": {
+      "rate": 4.66,
+      "lender": "Nationwide BS",
+      "fee": 999.0,
+      "fee_text": "Reservation \u00a3999",
+      "max_ltv": 85,
+      "revert": "reverting to 6.49%",
+      "description": "4.66% Fixed for 2 years",
+      "est_payment": 2870,
+      "monthly_saving": 202
+    },
+    "fixed_5yr": {
+      "rate": 4.68,
+      "lender": "first direct",
+      "fee": 490.0,
+      "fee_text": "Booking \u00a3490",
+      "max_ltv": 85,
+      "revert": "reverting to 6.24%",
+      "description": "4.68% Fixed for 5 years",
+      "est_payment": 2877,
+      "monthly_saving": 195
+    },
+    "product_count": 10
+  },
+  "avg_2yr_rate": 5.3,
+  "avg_5yr_rate": 5.12,
+  "avg_2yr_payment": 3085,
+  "avg_5yr_payment": 3024,
+  "news": [
+    {
+      "title": "Mortgage Rates Surge Above 6% As Iran War Ripples Through Housing Markets Worldwide",
+      "description": "Mortgage rates surged across the U.S. and Europe as Middle East conflict and inflation fears pressured global housing markets.",
+      "source": "benzinga.com",
+      "published": "2026-05-18",
+      "url": "https://www.benzinga.com/real-estate/26/05/52627123/mortgage-rates-surge-above-6-as-iran-war-ripples-through-housing-markets-worldwide"
+    },
+    {
+      "title": "UK Housing Market Defies Odds with Price Surge Amid Global Economic Headwinds",
+      "description": "The British housing market showed unexpected resilience in May as new seller asking prices rose by 1.2%, according to the latest data from Rightmove (RMV).",
+      "source": "thestockmarketwatch.com",
+      "published": "2026-05-17",
+      "url": "https://www2.stockmarketwatch.com/stock-market-news/uk-housing-market-defies-odds-with-price-surge-amid-global-economic-headwinds/62043/"
+    },
+    {
+      "title": "Australia's interest rate rise comes as other countries maintain theirs. Why?",
+      "description": "As Australians pay more on their mortgages, some countries have had no rise in their interest rate in recent years. So what's going on?",
+      "source": "abc.net.au",
+      "published": "2026-05-17",
+      "url": "https://www.abc.net.au/news/2026-05-18/why-is-australias-interest-rate-high-compared-to-other-countries/106655098"
+    }
+  ]
+}
