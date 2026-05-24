@@ -4,15 +4,15 @@ sync_worker.py — Phase 16 orchestrator.
 
 Reads the Notion Financial Updates DB, routes each row by (Type, Domain),
 writes the appropriate Sheets cells/columns and Supabase transactions,
-triggers snapshot_worker for each affected domain, then marks rows synced.
+then marks rows synced. snapshot_worker is run separately by bot_sync.yml
+after this script completes.
 
 Pipeline per row:
   1. Fetch unsynced rows (Status=confirmed AND Sheets Written=false)
   2. Route per (Type, Domain) — handlers update Sheets directly
   3. Mark Sheets Written=true on the Notion row
-  4. After all rows processed: run snapshot_worker for affected domains
-  5. Mark Status=synced + Supabase Written=true + Synced At=today
-  6. Send Telegram summary
+  4. After all rows processed: mark Status=synced + Supabase Written=true + Synced At=today
+  5. Send Telegram summary
 
 CLI:
   --dry-run            Read Notion only, log planned actions, no writes
@@ -23,7 +23,6 @@ CLI:
 import os
 import sys
 import argparse
-import subprocess
 from datetime import date
 from dotenv import load_dotenv
 import gspread
@@ -324,7 +323,7 @@ def handle_savings_cashflow(entry, sh):
                 continue  # skip today's column itself
             if i < len(row_vals):
                 v = parse_float(row_vals[i])
-                if v:
+                if v is not None:
                     prior = v
                     break
         new_balance = prior + delta
@@ -461,21 +460,6 @@ def process_entry(entry, sh):
     raise ValueError(f"Unsupported (Type, Domain) combination: ({typ}, {domain})")
 
 
-def run_snapshot_worker(domain):
-    """Spawn snapshot_worker for one domain. Returns True on success."""
-    cmd = ['python3', 'scripts/snapshot_worker.py', '--domain', domain]
-    print(f"\n  Running: {' '.join(cmd)}")
-    try:
-        result = subprocess.run(cmd, capture_output=True, text=True, timeout=180)
-        if result.returncode != 0:
-            print(f"  ⚠ snapshot_worker --domain {domain} failed:\n{result.stderr[:500]}")
-            return False
-        print(f"  snapshot_worker --domain {domain} → OK")
-        return True
-    except subprocess.TimeoutExpired:
-        print(f"  ⚠ snapshot_worker --domain {domain} timed out")
-        return False
-
 
 def send_telegram(summary):
     token   = os.getenv('TELEGRAM_BOT_TOKEN')
@@ -565,7 +549,6 @@ def main():
     sh = open_sheet()
     successes  = []
     failures   = []
-    domains    = set()
 
     for page in pages:
         entry = extract_financial_update(page)
@@ -580,7 +563,6 @@ def main():
             print(f"\n  ✓ {label} {result_msg}")
             mark_sheets_written(entry['id'], headers)
             successes.append(entry)
-            domains.add(entry['domain'])
         except Exception as e:
             err = f"{type(e).__name__}: {e}"
             print(f"\n  ✗ {label} {err}")
@@ -590,10 +572,6 @@ def main():
     if args.dry_run:
         print("\nDry run complete — no writes performed.")
         return
-
-    # Run snapshot_worker for each affected domain
-    for domain in domains:
-        run_snapshot_worker(domain)
 
     # Mark all successful entries as fully synced
     for entry in successes:
