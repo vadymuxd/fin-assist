@@ -105,6 +105,48 @@ def _parse_date_header(h):
     return None
 
 
+def latest_date_column(ws):
+    """Return 1-based index of the chronologically latest date column on `ws`,
+    or None if no date columns are present."""
+    headers = ws.row_values(1)
+    dated = []
+    for col_i, h in enumerate(headers, start=1):
+        if not _is_date_header(h):
+            continue
+        d = _parse_date_header(h)
+        if d:
+            dated.append((col_i, d))
+    if not dated:
+        return None
+    dated.sort(key=lambda x: x[1])
+    return dated[-1][0]
+
+
+def self_heal_sparse_columns(sh):
+    """Run carry_forward_column on the latest date column of Savings Balance
+    and Pensions. Idempotent — only fills empty cells — so safe to run every
+    sync, even when no Notion entries were pending."""
+    healed = []
+    for sheet_name in ('Savings Balance', 'Pensions'):
+        try:
+            ws = sh.worksheet(sheet_name)
+        except Exception as e:
+            print(f"  ⚠ {sheet_name}: cannot open ({e})")
+            continue
+        col = latest_date_column(ws)
+        if col is None:
+            print(f"  {sheet_name}: no date columns — skipping")
+            continue
+        cf_count = carry_forward_column(ws, col)
+        header = ws.cell(1, col).value
+        if cf_count:
+            print(f"  {sheet_name} · {header} (col {col}): +{cf_count} carry-fwd")
+            healed.append(f"{sheet_name}:{cf_count}")
+        else:
+            print(f"  {sheet_name} · {header} (col {col}): already complete")
+    return healed
+
+
 def carry_forward_column(ws, target_col):
     """Fill empty cells in target_col with each row's most-recent prior value
     from other date columns. Idempotent — skips non-empty cells. Returns count
@@ -545,14 +587,19 @@ def main():
     else:
         pages = fetch_unsynced_financial_updates(headers)
 
+    sh = open_sheet()
+
     if not pages:
         print("  No unsynced rows found.")
+        # Still self-heal — earlier broken runs may have left the latest
+        # date column sparse, and without this every Sync click would do nothing.
+        print("\nSelf-healing latest date columns...")
+        self_heal_sparse_columns(sh)
         send_telegram(build_telegram_summary([], []))
         return
 
     print(f"  {len(pages)} unsynced row(s) to process")
 
-    sh = open_sheet()
     successes  = []
     failures   = []
 
@@ -582,6 +629,12 @@ def main():
     # Mark all successful entries as fully synced
     for entry in successes:
         mark_row_synced(entry['id'], headers)
+
+    # Self-heal latest date columns — picks up any rows that ended up sparse
+    # (e.g. an account explicitly updated today via Notion, but the column
+    # was created on an earlier broken run).
+    print("\nSelf-healing latest date columns...")
+    self_heal_sparse_columns(sh)
 
     # One rich Telegram message — replaces the curl step previously in bot_sync.yml
     send_telegram(build_telegram_summary(successes, failures))
