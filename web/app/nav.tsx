@@ -33,6 +33,7 @@ function activeHref(pathname: string): string {
 
 export default function Nav() {
   const pathname = usePathname();
+  if (pathname === "/login") return null;
   const current = activeHref(pathname);
 
   return (
