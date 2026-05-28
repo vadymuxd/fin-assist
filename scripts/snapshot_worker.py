@@ -144,7 +144,8 @@ def run_portfolio():
 
     totals = {
         'vadym_total':          read_cell(ws, r['vadym_total'],   COL_VALUE_IDX),
-        'lisa_total':           read_cell(ws, r['lisa_total'],    COL_VALUE_IDX) if r.get('lisa_total')  else None,
+        'lisa_total':           read_cell(ws, r['lisa_total'],    COL_VALUE_IDX)   if r.get('lisa_total') else None,
+        'lisa_started_value':   read_cell(ws, r['lisa_total'],    COL_STARTED_IDX) if r.get('lisa_total') else None,
         'joint_total':          read_cell(ws, r['joint_total'],   COL_VALUE_IDX) if r.get('joint_total') else None,
         'self_managed':         read_cell(ws, r['stocks_total'],  COL_VALUE_IDX),
         # Sum of every held stock's "Tracking Started Value" (sheet col I, R11).
@@ -168,6 +169,8 @@ def run_portfolio():
     print(f"  Vadym total:  £{totals['vadym_total']:,.2f}")
     if totals['lisa_total'] is not None:
         print(f"  Lisa total:   £{totals['lisa_total']:,.2f}")
+    if totals.get('lisa_started_value') is not None:
+        print(f"  Lisa started: £{totals['lisa_started_value']:,.2f}")
     if totals['joint_total'] is not None:
         print(f"  Joint total:  £{totals['joint_total']:,.2f}")
     print(f"  Self-managed: £{totals['self_managed']:,.2f}")

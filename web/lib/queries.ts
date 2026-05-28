@@ -27,6 +27,11 @@ export type PortfolioSnapshot = {
    * Insulated from new BUYs because cost basis is added to both sides equally.
    */
   stocks_started_value: number | null;
+  /**
+   * Total capital Lisa has invested in her GIC ISA (updated when she deposits).
+   * Used as denominator for her organic performance: (lisa_total - lisa_started_value) / lisa_started_value.
+   */
+  lisa_started_value: number | null;
   managed: number;
   cash: number;
   net_deposits: number;
@@ -70,7 +75,7 @@ export type HoldingsAlert = {
 export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -79,7 +84,7 @@ export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
 export async function getLatestSnapshot(): Promise<PortfolioSnapshot | null> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, cash, net_deposits, spx, ftse, ndx, msci, gold")
     .order("date", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -806,7 +811,14 @@ export function computeDeltas(snapshots: PortfolioSnapshot[]): DashboardDeltas |
   const lisaDaily = sorted.length >= 2 ? deltaField(latest, sorted[sorted.length - 2], "lisa_total") : null;
   const lisaWow = deltaField(latest, prev7, "lisa_total");
   const lisaMom = deltaField(latest, prev30 ?? prevFallback, "lisa_total");
-  const lisaSinceBaseline = baseline.date !== latest.date ? deltaField(latest, baseline, "lisa_total") : null;
+  const lisaSinceBaseline = (() => {
+    const val = latest.lisa_total ?? 0;
+    const started = latest.lisa_started_value;
+    if (!started || started === 0 || baseline.date === latest.date) return null;
+    const absolute = val - started;
+    const pct = (absolute / started) * 100;
+    return { absolute, pct, fromDate: baseline.date };
+  })();
 
   const jointDaily = sorted.length >= 2 ? deltaField(latest, sorted[sorted.length - 2], "joint_total") : null;
   const jointWow = deltaField(latest, prev7, "joint_total");
@@ -842,7 +854,12 @@ export function buildComparisonData(
   const base = sorted[0];
   const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
   const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
-  const baseLisa = sorted.find((s) => s.lisa_total != null && s.lisa_total > 0)?.lisa_total ?? null;
+  // Anchor Lisa to her organic gain ratio at baseline: (lisa_total / lisa_started_value).
+  // Deposits raise both numerator and denominator equally, so they don't spike the chart.
+  const baseLisaRatio = (() => {
+    const b = sorted.find((s) => s.lisa_started_value != null && s.lisa_started_value > 0);
+    return b && b.lisa_total != null ? b.lisa_total / b.lisa_started_value! : null;
+  })();
   // Anchor Custom Stocks to its own organic ratio at baseline (∼1.0 on tracking
   // start) so the line shows organic stocks performance, not cost-basis growth.
   const baseStockRatio =
@@ -867,7 +884,10 @@ export function buildComparisonData(
           : null,
       spx: s.spx != null && baseSpx != null ? (s.spx / baseSpx) * 100 : null,
       pensions: pensionRow && basePension ? (pensionRow.total / basePension) * 100 : null,
-      lisa: s.lisa_total != null && baseLisa != null ? (s.lisa_total / baseLisa) * 100 : null,
+      lisa:
+        s.lisa_total != null && s.lisa_started_value != null && s.lisa_started_value > 0 && baseLisaRatio != null
+          ? ((s.lisa_total / s.lisa_started_value) / baseLisaRatio) * 100
+          : null,
     };
   });
 }
