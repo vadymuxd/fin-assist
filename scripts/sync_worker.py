@@ -558,7 +558,7 @@ def build_telegram_summary(successes, failures):
             label = entry['account'] or entry['from_account'] or entry['type']
             lines.append(f"• {label} — {err[:100]}")
     if not successes and not failures:
-        lines.append("Nothing pending — Sheets + Supabase + Notion Context refreshed.")
+        lines.append("Nothing pending in Notion queue — snapshot worker is refreshing Supabase + Notion Context from current sheet values.")
 
     return '\n'.join(lines)
 

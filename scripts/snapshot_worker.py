@@ -42,6 +42,8 @@ from lib.notion_writer import (
     PENSIONS_CONTEXT_ID,
 )
 
+import requests as _requests
+
 load_dotenv()
 
 SHEET_ID = os.getenv('PORTFOLIO_SHEET_ID')
@@ -188,6 +190,8 @@ def run_portfolio():
     else:
         print("  Supabase write failed.")
         sys.exit(1)
+
+    return totals
 
 
 # ── Notion Context writers (called after each domain run) ─────────────────────
@@ -459,6 +463,9 @@ def run_savings():
 
     print("\nAll done.")
 
+    latest_d = max(date_totals.keys())
+    return date_totals[latest_d]
+
 
 # ── Domain: pensions ───────────────────────────────────────────────────────────
 
@@ -581,6 +588,23 @@ def run_pensions():
     print("\nAll done.")
 
 
+# ── Telegram helpers ───────────────────────────────────────────────────────────
+
+def _send_telegram(text: str) -> None:
+    token   = os.getenv('TELEGRAM_BOT_TOKEN', '')
+    chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
+    if not token or not chat_id:
+        return
+    try:
+        _requests.post(
+            f'https://api.telegram.org/bot{token}/sendMessage',
+            json={'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'},
+            timeout=10,
+        )
+    except Exception as e:
+        print(f'  Telegram send failed (non-critical): {e}')
+
+
 # ── Entry point ────────────────────────────────────────────────────────────────
 
 def main():
@@ -599,8 +623,26 @@ def main():
         'pensions':  [run_pensions],
         'all':       [run_portfolio, run_savings, run_pensions],
     }
+    results = {}
     for fn in runners[args.domain]:
-        fn()
+        ret = fn()
+        if ret is not None:
+            results[fn.__name__] = ret
+
+    if os.getenv('BOT_SYNC_TELEGRAM') and args.domain == 'all':
+        today = date.today().isoformat()
+        lines = [f"<b>📊 Snapshot refreshed</b> · {today}"]
+        inv = results.get('run_portfolio')
+        if inv:
+            inv_total = (inv.get('vadym_total') or 0) + (inv.get('lisa_total') or 0)
+            lines.append(f"\n<b>Investments:</b> £{inv_total:,.0f}")
+            lines.append(f"  Vadym £{inv.get('vadym_total', 0):,.0f} / Lisa £{inv.get('lisa_total', 0):,.0f}")
+        sav = results.get('run_savings')
+        if sav:
+            lines.append(f"\n<b>Savings:</b> £{sav.get('total', 0):,.0f}")
+            lines.append(f"  Vadym £{sav.get('vadym', 0):,.0f} / Lisa £{sav.get('lisa', 0):,.0f} / Joint £{sav.get('joint', 0):,.0f}")
+        lines.append("\nPensions ✅ refreshed")
+        _send_telegram('\n'.join(lines))
 
 
 if __name__ == '__main__':
