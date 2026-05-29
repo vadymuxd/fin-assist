@@ -28,6 +28,23 @@ function shortDate(iso: string): string {
   return d.toLocaleDateString("en-GB", { day: "2-digit", month: "short", timeZone: "UTC" });
 }
 
+// Bucket daily points into ISO weeks (Monday-anchored), keeping the latest
+// value in each week — so the X-axis steps by weeks rather than days.
+function aggregateWeekly<T extends { date: string }>(rows: T[]): T[] {
+  if (rows.length <= 1) return rows;
+  const bucket: Record<string, T> = {};
+  for (const r of rows) {
+    const d = new Date(`${r.date}T00:00:00Z`);
+    const day = d.getUTCDay();
+    const diff = day === 0 ? -6 : 1 - day;
+    const monday = new Date(d);
+    monday.setUTCDate(d.getUTCDate() + diff);
+    const key = monday.toISOString().slice(0, 10);
+    bucket[key] = { ...r, date: key };
+  }
+  return Object.values(bucket).sort((a, b) => a.date.localeCompare(b.date));
+}
+
 type TooltipEntry = {
   dataKey?: string | number;
   value?: number | string | (number | string)[];
@@ -81,7 +98,7 @@ export default function ComparisonChart({
   const [active, setActive] = useState<SeriesKey[]>(["customStocks", "spx", "managed"]);
 
   const data = useMemo(
-    () => buildComparisonData(portfolioSnapshots, pensionSnapshots),
+    () => aggregateWeekly(buildComparisonData(portfolioSnapshots, pensionSnapshots)),
     [portfolioSnapshots, pensionSnapshots],
   );
 
