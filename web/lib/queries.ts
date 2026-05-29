@@ -345,20 +345,23 @@ export async function getSavingsSnapshots(): Promise<SavingsSnapshot[]> {
 }
 
 export async function getSavingsAccounts(): Promise<SavingsAccount[]> {
-  const latest = await supabase
-    .from("savings_snapshots")
-    .select("date")
-    .order("date", { ascending: false })
-    .limit(1)
-    .maybeSingle();
-  if (!latest.data) return [];
+  // Fetch recent rows (all accounts × ~10 dates = well under 500) and pick the
+  // latest entry per account client-side. This avoids the previous bug where
+  // accounts last updated on an older date were invisible because the query
+  // filtered to the exact latest snapshot date.
   const { data, error } = await supabase
     .from("savings_accounts")
     .select("id, date, bank, account_name, account_type, owner, balance_gbp")
-    .eq("date", latest.data.date)
-    .order("balance_gbp", { ascending: false });
+    .order("date", { ascending: false })
+    .limit(500);
   if (error) throw error;
-  return data ?? [];
+  const rows = data ?? [];
+  const seen = new Map<string, (typeof rows)[0]>();
+  for (const row of rows) {
+    const key = `${row.bank}|${row.account_name}`;
+    if (!seen.has(key)) seen.set(key, row); // rows ordered date DESC → first = latest
+  }
+  return [...seen.values()].sort((a, b) => b.balance_gbp - a.balance_gbp);
 }
 
 function savingsDeltaField(
