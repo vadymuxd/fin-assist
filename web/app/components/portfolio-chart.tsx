@@ -203,7 +203,10 @@ export default function PortfolioChart({ snapshots }: { snapshots: PortfolioSnap
             {(["value", "performance"] as Mode[]).map((m) => (
               <button
                 key={m}
-                onClick={() => setMode(m)}
+                onClick={() => {
+                  setMode(m);
+                  if (m === "performance" && granularity === "D") setGranularity("W");
+                }}
                 className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
                   mode === m
                     ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"

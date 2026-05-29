@@ -202,6 +202,12 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
                 )}
               </div>
             </div>
+            {owner === "Joint" && (
+              <div className="grid grid-cols-2 gap-4 sm:gap-6 shrink-0">
+                <BreakdownChip label="Vadym" value={latest.vadym_total ?? stocks + managed + cash} total={total} />
+                <BreakdownChip label="Lisa" value={latest.lisa_total ?? 0} total={total} />
+              </div>
+            )}
             {owner === "Vadym" && (
               <div className="grid grid-cols-3 gap-4 sm:gap-6 shrink-0">
                 <BreakdownChip label="Stocks" value={stocks} total={total} />
