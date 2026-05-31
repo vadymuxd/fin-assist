@@ -1,0 +1,88 @@
+{
+  "date": "2026-05-31",
+  "balance": 551720.71,
+  "ltv": 83.6,
+  "remaining_term": 354,
+  "base_rate": {
+    "error": "no IUDBEDR rows parsed from BoE database"
+  },
+  "quoted": {
+    "error": "no quoted-rate rows parsed from BoE database"
+  },
+  "mpc_dates": [
+    "2026-06-18",
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "best_buy": {
+    "source": "Moneyfacts",
+    "page": "https://moneyfactscompare.co.uk/mortgages/85-ltv-mortgages/",
+    "fixed_2yr": {
+      "rate": 4.66,
+      "lender": "Nationwide BS",
+      "fee": 999.0,
+      "fee_text": "Reservation \u00a3999",
+      "max_ltv": 85,
+      "revert": "reverting to 6.49%",
+      "description": "4.66% Fixed for 2 years",
+      "est_payment": 2870,
+      "monthly_saving": 202
+    },
+    "fixed_5yr": {
+      "rate": 4.68,
+      "lender": "first direct",
+      "fee": 490.0,
+      "fee_text": "Booking \u00a3490",
+      "max_ltv": 85,
+      "revert": "reverting to 6.24%",
+      "description": "4.68% Fixed for 5 years",
+      "est_payment": 2877,
+      "monthly_saving": 195
+    },
+    "product_count": 10
+  },
+  "avg_2yr_rate": null,
+  "avg_5yr_rate": null,
+  "avg_2yr_payment": null,
+  "avg_5yr_payment": null,
+  "news": [
+    {
+      "title": "Trump 'Doesn't Care' About Rising Oil Costs, but Bond Markets Will Force Iran Deal",
+      "description": "deVere Group's Nigel Green says triple-digit oil and rising Treasury yields will ultimately force Trump into an Iran deal despite his stated resistance to pressure.",
+      "source": "investorideas.com",
+      "published": "2026-05-28",
+      "url": "https://www.investorideas.com/news/2026/energy/05281-trump-iran-oil-bond-markets-force-devere.asp"
+    },
+    {
+      "title": "Stocks Pressured by Weakness in Energy Producers and Cybersecurity Stocks",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is down -0.05%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is up +0.23%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is down -0.15%. June E-mini S&P futures (ESM26 ) are down -0.05%, and June E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-05-27",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-pressured-weakness-energy-producers-141237856.html"
+    },
+    {
+      "title": "49 Times Laziness Saved People From Disaster",
+      "description": "Making good decisions is hard! Usually, being proactive, quickly assessing outcomes, and thinking on your feet are virtues. However, there are important moments in many of our lives where being patient and reactive (read: lazy and procrastinative) might have protected us from some seriously bad luck and lots of pain. A handful of the luckiest people on Earth recently shared the disasters they dodged in life because they were too lazy to do something. They\u2019re fascinating to read and a gentle reminder that procrastination and not rushing can accidentally lead to better results\u2026 sometimes! . Creepy World, Curiosities",
+      "source": "flipboard.com",
+      "published": "2026-05-28",
+      "url": "https://www.boredpanda.com/people-dodged-danger-being-lazy/"
+    },
+    {
+      "title": "GBP/USD Compression Points to a 150-Pip Breakout Risk",
+      "description": "Market Analysis by  covering: Euro US Dollar, British Pound US Dollar, US Dollar Japanese Yen, Gold Spot US Dollar. Read 's Market Analysis on Investing.com",
+      "source": "investing.com",
+      "published": "2026-05-26",
+      "url": "https://www.investing.com/analysis/gbpusd-compression-points-to-a-150pip-breakout-risk-200680969"
+    }
+  ]
+}
