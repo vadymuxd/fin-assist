@@ -22,6 +22,7 @@ CLI:
 
 import os
 import sys
+import tempfile
 import argparse
 from datetime import date
 from dotenv import load_dotenv
@@ -52,6 +53,11 @@ SA_FILE  = os.getenv('GOOGLE_APPLICATION_CREDENTIALS', 'config/service_account.j
 SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
 
 COL_VALUE_IDX = 7  # col G (1-based) for cash/managed/lisa value cells in Investments tab
+
+# Handoff file for the combined bot_sync Telegram message. sync_worker writes
+# its Notion-queue summary here when DEFER_SYNC_TELEGRAM is set; snapshot_worker
+# reads it and sends one message. Same path must be used by both scripts.
+SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_sync_summary.txt')
 
 
 # ── Sheet utilities ──────────────────────────────────────────────────────────
@@ -538,29 +544,44 @@ def _entry_summary_line(entry):
     return f"• {typ} · {acct}"
 
 
-def build_telegram_summary(successes, failures):
-    """Build the single rich Telegram message sent at the end of bot_sync.yml.
-
-    Includes per-entry detail so the user sees exactly what was recorded.
-    """
-    today = date.today().isoformat()
-    lines = [f"<b>✅ Sync complete</b> · {today}"]
-
+def build_queue_section(successes, failures):
+    """The Notion-queue portion of the Telegram digest (no header), shared by the
+    standalone message and the combined bot_sync message that snapshot_worker sends."""
+    lines = []
     if successes:
-        lines.append("")
         lines.append(f"<b>📥 Recorded ({len(successes)}):</b>")
         for entry in successes:
             lines.append(_entry_summary_line(entry))
     if failures:
-        lines.append("")
+        if lines:
+            lines.append("")
         lines.append(f"<b>⚠️ Failed ({len(failures)}):</b>")
         for entry, err in failures:
             label = entry['account'] or entry['from_account'] or entry['type']
             lines.append(f"• {label} — {err[:100]}")
     if not successes and not failures:
-        lines.append("Nothing pending in Notion queue — snapshot worker is refreshing Supabase + Notion Context from current sheet values.")
-
+        lines.append("No pending entries in Notion queue.")
     return '\n'.join(lines)
+
+
+def build_telegram_summary(successes, failures):
+    """Standalone sync_worker message (when not deferring to snapshot_worker)."""
+    today = date.today().isoformat()
+    return f"<b>✅ Sync complete</b> · {today}\n\n" + build_queue_section(successes, failures)
+
+
+def emit_sync_summary(successes, failures):
+    """Send the Notion-queue summary now, OR — when DEFER_SYNC_TELEGRAM is set
+    (the bot_sync flow) — write just the queue section to a temp file so
+    snapshot_worker can fold it into ONE combined message instead of two."""
+    if os.getenv('DEFER_SYNC_TELEGRAM'):
+        try:
+            with open(SYNC_SUMMARY_FILE, 'w') as f:
+                f.write(build_queue_section(successes, failures))
+        except OSError as e:
+            print(f"  ⚠ could not write sync summary file: {e}")
+        return
+    send_telegram(build_telegram_summary(successes, failures))
 
 
 def main():
@@ -595,7 +616,7 @@ def main():
         # date column sparse, and without this every Sync click would do nothing.
         print("\nSelf-healing latest date columns...")
         self_heal_sparse_columns(sh)
-        send_telegram(build_telegram_summary([], []))
+        emit_sync_summary([], [])
         return
 
     print(f"  {len(pages)} unsynced row(s) to process")
@@ -636,8 +657,9 @@ def main():
     print("\nSelf-healing latest date columns...")
     self_heal_sparse_columns(sh)
 
-    # One rich Telegram message — replaces the curl step previously in bot_sync.yml
-    send_telegram(build_telegram_summary(successes, failures))
+    # Notion-queue digest — sent now standalone, or deferred into snapshot_worker's
+    # single combined bot_sync message.
+    emit_sync_summary(successes, failures)
 
     print(f"\nDone — {len(successes)} synced, {len(failures)} failed.")
 

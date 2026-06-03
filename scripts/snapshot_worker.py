@@ -15,6 +15,7 @@ import os
 import sys
 import re
 import calendar
+import tempfile
 import argparse
 from collections import defaultdict
 from datetime import date
@@ -30,6 +31,7 @@ from lib.supabase_sink import (
     write_savings_snapshot,
     write_pension_accounts,
     write_pension_snapshot,
+    force_revalidate,
 )
 from lib.sheets_layout import find_investment_rows
 from lib.notion_writer import (
@@ -52,6 +54,10 @@ SCOPES   = ['https://www.googleapis.com/auth/spreadsheets']
 
 COL_VALUE_IDX   = 6  # 0-based → col G (Current Value)
 COL_STARTED_IDX = 8  # 0-based → col I (Tracking Started Value)
+
+# Must match SYNC_SUMMARY_FILE in sync_worker.py — the handoff file for the
+# single combined bot_sync Telegram message.
+SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_sync_summary.txt')
 
 
 MONTH_NAMES = {
@@ -587,8 +593,23 @@ def run_pensions():
 
     print("\nAll done.")
 
+    latest_d = max(date_totals.keys())
+    return date_totals[latest_d]
+
 
 # ── Telegram helpers ───────────────────────────────────────────────────────────
+
+def _read_sync_summary() -> str:
+    """Read (and consume) the Notion-queue summary sync_worker left behind, so it
+    can be folded into the one combined message. Returns '' if absent."""
+    try:
+        with open(SYNC_SUMMARY_FILE) as f:
+            text = f.read().strip()
+        os.remove(SYNC_SUMMARY_FILE)
+        return text
+    except OSError:
+        return ''
+
 
 def _send_telegram(text: str) -> None:
     token   = os.getenv('TELEGRAM_BOT_TOKEN', '')
@@ -629,19 +650,37 @@ def main():
         if ret is not None:
             results[fn.__name__] = ret
 
+    # All domains written — purge the frontend cache ONCE now, after everything
+    # is in Supabase. The per-write _trigger_revalidate fires on the first write
+    # (portfolio), which lands before savings/pension data; a page request in
+    # that gap would re-cache stale values for the ISR window.
+    force_revalidate()
+
     if os.getenv('BOT_SYNC_TELEGRAM') and args.domain == 'all':
         today = date.today().isoformat()
-        lines = [f"<b>📊 Snapshot refreshed</b> · {today}"]
+        lines = [f"<b>✅ Sync complete</b> · {today}", ""]
+
+        # What was captured from the Notion queue (deferred from sync_worker).
+        queue = _read_sync_summary()
+        lines.append("<b>From Notion queue:</b>")
+        lines.append(queue if queue else "No pending entries.")
+        lines.append("")
+
+        # What the Sheet snapshot now holds.
+        lines.append("<b>From Sheet snapshot:</b>")
         inv = results.get('run_portfolio')
         if inv:
             inv_total = (inv.get('vadym_total') or 0) + (inv.get('lisa_total') or 0)
-            lines.append(f"\n<b>Investments:</b> £{inv_total:,.0f}")
+            lines.append(f"Investments: £{inv_total:,.0f}")
             lines.append(f"  Vadym £{inv.get('vadym_total', 0):,.0f} / Lisa £{inv.get('lisa_total', 0):,.0f}")
         sav = results.get('run_savings')
         if sav:
-            lines.append(f"\n<b>Savings:</b> £{sav.get('total', 0):,.0f}")
+            lines.append(f"Savings: £{sav.get('total', 0):,.0f}")
             lines.append(f"  Vadym £{sav.get('vadym', 0):,.0f} / Lisa £{sav.get('lisa', 0):,.0f} / Joint £{sav.get('joint', 0):,.0f}")
-        lines.append("\nPensions ✅ refreshed")
+        pen = results.get('run_pensions')
+        if pen:
+            lines.append(f"Pensions: £{pen.get('total', 0):,.0f}")
+            lines.append(f"  Vadym £{pen.get('vadym', 0):,.0f} / Lisa £{pen.get('lisa', 0):,.0f}")
         _send_telegram('\n'.join(lines))
 
 

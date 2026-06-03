@@ -37,6 +37,20 @@ def _trigger_revalidate() -> None:
         logger.debug(f'Revalidate ping failed (non-critical): {e}')
 
 
+def force_revalidate() -> None:
+    """Reset the once-per-process guard and ping the revalidate endpoint again.
+
+    _trigger_revalidate fires on the FIRST Supabase write of a process. In a
+    multi-domain run (snapshot_worker --domain all) that first write is the
+    portfolio snapshot, which lands BEFORE savings/pension data is written — so
+    a page request in that gap re-caches stale values for the ISR window. Call
+    this AFTER all writes complete to purge the frontend cache once everything
+    is in Supabase."""
+    global _revalidated
+    _revalidated = False
+    _trigger_revalidate()
+
+
 def _get_client() -> Client | None:
     global _client
     if _client is not None:

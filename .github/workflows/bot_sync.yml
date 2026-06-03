@@ -40,6 +40,9 @@ jobs:
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
           APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
+          # Defer the Notion-queue summary so snapshot_worker sends ONE combined
+          # message (Notion queue + Sheet snapshot) instead of two.
+          DEFER_SYNC_TELEGRAM:            "1"
         run: python3 scripts/sync_worker.py
 
       - name: Sync all domains (Sheets → Supabase + Notion Context pages)
@@ -67,5 +70,6 @@ jobs:
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: python3 scripts/sheets_updater.py --snapshot
 
-# Telegram confirmation is sent by sync_worker.py itself (one rich message
-# with per-entry details — see build_telegram_summary). No duplicate curl.
+# One combined Telegram message is sent by snapshot_worker.py: sync_worker
+# defers its Notion-queue summary to a temp file (DEFER_SYNC_TELEGRAM), and
+# snapshot_worker folds it together with the Sheet-snapshot totals.
