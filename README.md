@@ -43,7 +43,6 @@ fin-assist/
 │   └── thresholds.json         # Per-stock alert thresholds
 ├── .github/workflows/          # GitHub Actions cron jobs (Phase 5)
 ├── CLAUDE.md                   # Claude Code session instructions
-├── PLAN.md                     # Full phase-by-phase build plan
 └── .env                        # Secrets (gitignored) — see .env.example
 ```
 
@@ -81,4 +80,4 @@ Required secrets in `.env`:
 | 6 | App & UI | ❌ Not started |
 | 7–10 | Savings, Pensions, Mortgage, Budgeting | ❌ Not started |
 
-See [PLAN.md](PLAN.md) for full detail.
+See the [Notion Plan page](https://www.notion.so/34f416f2756681c48b99ef184aa3c5c3) for full detail (single source of truth, mobile-accessible).

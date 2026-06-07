@@ -11,8 +11,12 @@ real-data summary to Telegram.
 Data sources (see scripts/lib/mortgage_rates.py):
   • Bank of England database — base rate + quoted lender rates
   • Bank of England MPC schedule
-  • Moneyfacts — live best-buy deals at the 85% LTV tier
   • Marketaux — market news
+
+Note: best-buy scraping (Moneyfacts) was removed in the 2026-06 hotfix — the
+scrape was unreliable for best-buy picks and produced misleading figures. The
+report now shows BoE market-average 2yr/5yr fixed rates only, with a
+week-over-week comparison.
 
 Run:
   python3 scripts/mortgage_monitor.py
@@ -32,7 +36,6 @@ from lib.mortgage_rates import (
     fetch_boe_base_rate,
     fetch_boe_quoted_rates,
     fetch_mpc_dates,
-    fetch_best_buy_rates,
     monthly_payment,
     remaining_term_months,
 )
@@ -62,11 +65,13 @@ SYSTEM_PROMPT = """You are the mortgage-market monitoring agent for Vadym and Li
 remortgaging when their current fix ends 31 January 2027 (their 6-month early-switch window has \
 been open since April 2026; their broker is Oliver).
 
-CRITICAL RULE: every market figure you need is given to you below as VERIFIED real data — best-buy \
-rates, payments, the Bank of England base rate, quoted-rate trend, and MPC dates. Use those exact \
-figures. Never invent, re-estimate, round differently, or override any rate, payment, or date. If a \
-figure is marked unavailable, say so plainly and tell them to confirm with Oliver — do not fill the \
-gap with a guess.
+CRITICAL RULE: every market figure you need is given to you below as VERIFIED real data — the \
+market-average 2yr/5yr fixed rates and their week-over-week change, the payments, the Bank of \
+England base rate, quoted-rate trend, and MPC dates. Use those exact figures. Never invent, \
+re-estimate, round differently, or override any rate, payment, or date. Do not quote any "best-buy" \
+or named-lender headline deal — those are no longer tracked here; if you want one, tell them to ask \
+Oliver. If a figure is marked unavailable, say so plainly and tell them to confirm with Oliver — do \
+not fill the gap with a guess.
 
 YOUR JOB: return Markdown containing EXACTLY these two sections and nothing else (no preamble, no \
 title, no closing line):
@@ -79,17 +84,18 @@ If no genuinely relevant UK mortgage news was supplied, write a single line sayi
 ## ✅ Recommended Action
 
 Open with a bold verdict on its own line — one of: **No action needed**, **Start preparing**, or \
-**Act now**. Then 2–4 sentences grounded in their actual numbers: compare the best-buy rates against \
-their current 5.26% and the resulting £/month difference; weigh the 2-year vs 5-year trade-off \
+**Act now**. Then 2–4 sentences grounded in their actual numbers: compare the market-average rates \
+against their current 5.26% and the resulting £/month difference; note the week-over-week move in \
+those averages (rising or falling, and by how many bps); weigh the 2-year vs 5-year trade-off \
 (Vadym prefers the 2-year for flexibility — name the rate gap between them; the two fixed terms are \
 exactly 2 years and 5 years, never describe them as any other length); factor the Bank of England \
 trajectory and the next MPC date; and remember they are planning children, so a single-income \
 period must remain affordable. Be honest about uncertainty — do not predict rate moves with false \
 confidence.
 
-Context for your judgement: best-buy rates are headline deals at the 85% LTV tier — true eligibility \
-and total cost still need Oliver. BoE quoted rates are market-wide averages that sit above best-buy; \
-they are shown only to indicate direction.
+Context for your judgement: the rates shown are Bank of England market-wide quoted averages at \
+~85% LTV — they sit above the sharpest broker deals, so treat them as a direction-of-travel \
+indicator, not a quote. True eligibility and total cost still need Oliver.
 """
 
 
@@ -146,21 +152,16 @@ def save_insight(data: dict, report_md: str, telegram_text: str) -> None:
     try:
         from supabase import create_client
         client = create_client(url, key)
-        bb = data.get('best_buy', {})
-        d2 = bb.get('fixed_2yr') or {}
-        d5 = bb.get('fixed_5yr') or {}
         triggered = 'manual' if os.getenv('TRIGGER_SOURCE') == 'workflow_dispatch' else 'schedule'
         client.table('mortgage_insights').insert({
             'report_date':      data['date'],
             'report_md':        report_md,
             'telegram_text':    telegram_text,
             'base_rate':        data.get('base_rate', {}).get('rate'),
-            'fixed_2yr_rate':   d2.get('rate'),
-            'fixed_2yr_lender': d2.get('lender'),
-            'fixed_5yr_rate':   d5.get('rate'),
-            'fixed_5yr_lender': d5.get('lender'),
             'avg_2yr_rate':     data.get('avg_2yr_rate'),
             'avg_5yr_rate':     data.get('avg_5yr_rate'),
+            'avg_2yr_wow_bps':  data.get('avg_2yr_wow_bps'),
+            'avg_5yr_wow_bps':  data.get('avg_5yr_wow_bps'),
             'next_mpc':         (data.get('mpc_dates') or [None])[0],
             'triggered_by':     triggered,
             'data':             json.loads(json.dumps(data, default=str)),
@@ -243,17 +244,7 @@ def gather_data() -> dict:
     base_rate   = fetch_boe_base_rate()
     quoted      = fetch_boe_quoted_rates()
     mpc_dates   = fetch_mpc_dates()
-    best_buy    = fetch_best_buy_rates()
     news        = fetch_mortgage_news()
-
-    # Deterministic payment estimates on the actual balance & remaining term.
-    if 'error' not in best_buy and term:
-        for key in ('fixed_2yr', 'fixed_5yr'):
-            deal = best_buy.get(key)
-            if deal:
-                est = monthly_payment(balance, deal['rate'] / 100, term)
-                deal['est_payment']    = round(est)
-                deal['monthly_saving'] = round(CURRENT_PAYMENT - est)
 
     avg_2yr, avg_5yr = _boe_avg_rates(quoted)
     # Estimated monthly payments at average rates (same term, same balance).
@@ -268,55 +259,74 @@ def gather_data() -> dict:
         'base_rate':       base_rate,
         'quoted':          quoted,
         'mpc_dates':       mpc_dates,
-        'best_buy':        best_buy,
         'avg_2yr_rate':    avg_2yr,
         'avg_5yr_rate':    avg_5yr,
         'avg_2yr_payment': avg_2yr_payment,
         'avg_5yr_payment': avg_5yr_payment,
+        # Week-over-week fields are filled in by add_wow_deltas() once the prior
+        # snapshot has been loaded.
+        'prev_avg_2yr_rate': None,
+        'prev_avg_5yr_rate': None,
+        'avg_2yr_wow_bps':   None,
+        'avg_5yr_wow_bps':   None,
         'news':            news,
     }
+
+
+def add_wow_deltas(data: dict, prev: dict | None) -> None:
+    """Fill week-over-week average-rate deltas from the previous snapshot, in place.
+
+    bps delta is rounded to the nearest basis point; positive = rates rose since
+    last week, negative = fell. Left as None when either side is missing."""
+    for term in ('2yr', '5yr'):
+        now = data.get(f'avg_{term}_rate')
+        was = (prev or {}).get(f'avg_{term}_rate')
+        data[f'prev_avg_{term}_rate'] = was
+        if now is not None and was is not None:
+            data[f'avg_{term}_wow_bps'] = round((now - was) * 100)
+
+
+def fmt_wow(bps) -> str:
+    """Human label for a week-over-week bps move, e.g. '↑ +5bps', '↓ -5bps', '→ flat'."""
+    if bps is None:
+        return ''
+    if bps == 0:
+        return '→ flat vs last week'
+    arrow = '↑' if bps > 0 else '↓'
+    return f"{arrow} {'+' if bps > 0 else ''}{bps}bps vs last week"
 
 
 # ── deterministic report sections ─────────────────────────────────────────────
 
 def render_snapshot(data: dict) -> str:
-    bb = data['best_buy']
-    lines = ['## 🏦 Best-Buy Rate Snapshot (85% LTV tier)', '']
-
-    if 'error' in bb:
-        lines += [
-            f"> ⚠️ Best-buy data could not be retrieved this run ({bb['error']}). "
-            "Ask Oliver for a live best-buy table.", '']
-        return '\n'.join(lines)
-
-    lines += [
-        f"*Live best-buy deals — {bb['source']}, fetched {fmt_date(TODAY)}. "
-        "Market averages from BoE quoted-rate series (lags ~1–2 months).*", '',
-        '| Product | Rate | Lender / Source | Product Fee | Est. Monthly Payment\\* |',
-        '|---|---|---|---|---|',
-    ]
-    for label, key in (('2-year fixed (best-buy)', 'fixed_2yr'), ('5-year fixed (best-buy)', 'fixed_5yr')):
-        short_key = 'fixed_2yr' if '2-year' in label else 'fixed_5yr'
-        deal = bb.get(short_key)
-        if deal:
-            pay = f"~£{deal['est_payment']:,}" if 'est_payment' in deal else '—'
-            lines.append(
-                f"| {label} | {deal['rate']:.2f}% | {deal['lender']} | "
-                f"{deal['fee_text'] or 'None'} | {pay} |")
-        else:
-            lines.append(f"| {label} | *none in this run's best-buy table* | — | — | — |")
+    lines = ['## 🏦 Market-Average Rate Snapshot (~85% LTV)', '']
 
     avg_2yr = data.get('avg_2yr_rate')
     avg_5yr = data.get('avg_5yr_rate')
+    if not (avg_2yr or avg_5yr):
+        lines += [
+            "> ⚠️ Market-average rates could not be derived this run "
+            "(BoE quoted-rate series unavailable). Ask Oliver for a live rate table.", '']
+        return '\n'.join(lines)
+
+    lines += [
+        f"*Bank of England market-average quoted fixed rates at ~85% LTV "
+        f"(midpoint of the 75% and 90% bands), as of {fmt_date(TODAY)}. "
+        "BoE data lags live broker deals by ~1–2 months and runs above the sharpest "
+        "deals — treat as direction of travel, not a quote.*", '',
+        '| Product | Rate | WoW change | Est. Monthly Payment\\* |',
+        '|---|---|---|---|',
+    ]
     avg_2yr_pay = data.get('avg_2yr_payment')
     avg_5yr_pay = data.get('avg_5yr_payment')
-    for label, rate, pay in (
-        ('2-year fixed (market avg)', avg_2yr, avg_2yr_pay),
-        ('5-year fixed (market avg)', avg_5yr, avg_5yr_pay),
+    for label, rate, pay, bps in (
+        ('2-year fixed', avg_2yr, avg_2yr_pay, data.get('avg_2yr_wow_bps')),
+        ('5-year fixed', avg_5yr, avg_5yr_pay, data.get('avg_5yr_wow_bps')),
     ):
         rate_str = f"{rate:.2f}%" if rate else '—'
         pay_str  = f"~£{pay:,}" if pay else '—'
-        lines.append(f"| {label} | {rate_str} | BoE quoted-rate midpoint | — | {pay_str} |")
+        wow_str  = fmt_wow(bps) or '—'
+        lines.append(f"| {label} | {rate_str} | {wow_str} | {pay_str} |")
 
     term = data['remaining_term']
     lines += [
@@ -329,14 +339,13 @@ def render_snapshot(data: dict) -> str:
         f"Balance £{data['balance']:,.0f}, property £{PROPERTY_VALUE:,.0f}, LTV ~{data['ltv']}%.*",
         '',
     ]
-    for label, key in (('2-year', 'fixed_2yr'), ('5-year', 'fixed_5yr')):
-        deal = bb.get(key)
-        if deal and 'monthly_saving' in deal:
-            saving = deal['monthly_saving']
-            verb = 'saves' if saving >= 0 else 'costs an extra'
+    for label, rate, pay in (('2-year', avg_2yr, avg_2yr_pay), ('5-year', avg_5yr, avg_5yr_pay)):
+        if rate and pay:
+            diff = round(CURRENT_PAYMENT - pay)
+            verb = 'saves' if diff >= 0 else 'costs an extra'
             lines.append(
-                f"- Switching to the best {label} fixed {verb} "
-                f"~£{abs(saving):,}/month vs. the current payment.")
+                f"- At the average {label} fixed rate, remortgaging {verb} "
+                f"~£{abs(diff):,}/month vs. the current payment.")
     lines.append('')
     return '\n'.join(lines)
 
@@ -379,8 +388,8 @@ def render_quoted_trend(data: dict) -> str:
 
     lines += [
         f"*Average rate quoted across UK lenders — Bank of England, "
-        f"{month_label(q['prev_as_of'])} → {month_label(q['as_of'])}. These run above best-buy "
-        "deals; shown to indicate market direction.*", '',
+        f"{month_label(q['prev_as_of'])} → {month_label(q['as_of'])}. These run above the sharpest "
+        "broker deals; shown to indicate market direction.*", '',
         '| Term / LTV band | ' + month_label(q['prev_as_of']) +
         ' | ' + month_label(q['as_of']) + ' | Change |',
         '|---|---|---|---|',
@@ -409,15 +418,9 @@ def render_change(data: dict, prev: dict) -> str:
 
     lines[0] = f"## 🔄 Change vs. Last Snapshot ({fmt_date(prev.get('date'))})"
 
-    def deal_rate(d, key):
-        bb = d.get('best_buy', {})
-        if isinstance(bb, dict) and isinstance(bb.get(key), dict):
-            return bb[key].get('rate')
-        return None
-
-    for label, key in (('2-year fixed best-buy', 'fixed_2yr'),
-                        ('5-year fixed best-buy', 'fixed_5yr')):
-        now, was = deal_rate(data, key), deal_rate(prev, key)
+    for label, key in (('2-year fixed avg', 'avg_2yr_rate'),
+                        ('5-year fixed avg', 'avg_5yr_rate')):
+        now, was = data.get(key), prev.get(key)
         if now is not None and was is not None:
             bp = round((now - was) * 100)
             if bp == 0:
@@ -445,11 +448,11 @@ def render_change(data: dict, prev: dict) -> str:
 def render_footer() -> str:
     return (
         '---\n\n'
-        f"*Generated automatically on {fmt_date(TODAY)}. Sources: Moneyfacts "
-        "(live best-buy deals, 85% LTV tier); Bank of England database (base rate "
-        "IUDBEDR and quoted-rate series); Bank of England MPC schedule; Marketaux "
-        "(news). Best-buy rates are headline deals — confirm eligibility and total "
-        "cost with broker Oliver before acting.*"
+        f"*Generated automatically on {fmt_date(TODAY)}. Sources: Bank of England "
+        "database (base rate IUDBEDR and quoted-rate series); Bank of England MPC "
+        "schedule; Marketaux (news). Rates shown are BoE market-wide quoted averages "
+        "at ~85% LTV — confirm live deals, eligibility and total cost with broker "
+        "Oliver before acting.*"
     )
 
 
@@ -499,20 +502,6 @@ def extract_recommendation(interpretation: str) -> str:
 def build_telegram_summary(data: dict, interpretation: str) -> str:
     lines = [f'🏦 Mortgage Monitor — {fmt_date(TODAY)}', '']
 
-    bb = data['best_buy']
-    if 'error' not in bb:
-        lines.append('Best-buy, 85% LTV tier (Moneyfacts):')
-        for label, key in (('2yr fixed', 'fixed_2yr'), ('5yr fixed', 'fixed_5yr')):
-            deal = bb.get(key)
-            if deal:
-                pay = f" → ~£{deal['est_payment']:,}/mo" if 'est_payment' in deal else ''
-                lines.append(
-                    f"  {label}: {deal['rate']:.2f}% — {deal['lender']} "
-                    f"({deal['fee_text'] or 'no fee'}){pay}")
-        lines.append(f"  vs current: {CURRENT_RATE * 100:.2f}%, £{CURRENT_PAYMENT:,.0f}/mo")
-    else:
-        lines.append('Best-buy rates: unavailable this run — check with Oliver.')
-
     avg_2yr = data.get('avg_2yr_rate')
     avg_5yr = data.get('avg_5yr_rate')
     avg_2yr_pay = data.get('avg_2yr_payment')
@@ -521,10 +510,17 @@ def build_telegram_summary(data: dict, interpretation: str) -> str:
         lines.append('Market avg (BoE quoted, ~85% LTV):')
         if avg_2yr:
             pay = f" → ~£{avg_2yr_pay:,}/mo" if avg_2yr_pay else ''
-            lines.append(f"  2yr fixed: {avg_2yr:.2f}%{pay}")
+            wow = fmt_wow(data.get('avg_2yr_wow_bps'))
+            wow = f"  {wow}" if wow else ''
+            lines.append(f"  2yr fixed: {avg_2yr:.2f}%{pay}{wow}")
         if avg_5yr:
             pay = f" → ~£{avg_5yr_pay:,}/mo" if avg_5yr_pay else ''
-            lines.append(f"  5yr fixed: {avg_5yr:.2f}%{pay}")
+            wow = fmt_wow(data.get('avg_5yr_wow_bps'))
+            wow = f"  {wow}" if wow else ''
+            lines.append(f"  5yr fixed: {avg_5yr:.2f}%{pay}{wow}")
+        lines.append(f"  vs current: {CURRENT_RATE * 100:.2f}%, £{CURRENT_PAYMENT:,.0f}/mo")
+    else:
+        lines.append('Market-average rates: unavailable this run — check with Oliver.')
 
     br = data['base_rate']
     if 'error' not in br:
@@ -567,10 +563,11 @@ def main() -> None:
 
     print("Gathering real market data...")
     data = gather_data()
-    bb, br = data['best_buy'], data['base_rate']
-    print(f"  Best-buy:  {'OK' if 'error' not in bb else bb['error']}")
+    br = data['base_rate']
     print(f"  Base rate: {'OK' if 'error' not in br else br['error']}")
     print(f"  Quoted:    {'OK' if 'error' not in data['quoted'] else data['quoted']['error']}")
+    avg_ok = 'OK' if (data['avg_2yr_rate'] or data['avg_5yr_rate']) else 'unavailable'
+    print(f"  Avg rates: {avg_ok} (2yr {data['avg_2yr_rate']}, 5yr {data['avg_5yr_rate']})")
     print(f"  News:      {len(data['news'])} articles")
 
     prev = None
@@ -581,6 +578,10 @@ def main() -> None:
                 break
             except Exception:
                 pass
+
+    add_wow_deltas(data, prev)
+    print(f"  WoW:       2yr {fmt_wow(data['avg_2yr_wow_bps']) or 'n/a'}, "
+          f"5yr {fmt_wow(data['avg_5yr_wow_bps']) or 'n/a'}")
 
     deterministic = '\n'.join([
         f'# Mortgage Market Monitor — {fmt_date(TODAY)}',

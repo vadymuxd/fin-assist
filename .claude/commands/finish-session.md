@@ -23,7 +23,7 @@ Read the entire conversation from the top. Identify:
 - Every file created, modified, or deleted
 - Every bug fixed and its root cause
 - Scripts built, retired, or renamed
-- Phase tasks completed (map to PLAN.md task IDs like `eng.6`, `data.1`, etc.)
+- Phase tasks completed (map to Notion Plan task IDs like `eng.6`, `data.1`, etc.)
 - Outstanding items / next steps
 - Anything that changes Architecture, Sheet Structure, Credentials, or Agent Config
 
@@ -89,7 +89,7 @@ Fetch it first to see current state.
 - If new tasks were discovered, add them under the right phase
 - Update **Immediate Next Steps** list if priorities shifted
 
-Then sync to `PLAN.md` in git — PLAN.md mirrors Notion exactly. Commit the sync separately with message `docs(plan): sync PLAN.md — [brief description]`.
+Notion is the single source of truth for the plan — there is no `PLAN.md` mirror to sync.
 
 ---
 
@@ -113,7 +113,7 @@ Fetch the page first, then update only the parts that changed.
 - [ ] Session entry created in Notion
 - [ ] Memory Index Current State updated, stale entries removed
 - [ ] Agent Config current phase accurate
-- [ ] Plan tasks ticked, PLAN.md synced if anything changed
+- [ ] Plan tasks ticked in Notion
 - [ ] Reference pages updated where facts changed
 
 Tell the user: "Session wrapped. [1-sentence summary of what was recorded and what's next]."

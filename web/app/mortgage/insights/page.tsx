@@ -30,8 +30,9 @@ export default async function MortgageInsightsPage() {
       </div>
 
       <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 max-w-2xl">
-        Weekly UK mortgage-market monitor — live best-buy rates at the 85% LTV tier, the Bank of
-        England base rate and MPC schedule, and a recommended action grounded in your remortgage.
+        Weekly UK mortgage-market monitor — BoE market-average 2yr/5yr fixed rates at ~85% LTV with
+        a week-over-week comparison, the Bank of England base rate and MPC schedule, and a
+        recommended action grounded in your remortgage.
         Reports generate automatically each Sunday; press <span className="font-medium">Get
         Insights</span> to run one now (it appears here in a minute or two).
       </p>

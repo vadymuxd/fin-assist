@@ -29,11 +29,38 @@ function timeAgo(iso: string): string {
   return `${Math.round(h / 24)}d ago`;
 }
 
-function Chip({ label, value }: { label: string; value: string }) {
+function Chip({
+  label,
+  value,
+  wowBps,
+}: {
+  label: string;
+  value: string;
+  wowBps?: number | null;
+}) {
   return (
     <span className="inline-flex items-baseline gap-1 rounded-md bg-gray-100 dark:bg-gray-800 px-2 py-1 text-[11px]">
       <span className="text-gray-500 dark:text-gray-400">{label}</span>
       <span className="font-semibold tabular-nums text-gray-900 dark:text-gray-50">{value}</span>
+      {wowBps != null && <WowDelta bps={wowBps} />}
+    </span>
+  );
+}
+
+// Week-over-week change indicator: ↑ rising (amber), ↓ falling (green — cheaper
+// borrowing is good for a remortgager), → flat (grey).
+function WowDelta({ bps }: { bps: number }) {
+  if (bps === 0) {
+    return <span className="font-medium text-gray-400 dark:text-gray-500">→ flat</span>;
+  }
+  const up = bps > 0;
+  const cls = up
+    ? "text-amber-600 dark:text-amber-400"
+    : "text-emerald-600 dark:text-emerald-400";
+  return (
+    <span className={`font-medium tabular-nums ${cls}`}>
+      {up ? "↑" : "↓"} {up ? "+" : ""}
+      {bps}bps
     </span>
   );
 }
@@ -73,17 +100,19 @@ export default function InsightCard({
               </span>
             </div>
             <div className="mt-2 flex flex-wrap gap-1.5">
-              {i.fixed_2yr_rate != null && (
-                <Chip label="2yr best-buy" value={`${i.fixed_2yr_rate.toFixed(2)}%`} />
-              )}
-              {i.fixed_5yr_rate != null && (
-                <Chip label="5yr best-buy" value={`${i.fixed_5yr_rate.toFixed(2)}%`} />
-              )}
               {i.avg_2yr_rate != null && (
-                <Chip label="2yr avg" value={`${i.avg_2yr_rate.toFixed(2)}%`} />
+                <Chip
+                  label="2yr avg"
+                  value={`${i.avg_2yr_rate.toFixed(2)}%`}
+                  wowBps={i.avg_2yr_wow_bps}
+                />
               )}
               {i.avg_5yr_rate != null && (
-                <Chip label="5yr avg" value={`${i.avg_5yr_rate.toFixed(2)}%`} />
+                <Chip
+                  label="5yr avg"
+                  value={`${i.avg_5yr_rate.toFixed(2)}%`}
+                  wowBps={i.avg_5yr_wow_bps}
+                />
               )}
               {i.base_rate != null && (
                 <Chip label="BoE base" value={`${i.base_rate.toFixed(2)}%`} />

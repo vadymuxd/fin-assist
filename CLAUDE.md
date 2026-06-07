@@ -17,13 +17,13 @@ The phase-by-phase build plan lives in Notion (authoritative, mobile-accessible)
 
 Fetch this page when the user asks about roadmap, phases, scope, or "what's next."
 
-`PLAN.md` in repo root is a git-versioned mirror — kept in sync but Notion is the source of truth. **After completing phases or updating tasks:** update the Notion Plan page first, then sync to `PLAN.md`.
+Notion is the **single source of truth** for the plan. **After completing phases or updating tasks:** update the Notion Plan page directly. (There is no `PLAN.md` mirror — it has been retired.)
 
 ## Finishing a session
 
 When the user says **"finish the session"** (or similar), run `/finish-session` — a slash command defined in `.claude/commands/finish-session.md`.
 
-It covers: push git, analyse full chat, create Notion session entry, update Memory Index (prune stale entries), update Agent Config current phase + scripts, tick Plan tasks + sync PLAN.md, update Architecture/Sheet Structure/other references where facts changed.
+It covers: push git, analyse full chat, create Notion session entry, update Memory Index (prune stale entries), update Agent Config current phase + scripts, tick Plan tasks in Notion, update Architecture/Sheet Structure/other references where facts changed.
 
 ## After every meaningful decision or outcome (mid-session)
 

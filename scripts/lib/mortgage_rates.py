@@ -7,7 +7,10 @@ Every figure here comes from a real source; nothing is fabricated:
   • BoE base rate           — Bank of England database, series IUDBEDR
   • BoE quoted lender rates — Bank of England database, monthly 2yr/5yr fixed series
   • MPC schedule            — Bank of England 'upcoming MPC dates' page
-  • Best-buy mortgage deals — Moneyfacts 85% LTV best-buy table (updated hourly)
+
+Best-buy scraping (Moneyfacts) was removed in the 2026-06 hotfix: the scrape was
+unreliable for best-buy picks and produced misleading figures. The monitor now
+reports BoE market-average 2yr/5yr fixed rates only.
 
 Every fetch_* function degrades gracefully: on any failure it returns a dict
 with an 'error' key instead of raising, so the monitor still produces a report
@@ -18,8 +21,6 @@ Standalone debug run:
 """
 
 import re
-import html as _html
-import json
 import math
 from datetime import date, datetime
 
@@ -49,21 +50,6 @@ _MPC_FALLBACK = [
     "2027-04-29", "2027-06-17", "2027-07-29", "2027-09-16", "2027-11-04",
     "2027-12-16",
 ]
-
-# Moneyfacts best-buy pages, tried in order. The 85% LTV page is the right one
-# for Vadym & Lisa; the others are fallbacks in case that page is renamed. All
-# expose deals as server-rendered product="{json}" attributes and are permitted
-# by robots.txt.
-_MONEYFACTS_PAGES = (
-    "https://moneyfactscompare.co.uk/mortgages/85-ltv-mortgages/",
-    "https://moneyfactscompare.co.uk/mortgages/best-mortgage-rates/",
-    "https://moneyfactscompare.co.uk/mortgages/fixed-rate-mortgages/",
-)
-
-# Their LTV is ~84%, which sits in the 85% lending tier. Only keep deals a
-# borrower at that LTV would actually qualify for.
-_MIN_LTV = 84
-
 
 # ── Bank of England database (IADB) ───────────────────────────────────────────
 
@@ -193,79 +179,6 @@ def fetch_mpc_dates() -> list:
     return upcoming or sorted(_MPC_FALLBACK)
 
 
-# ── Moneyfacts best-buy table ─────────────────────────────────────────────────
-
-def _ltv_pct(raw) -> float:
-    try:
-        return round(float(raw))
-    except (TypeError, ValueError):
-        return None
-
-
-def _parse_moneyfacts_products(html: str) -> list:
-    """Extract unique deal objects from Moneyfacts' product="{json}" attributes."""
-    seen, products = set(), []
-    for raw in re.findall(r'product="(\{.*?\})"', html):
-        try:
-            product = json.loads(_html.unescape(raw))
-        except json.JSONDecodeError:
-            continue
-        pid = product.get("Id")
-        if pid in seen:
-            continue
-        seen.add(pid)
-        products.append(product)
-    return products
-
-
-def fetch_best_buy_rates() -> dict:
-    """Cheapest live 2yr & 5yr fixed deals at the 85% LTV tier, from Moneyfacts."""
-    last_error = "no Moneyfacts page returned usable data"
-
-    for url in _MONEYFACTS_PAGES:
-        try:
-            resp = requests.get(url, headers=_HEADERS, timeout=45)
-            resp.raise_for_status()
-            products = _parse_moneyfacts_products(resp.text)
-            if not products:
-                last_error = f"no products parsed from {url}"
-                continue
-
-            def best(period: str):
-                fixed = [p for p in products
-                         if p.get("MortgageType") == "Fixed"
-                         and p.get("Period") == period
-                         and p.get("Rate") is not None
-                         and (_ltv_pct(p.get("MaxLTV")) or 0) >= _MIN_LTV]
-                if not fixed:
-                    return None
-                p = min(fixed, key=lambda x: x["Rate"])
-                return {
-                    "rate": float(p["Rate"]),
-                    "lender": p.get("Company") or p.get("ProviderName"),
-                    "fee": p.get("ProductFees"),
-                    "fee_text": (p.get("ProductFeesText") or "").strip().rstrip(","),
-                    "max_ltv": _ltv_pct(p.get("MaxLTV")),
-                    "revert": (p.get("FirstRevertText") or "").strip(),
-                    "description": p.get("Description"),
-                }
-
-            result = {
-                "source": "Moneyfacts",
-                "page": url,
-                "fixed_2yr": best("2 Years"),
-                "fixed_5yr": best("5 Years"),
-                "product_count": len(products),
-            }
-            if result["fixed_2yr"] or result["fixed_5yr"]:
-                return result
-            last_error = f"no qualifying 85%-tier fixed deals on {url}"
-        except Exception as exc:
-            last_error = f"{type(exc).__name__}: {exc}"
-
-    return {"error": last_error}
-
-
 # ── amortisation ──────────────────────────────────────────────────────────────
 
 def monthly_payment(principal: float, annual_rate: float, term_months: int) -> float:
@@ -295,5 +208,3 @@ if __name__ == "__main__":
     print(" ", fetch_boe_quoted_rates())
     print("Upcoming MPC dates:")
     print(" ", fetch_mpc_dates()[:4])
-    print("Best-buy (Moneyfacts, 85% LTV):")
-    print(" ", fetch_best_buy_rates())
