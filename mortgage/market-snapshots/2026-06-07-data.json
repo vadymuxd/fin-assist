@@ -1,0 +1,115 @@
+{
+  "date": "2026-06-07",
+  "balance": 551067.09,
+  "ltv": 83.5,
+  "remaining_term": 353,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-06-04",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-05-31",
+    "prev_as_of": "2026-04-30",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.92,
+        "prev_rate": 5.14
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.32,
+        "prev_rate": 5.46
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.8,
+        "prev_rate": 4.98
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 5.1,
+        "prev_rate": 5.22
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-06-18",
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "best_buy": {
+    "source": "Moneyfacts",
+    "page": "https://moneyfactscompare.co.uk/mortgages/85-ltv-mortgages/",
+    "fixed_2yr": {
+      "rate": 4.66,
+      "lender": "Nationwide BS",
+      "fee": 999.0,
+      "fee_text": "Reservation \u00a3999",
+      "max_ltv": 85,
+      "revert": "reverting to 6.49%",
+      "description": "4.66% Fixed for 2 years",
+      "est_payment": 2871,
+      "monthly_saving": 201
+    },
+    "fixed_5yr": {
+      "rate": 4.68,
+      "lender": "first direct",
+      "fee": 490.0,
+      "fee_text": "Booking \u00a3490",
+      "max_ltv": 85,
+      "revert": "reverting to 6.24%",
+      "description": "4.68% Fixed for 5 years",
+      "est_payment": 2877,
+      "monthly_saving": 195
+    },
+    "product_count": 10
+  },
+  "avg_2yr_rate": 5.12,
+  "avg_5yr_rate": 4.95,
+  "avg_2yr_payment": 3024,
+  "avg_5yr_payment": 2967,
+  "news": [
+    {
+      "title": "Tim Worstall",
+      "description": "In the United States, millions of homeowners have fixed-rate mortgages that last for the entire life of their loan. They know what they will be paying not just next year, but potentially for the next 20 or 30 years. And, if interest rates fall, they can usually refinance and benefit from lower rates, whilst if",
+      "source": "timworstall.com",
+      "published": "2026-06-05",
+      "url": "https://www.timworstall.com/2026/06/guess-what-6/"
+    },
+    {
+      "title": "Stocks Fall on Escalation of US-Iran Hostilities",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is down -0.40%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is down -0.74%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is down -0.08%. June E-mini S&P futures (ESM26 ) are down -0.48%, and June E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-06-03",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-fall-escalation-us-iran-151927086.html"
+    },
+    {
+      "title": "Paragon Banking Group H1 Earnings Call Highlights",
+      "description": "Paragon Banking Group (LON:PAG) reported what Chief Executive Nigel Terrington called \u201canother strong financial and operational performance\u201d for the first half of 2026, citing resilient margins, loan growth, tight cost control and strong capital generation despite market volatility. The specialist",
+      "source": "finance.yahoo.com",
+      "published": "2026-06-02",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/paragon-banking-group-h1-earnings-100347448.html"
+    }
+  ]
+}
