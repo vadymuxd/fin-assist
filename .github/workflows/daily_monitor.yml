@@ -2,10 +2,10 @@ name: Daily Monitor
 
 on:
   schedule:
-    # 3× daily weekdays: 09:30, 13:00, 16:30 BST (= 08:30, 12:00, 15:30 UTC)
-    - cron: '30 8 * * 1-5'   # Morning  — 09:30 BST
-    - cron: '0 12 * * 1-5'   # Midday   — 13:00 BST
-    - cron: '30 15 * * 1-5'  # Close    — 16:30 BST
+    # 1× daily weekdays: 16:30 BST (= 15:30 UTC) — end-of-day close run.
+    # Reduced from 3× daily (2026-06-07) to cut API cost; kept the close run so
+    # the daily snapshot + EOD prices still land. Intraday alert sweeps dropped.
+    - cron: '30 15 * * 1-5'  # Close — 16:30 BST
   workflow_dispatch:
 
 jobs:
@@ -80,8 +80,8 @@ jobs:
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: python3 scripts/market_worker.py --mode dispatch
 
-      # ── Close-run only: drain Notion NL queue → Sheets → Supabase → Notion ──────
-      - name: sync_worker + snapshots + Notion (close run only)
+      # ── Drain Notion NL queue → Sheets → Supabase → Notion ──────────────────────
+      - name: sync_worker + snapshots + Notion
         env:
           PORTFOLIO_SHEET_ID:             ${{ secrets.PORTFOLIO_SHEET_ID }}
           GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
@@ -92,14 +92,10 @@ jobs:
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
           APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
+        # Now that this workflow runs once daily (the close run), always drain the
+        # queue + snapshot. Phase 16: drain Notion Financial Updates first so the
+        # subsequent snapshot picks up any Sheets changes from NL entries.
         run: |
-          HOUR=$(date -u +"%H")
-          if [ "$HOUR" -ge "15" ]; then
-            # Phase 16: drain Notion Financial Updates first so subsequent
-            # snapshot picks up any Sheets changes from NL entries.
-            python3 scripts/sync_worker.py
-            python3 scripts/snapshot_worker.py --domain all
-            python3 scripts/sheets_updater.py --snapshot
-          else
-            echo "Skipping close-run steps (current hour UTC: $HOUR)"
-          fi
+          python3 scripts/sync_worker.py
+          python3 scripts/snapshot_worker.py --domain all
+          python3 scripts/sheets_updater.py --snapshot
