@@ -573,14 +573,33 @@ def build_telegram_summary(successes, failures):
 def emit_sync_summary(successes, failures):
     """Send the Notion-queue summary now, OR — when DEFER_SYNC_TELEGRAM is set
     (the bot_sync flow) — write just the queue section to a temp file so
-    snapshot_worker can fold it into ONE combined message instead of two."""
+    snapshot_worker can fold it into ONE combined message instead of two.
+
+    HF-B: a silent run (no entries recorded or failed) produces NO Telegram
+    message. In the bot_sync flow the only thing that changes the sheet is
+    draining the Notion queue — no price refresh runs there — so "no entries
+    processed" means "nothing changed". We signal that to snapshot_worker by
+    NOT writing the handoff file, which suppresses the combined message too.
+    """
+    processed = bool(successes or failures)
+
     if os.getenv('DEFER_SYNC_TELEGRAM'):
+        # Clear any stale handoff first so an empty run can't reuse a prior file.
+        try:
+            os.remove(SYNC_SUMMARY_FILE)
+        except OSError:
+            pass
+        if not processed:
+            return  # silent run — snapshot_worker skips the combined message
         try:
             with open(SYNC_SUMMARY_FILE, 'w') as f:
                 f.write(build_queue_section(successes, failures))
         except OSError as e:
             print(f"  ⚠ could not write sync summary file: {e}")
         return
+
+    if not processed:
+        return  # standalone silent run — no message
     send_telegram(build_telegram_summary(successes, failures))
 
 

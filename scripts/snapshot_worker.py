@@ -657,13 +657,21 @@ def main():
     force_revalidate()
 
     if os.getenv('BOT_SYNC_TELEGRAM') and args.domain == 'all':
+        # HF-B: sync_worker only leaves a handoff file when it processed ≥1 entry.
+        # An absent/empty queue means nothing changed in this sync flow (no price
+        # refresh runs here), so stay silent instead of pinging a "nothing
+        # happened" message.
+        queue = _read_sync_summary()
+        if not queue:
+            print("  No Notion-queue updates this run — skipping combined Telegram message.")
+            return
+
         today = date.today().isoformat()
         lines = [f"<b>✅ Sync complete</b> · {today}", ""]
 
         # What was captured from the Notion queue (deferred from sync_worker).
-        queue = _read_sync_summary()
         lines.append("<b>From Notion queue:</b>")
-        lines.append(queue if queue else "No pending entries.")
+        lines.append(queue)
         lines.append("")
 
         # What the Sheet snapshot now holds.
