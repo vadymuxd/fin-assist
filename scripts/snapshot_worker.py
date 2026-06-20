@@ -163,6 +163,11 @@ def run_portfolio():
         # amounts to numerator and denominator.
         'stocks_started_value': read_cell(ws, r['stocks_total'],  COL_STARTED_IDX),
         'managed':              read_cell(ws, r['managed_total'], COL_VALUE_IDX),
+        # Managed funds' "Tracking Started Value" (sheet col I on the MANAGED
+        # FUNDS aggregate row). Bumped by deposits so the web shows organic
+        # managed performance (managed / managed_started_value) without a
+        # contribution spiking the line — mirrors stocks_started_value.
+        'managed_started_value': read_cell(ws, r['managed_total'], COL_STARTED_IDX),
         'cash':                 read_cell(ws, r['cash'],          COL_VALUE_IDX),
         'spx':                  read_cell(ws, r['sp500'],         COL_VALUE_IDX),
         'ftse':                 read_cell(ws, r['ftse100'],       COL_VALUE_IDX),
