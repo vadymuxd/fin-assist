@@ -305,6 +305,35 @@ def find_investments_balance_row(ws, account_name):
     return None, None
 
 
+def find_managed_fund_row(ws, account_name):
+    """Locate the specific managed-fund detail row (e.g. Nutmeg) by name.
+
+    Scans the rows below the MANAGED FUNDS aggregate, matching the Notion
+    Account text against each fund's Name/Platform cells. Returns
+    (row_1based, fund_name) or None. Used so a DEPOSIT/WITHDRAWAL on a managed
+    fund updates the fund itself rather than the brokerage cash pile.
+    """
+    layout = find_investment_rows(ws)
+    start = layout.get('managed_total')  # aggregate row; fund detail begins next row
+    if not start:
+        return None
+    all_rows = ws.get_all_values()
+    a = (account_name or '').lower()
+    for i in range(start + 1, len(all_rows) + 1):
+        row = all_rows[i - 1] if i - 1 < len(all_rows) else []
+        label = (row[0] if len(row) > 0 else '').strip()
+        name  = (row[1] if len(row) > 1 else '').strip()
+        plat  = (row[2] if len(row) > 2 else '').strip()
+        if label and not name:  # next section header (e.g. BENCHMARKS) — stop
+            break
+        if not name:
+            continue
+        tokens = [w for w in (name + ' ' + plat).lower().replace('/', ' ').split() if len(w) > 3]
+        if any(t in a for t in tokens):
+            return i, name
+    return None
+
+
 # ── Handlers — per (Type, Domain) ────────────────────────────────────────────
 
 def handle_balance_update(entry, sh):
@@ -448,12 +477,51 @@ def handle_investments_action(entry, sh):
     log_trades.append_to_inv_transactions(ws_tx, trade)
 
     if entry['type'] in ('DEPOSIT', 'WITHDRAWAL'):
-        # update Cash row (col G) directly — log_trades.update_cash only handles BUY/SELL
+        delta = trade['total'] if entry['type'] == 'DEPOSIT' else -trade['total']
+
+        # Managed-fund contributions (e.g. Nutmeg) go straight into the fund, not
+        # the brokerage cash pile. Bump the fund's Current Value (G) and Initially
+        # Invested (H), and the Tracking Started Value baseline (I) on BOTH the fund
+        # row and the MANAGED FUNDS aggregate (its I is hardcoded, not a SUM) by the
+        # same delta — so the deposit is return-neutral (no phantom gain in the %).
+        fund = find_managed_fund_row(ws_inv, entry['account'])
+        if fund:
+            frow, fname = fund
+            layout = find_investment_rows(ws_inv)
+            mt_row = layout.get('managed_total')
+
+            def _val(row_1based, col_idx):
+                cells = ws_inv.row_values(row_1based)
+                return parse_float(cells[col_idx - 1]) if len(cells) >= col_idx and cells[col_idx - 1] else 0.0
+
+            g, h, i_base = _val(frow, 7), _val(frow, 8), _val(frow, 9)
+            updates = [
+                {'range': gspread.utils.rowcol_to_a1(frow, 7), 'values': [[g + delta]]},
+                {'range': gspread.utils.rowcol_to_a1(frow, 8), 'values': [[h + delta]]},
+                {'range': gspread.utils.rowcol_to_a1(frow, 9), 'values': [[i_base + delta]]},
+            ]
+            if mt_row:
+                mt_i = _val(mt_row, 9)
+                updates.append({'range': gspread.utils.rowcol_to_a1(mt_row, 9), 'values': [[mt_i + delta]]})
+            ws_inv.batch_update(updates, value_input_option='USER_ENTERED')
+            write_transaction({
+                'date':         trade['date'],
+                'domain':       'investments',
+                'account_name': trade['platform'],
+                'amount_gbp':   trade['total'],
+                'type':         entry['type'].lower(),
+                'notes':        trade['notes'],
+                'source':       'nl_claude',
+            })
+            return (f"Investments {entry['type']} £{trade['total']:,.2f} into managed fund "
+                    f"{fname} (value {g:,.2f} → {g + delta:,.2f}; invested + started-value bumped)")
+
+        # Otherwise a brokerage cash top-up/withdrawal — update Cash row (col G).
+        # (log_trades.update_cash only handles BUY/SELL.)
         layout = find_investment_rows(ws_inv)
         cash_row = layout['cash_row']
         cash_vals = ws_inv.row_values(cash_row)
         prior = parse_float(cash_vals[6]) if len(cash_vals) > 6 else 0.0
-        delta = trade['total'] if entry['type'] == 'DEPOSIT' else -trade['total']
         ws_inv.update_cell(cash_row, COL_VALUE_IDX, prior + delta)
         write_transaction({
             'date':         trade['date'],
