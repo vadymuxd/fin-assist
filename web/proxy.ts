@@ -23,7 +23,10 @@ export async function proxy(request: NextRequest) {
 
 export const config = {
   matcher: [
-    // Run on everything except the login page, the login API, static assets, and metadata files.
-    "/((?!login|api/login|_next/static|_next/image|favicon.ico|apple-icon|icon|manifest.webmanifest|robots.txt|sitemap.xml).*)",
+    // Run on everything except the login page, the login API, the
+    // secret-protected revalidate endpoint (used by sync scripts to purge the
+    // ISR cache — it guards itself with REVALIDATE_SECRET), static assets, and
+    // metadata files.
+    "/((?!login|api/login|api/revalidate|_next/static|_next/image|favicon.ico|apple-icon|icon|manifest.webmanifest|robots.txt|sitemap.xml).*)",
   ],
 };
