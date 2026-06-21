@@ -1,0 +1,91 @@
+{
+  "date": "2026-06-21",
+  "balance": 551067.09,
+  "ltv": 83.5,
+  "remaining_term": 353,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-06-18",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-05-31",
+    "prev_as_of": "2026-04-30",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.92,
+        "prev_rate": 5.14
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.32,
+        "prev_rate": 5.46
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.8,
+        "prev_rate": 4.98
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 5.1,
+        "prev_rate": 5.22
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 5.12,
+  "avg_5yr_rate": 4.95,
+  "avg_2yr_payment": 3024,
+  "avg_5yr_payment": 2967,
+  "prev_avg_2yr_rate": 5.12,
+  "prev_avg_5yr_rate": 4.95,
+  "avg_2yr_wow_bps": 0,
+  "avg_5yr_wow_bps": 0,
+  "news": [
+    {
+      "title": "US-Iran Diplomatic Prospects, Evolving Central Bank Policy, and Stretched Equity Valuations",
+      "description": "Investors are cautiously awaiting Fed Chair Warsh\u2019s debut, while easing oil prices and US economic resilience influence future policy outlooks.",
+      "source": "financefeeds.com",
+      "published": "2026-06-17",
+      "url": "https://financefeeds.com/us-iran-diplomatic-prospects-evolving-central-bank-policy-and-stretched-equity-valuations/"
+    },
+    {
+      "title": "Stocks Supported by Chip Stock Strength and Strong US Retail Sales",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is up +0.23%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is up +0.26%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is up +0.74%. June E-mini S&P futures (ESM26 ) are up +0.19%, and June E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-06-17",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-supported-chip-stock-strength-140908126.html"
+    },
+    {
+      "title": "Stocks Mixed Ahead of FOMC Meeting Results",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is down -0.15%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is up +0.23%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is up +0.30%. June E-mini S&P futures (ESM26 ) are down -0.17%, and June E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-06-17",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-mixed-ahead-fomc-meeting-152257908.html"
+    }
+  ]
+}
