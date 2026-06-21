@@ -866,50 +866,43 @@ export function buildComparisonData(
   if (portfolioSnapshots.length === 0) return [];
   const sorted = [...portfolioSnapshots].sort((a, b) => a.date.localeCompare(b.date));
   const sortedPensions = [...pensionSnapshots].sort((a, b) => a.date.localeCompare(b.date));
-  const base = sorted[0];
+
   const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
   const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
-  // Anchor Lisa to her organic gain ratio at baseline: (lisa_total / lisa_started_value).
-  // Deposits raise both numerator and denominator equally, so they don't spike the chart.
-  const baseLisaRatio = (() => {
-    const b = sorted.find((s) => s.lisa_started_value != null && s.lisa_started_value > 0);
-    return b && b.lisa_total != null ? b.lisa_total / b.lisa_started_value! : null;
-  })();
-  // Anchor Custom Stocks to its own organic ratio at baseline (∼1.0 on tracking
-  // start) so the line shows organic stocks performance, not cost-basis growth.
-  const baseStockRatio =
-    base.stocks_started_value && base.stocks_started_value > 0
-      ? base.self_managed / base.stocks_started_value
-      : null;
-  // Anchor Managed Funds to its organic ratio at baseline (managed /
-  // managed_started_value) so deposits — which raise both equally — don't spike
-  // the line; only real fund growth moves it. Same treatment as Custom Stocks.
-  const baseManagedRatio =
-    base.managed_started_value && base.managed_started_value > 0
-      ? base.managed / base.managed_started_value
-      : null;
-  return sorted.map((s) => {
+
+  // Time-Weighted Return: chain sub-period returns between each cash flow.
+  // A deposit or withdrawal adjusts the sub-period base by the change in
+  // started_value, so the cash flow itself contributes 0% return — only real
+  // market movement moves the TWR line. Completely deposit-neutral.
+  let stocksTwr = 1.0;
+  let managedTwr = 1.0;
+  let lisaTwr = 1.0;
+
+  return sorted.map((s, i) => {
+    if (i > 0) {
+      const prev = sorted[i - 1];
+
+      // stocks: deposit/buy = increase in stocks_started_value; sell = decrease
+      const stocksBase = prev.self_managed + ((s.stocks_started_value ?? 0) - (prev.stocks_started_value ?? 0));
+      if (stocksBase > 0) stocksTwr *= 1 + (s.self_managed - stocksBase) / stocksBase;
+
+      // managed funds
+      const managedBase = prev.managed + ((s.managed_started_value ?? 0) - (prev.managed_started_value ?? 0));
+      if (managedBase > 0) managedTwr *= 1 + (s.managed - managedBase) / managedBase;
+
+      // Lisa
+      const lisaBase = (prev.lisa_total ?? 0) + ((s.lisa_started_value ?? 0) - (prev.lisa_started_value ?? 0));
+      if (lisaBase > 0) lisaTwr *= 1 + ((s.lisa_total ?? 0) - lisaBase) / lisaBase;
+    }
+
     const pensionRow = sortedPensions.filter((p) => p.date <= s.date).slice(-1)[0] ?? null;
-    const stockRatio =
-      s.stocks_started_value && s.stocks_started_value > 0
-        ? s.self_managed / s.stocks_started_value
-        : null;
     return {
       date: s.date,
-      customStocks:
-        stockRatio != null && baseStockRatio != null
-          ? (stockRatio / baseStockRatio) * 100
-          : 100,
-      managed:
-        s.managed != null && s.managed_started_value != null && s.managed_started_value > 0 && baseManagedRatio != null
-          ? ((s.managed / s.managed_started_value) / baseManagedRatio) * 100
-          : null,
+      customStocks: stocksTwr * 100,
+      managed: s.managed > 0 && (s.managed_started_value ?? 0) > 0 ? managedTwr * 100 : null,
       spx: s.spx != null && baseSpx != null ? (s.spx / baseSpx) * 100 : null,
       pensions: pensionRow && basePension ? (pensionRow.total / basePension) * 100 : null,
-      lisa:
-        s.lisa_total != null && s.lisa_started_value != null && s.lisa_started_value > 0 && baseLisaRatio != null
-          ? ((s.lisa_total / s.lisa_started_value) / baseLisaRatio) * 100
-          : null,
+      lisa: (s.lisa_total ?? 0) > 0 && (s.lisa_started_value ?? 0) > 0 ? lisaTwr * 100 : null,
     };
   });
 }
