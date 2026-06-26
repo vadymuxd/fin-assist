@@ -48,6 +48,7 @@ export type PortfolioSnapshot = {
   ndx: number | null;
   msci: number | null;
   gold: number | null;
+  magg: number | null;
 };
 
 export type SectorLookup = {
@@ -83,7 +84,7 @@ export type HoldingsAlert = {
 export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, managed_started_value, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, managed_started_value, cash, net_deposits, spx, ftse, ndx, msci, gold, magg")
     .order("date", { ascending: true });
   if (error) throw error;
   return data ?? [];
@@ -92,7 +93,7 @@ export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
 export async function getLatestSnapshot(): Promise<PortfolioSnapshot | null> {
   const { data, error } = await supabase
     .from("portfolio_snapshots")
-    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, managed_started_value, cash, net_deposits, spx, ftse, ndx, msci, gold")
+    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, managed_started_value, cash, net_deposits, spx, ftse, ndx, msci, gold, magg")
     .order("date", { ascending: false })
     .limit(1)
     .maybeSingle();
@@ -853,7 +854,7 @@ export function computeDeltas(snapshots: PortfolioSnapshot[]): DashboardDeltas |
 export type ComparisonPoint = {
   date: string;
   customStocks: number;
-  managed: number | null;
+  magg: number | null;
   spx: number | null;
   pensions: number | null;
   lisa: number | null;
@@ -868,6 +869,7 @@ export function buildComparisonData(
   const sortedPensions = [...pensionSnapshots].sort((a, b) => a.date.localeCompare(b.date));
 
   const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
+  const baseMagg = sorted.find((s) => s.magg != null && s.magg > 0)?.magg ?? null;
   const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
 
   // Time-Weighted Return: chain sub-period returns between each cash flow.
@@ -875,7 +877,6 @@ export function buildComparisonData(
   // started_value, so the cash flow itself contributes 0% return — only real
   // market movement moves the TWR line. Completely deposit-neutral.
   let stocksTwr = 1.0;
-  let managedTwr = 1.0;
   let lisaTwr = 1.0;
 
   return sorted.map((s, i) => {
@@ -886,10 +887,6 @@ export function buildComparisonData(
       const stocksBase = prev.self_managed + ((s.stocks_started_value ?? 0) - (prev.stocks_started_value ?? 0));
       if (stocksBase > 0) stocksTwr *= 1 + (s.self_managed - stocksBase) / stocksBase;
 
-      // managed funds
-      const managedBase = prev.managed + ((s.managed_started_value ?? 0) - (prev.managed_started_value ?? 0));
-      if (managedBase > 0) managedTwr *= 1 + (s.managed - managedBase) / managedBase;
-
       // Lisa
       const lisaBase = (prev.lisa_total ?? 0) + ((s.lisa_started_value ?? 0) - (prev.lisa_started_value ?? 0));
       if (lisaBase > 0) lisaTwr *= 1 + ((s.lisa_total ?? 0) - lisaBase) / lisaBase;
@@ -899,7 +896,7 @@ export function buildComparisonData(
     return {
       date: s.date,
       customStocks: stocksTwr * 100,
-      managed: s.managed > 0 && (s.managed_started_value ?? 0) > 0 ? managedTwr * 100 : null,
+      magg: s.magg != null && baseMagg != null ? (s.magg / baseMagg) * 100 : null,
       spx: s.spx != null && baseSpx != null ? (s.spx / baseSpx) * 100 : null,
       pensions: pensionRow && basePension ? (pensionRow.total / basePension) * 100 : null,
       lisa: (s.lisa_total ?? 0) > 0 && (s.lisa_started_value ?? 0) > 0 ? lisaTwr * 100 : null,

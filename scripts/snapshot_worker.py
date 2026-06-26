@@ -162,18 +162,15 @@ def run_portfolio():
         # Insulated from BUY/SELL inflows because each new position adds equal
         # amounts to numerator and denominator.
         'stocks_started_value': read_cell(ws, r['stocks_total'],  COL_STARTED_IDX),
-        'managed':              read_cell(ws, r['managed_total'], COL_VALUE_IDX),
-        # Managed funds' "Tracking Started Value" (sheet col I on the MANAGED
-        # FUNDS aggregate row). Bumped by deposits so the web shows organic
-        # managed performance (managed / managed_started_value) without a
-        # contribution spiking the line — mirrors stocks_started_value.
-        'managed_started_value': read_cell(ws, r['managed_total'], COL_STARTED_IDX),
+        'managed':              read_cell(ws, r['managed_total'], COL_VALUE_IDX) if r.get('managed_total') else 0.0,
+        'managed_started_value': read_cell(ws, r['managed_total'], COL_STARTED_IDX) if r.get('managed_total') else 0.0,
         'cash':                 read_cell(ws, r['cash'],          COL_VALUE_IDX),
         'spx':                  read_cell(ws, r['sp500'],         COL_VALUE_IDX),
         'ftse':                 read_cell(ws, r['ftse100'],       COL_VALUE_IDX),
         'ndx':                  read_cell(ws, r['nasdaq100'],     COL_VALUE_IDX),
         'msci':                 read_cell(ws, r['msci_world'],    COL_VALUE_IDX),
         'gold':                 read_cell(ws, r['gold'],          COL_VALUE_IDX),
+        'magg':                 read_cell(ws, r['magg'],          COL_VALUE_IDX) if r.get('magg') else None,
     }
 
     print("\nReading net deposits from InvTransactions...")
@@ -191,8 +188,10 @@ def run_portfolio():
     print(f"  Managed:      £{totals['managed']:,.2f}")
     print(f"  Cash:         £{totals['cash']:,.2f}")
     print(f"  Net deposits: £{totals['net_deposits']:,.2f}")
+    magg_val = totals.get('magg')
+    magg_str = f" | MAGG {magg_val:.4f}" if magg_val else ""
     print(f"  Benchmarks:   S&P {totals['spx']:.2f} | FTSE {totals['ftse']:.2f} | "
-          f"NDX {totals['ndx']:.2f} | MSCI {totals['msci']:.2f} | Gold {totals['gold']:.2f}")
+          f"NDX {totals['ndx']:.2f} | MSCI {totals['msci']:.2f} | Gold {totals['gold']:.2f}{magg_str}")
 
     print("\nWriting to Supabase portfolio_snapshots...")
     ok = write_portfolio_snapshot(today, totals)

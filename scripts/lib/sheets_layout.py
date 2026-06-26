@@ -62,6 +62,7 @@ def find_investment_rows(ws):
             rows['nasdaq100']  = i + 3
             rows['msci_world'] = i + 4
             rows['gold']       = i + 5
+            rows['magg']       = i + 6
 
         elif a == 'LISA TOTAL' and 'lisa_total' not in rows:
             rows['lisa_total'] = i + 1
