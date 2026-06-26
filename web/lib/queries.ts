@@ -130,6 +130,18 @@ export async function getHoldingByTicker(ticker: string): Promise<Holding | null
   };
 }
 
+export type PricePoint = { date: string; price: number };
+
+export async function getHoldingPriceHistory(ticker: string): Promise<PricePoint[]> {
+  const { data, error } = await supabase
+    .from("holding_price_history")
+    .select("date, price")
+    .eq("ticker", ticker)
+    .order("date");
+  if (error) throw error;
+  return (data ?? []).map((r) => ({ date: r.date as string, price: Number(r.price) }));
+}
+
 export async function getNewsForTicker(ticker: string, limit = 10): Promise<NewsItem[]> {
   const { data, error } = await supabase
     .from("news_items")

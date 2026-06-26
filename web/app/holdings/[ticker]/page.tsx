@@ -3,10 +3,12 @@ import Image from "next/image";
 import { notFound } from "next/navigation";
 import {
   getHoldingByTicker,
+  getHoldingPriceHistory,
   getLatestAlertForTicker,
   getNewsForTicker,
 } from "@/lib/queries";
 import TickerLogo from "@/app/components/ticker-logo";
+import HoldingPriceChart from "@/app/components/holding-price-chart";
 
 export const revalidate = 300;
 
@@ -61,10 +63,11 @@ export default async function HoldingDetailPage({
   const { ticker: rawTicker } = await params;
   const ticker = decodeURIComponent(rawTicker);
 
-  const [holding, alert, news] = await Promise.all([
+  const [holding, alert, news, priceHistory] = await Promise.all([
     getHoldingByTicker(ticker),
     getLatestAlertForTicker(ticker),
     getNewsForTicker(ticker, 10),
+    getHoldingPriceHistory(ticker),
   ]);
 
   if (!holding) notFound();
@@ -136,6 +139,16 @@ export default async function HoldingDetailPage({
             </dd>
           </div>
         </dl>
+      </div>
+
+      {/* Price return chart */}
+      <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6">
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50 mb-3">Return vs Cost Basis</h2>
+        <HoldingPriceChart
+          history={priceHistory}
+          avgBuy={holding.avg_buy}
+          ticker={holding.ticker}
+        />
       </div>
 
       {/* Latest alert / score */}

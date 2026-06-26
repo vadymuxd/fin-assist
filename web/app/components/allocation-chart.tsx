@@ -4,12 +4,11 @@ import { useMemo, useState } from "react";
 import { Cell, Pie, PieChart, ResponsiveContainer, Tooltip } from "recharts";
 import type { Holding } from "@/lib/queries";
 
-type Dimension = "sector" | "market" | "platform" | "ticker";
+type Dimension = "sector" | "market" | "ticker";
 
 const dimensionLabels: Record<Dimension, string> = {
   sector: "Sector",
   market: "Market",
-  platform: "Platform",
   ticker: "Ticker",
 };
 
@@ -69,12 +68,12 @@ export default function AllocationChart({
 
   const stockSlices = useMemo(() => bucket(holdings, dim), [holdings, dim]);
 
-  // For ticker/platform views include managed + cash as full-picture extras.
-  // For sector/market views only show self-managed stocks so categories stay meaningful.
+  // Ticker view includes managed + cash for a full-picture total.
+  // Sector/market views show only self-managed stocks so categories stay meaningful.
   const chartData = useMemo((): Slice[] => {
     const offset = stockSlices.length;
     const extras: Slice[] = [];
-    if (dim === "ticker" || dim === "platform") {
+    if (dim === "ticker") {
       if (managed && managed > 0) {
         extras.push({ name: "JP Morgan Managed", value: managed, pct: 0, color: palette[offset % palette.length] });
       }
@@ -96,9 +95,9 @@ export default function AllocationChart({
         <div>
           <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Allocation</h2>
           <p className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-            {dim === "sector" || dim === "market"
-              ? `Custom stocks by ${dimensionLabels[dim].toLowerCase()}`
-              : `All assets by ${dimensionLabels[dim].toLowerCase()}`}
+            {dim === "ticker"
+              ? "All assets by ticker"
+              : `Custom stocks by ${dimensionLabels[dim].toLowerCase()}`}
           </p>
         </div>
         <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 self-start">

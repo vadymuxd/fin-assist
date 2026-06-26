@@ -88,6 +88,13 @@ TICKER_CONFIG = {
     'EUE':    ('EUE.L',   'EUE.L',      'LSE'),
     'RHM':    ('RHM.DE',  'RHM.DE',     'EU'),
     'HO':     ('HO.PA',   'HO.PA',      'EU'),
+    # Added after Nutmeg/Freetrade consolidation
+    'MAGG':   ('MAGG.L',  'MAGG.L',     'LSE'),
+    'PCGH':   ('PCGH.L',  'PCGH.L',     'LSE'),
+    'UKRN':   ('UKRN.L',  'UKRN.L',     'LSE'),
+    'KYIV':   ('KYIV',    'KYIV',       'US'),
+    'PLTR':   ('PLTR',    'PLTR',       'US'),
+    'SWMR':   ('SWMR',    'SWMR',       'US'),
 }
 
 
