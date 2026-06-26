@@ -22,21 +22,24 @@ const benchmarkKeys = {
   "S&P 500": "spx",
   FTSE: "ftse",
   NDX: "ndx",
-  MSCI: "msci",
   Gold: "gold",
+  MAGG: "magg",
   Lisa: "lisa_total",
 } as const satisfies Record<string, keyof PortfolioSnapshot>;
 
-type BenchmarkLabel = keyof typeof benchmarkKeys;
-const benchmarkLabels = Object.keys(benchmarkKeys) as BenchmarkLabel[];
+type DirectBenchmarkLabel = keyof typeof benchmarkKeys;
+type BenchmarkLabel = DirectBenchmarkLabel | "Custom Stocks";
+
+const ALL_BENCHMARKS: BenchmarkLabel[] = ["Custom Stocks", "S&P 500", "FTSE", "NDX", "Gold", "MAGG", "Lisa"];
 
 const seriesColor: Record<string, string> = {
-  Portfolio: "#2563eb",
+  Portfolio: "#0f172a",
+  "Custom Stocks": "#2563eb",
   "S&P 500": "#0ea5e9",
   FTSE: "#10b981",
   NDX: "#f59e0b",
-  MSCI: "#8b5cf6",
   Gold: "#f43f5e",
+  MAGG: "#8b5cf6",
   Lisa: "#d946ef",
 };
 
@@ -79,19 +82,28 @@ function buildPerformanceData(
   if (snapshots.length === 0) return { rows: [], activeWithData: [] };
 
   // Portfolio line = stocks-only organic performance, indexed to 100.
-  // ratio = self_managed / stocks_started_value (col G / col I in the sheet).
-  // Cash and new BUYs both cancel out of this ratio, so it reflects only
-  // organic price movement on the stocks the user owns.
   const stockValues: number[] = snapshots.map((s) => {
     const started = s.stocks_started_value ?? 0;
     return started > 0 ? (s.self_managed / started) * 100 : 100;
   });
 
-  // Anchor each benchmark to its first non-null point, so a series with a
-  // late start (e.g. gold backfilled later) still indexes to 100 from its
-  // own first sample rather than being dropped.
-  const baseBench: Partial<Record<BenchmarkLabel, number | null>> = {};
-  for (const label of active) {
+  // Custom Stocks = deposit-neutral TWR of the self-managed portfolio.
+  let customTwr = 1.0;
+  const customTwrValues: number[] = snapshots.map((s, i) => {
+    if (i > 0) {
+      const prev = snapshots[i - 1];
+      const base = prev.self_managed + ((s.stocks_started_value ?? 0) - (prev.stocks_started_value ?? 0));
+      if (base > 0) customTwr *= 1 + (s.self_managed - base) / base;
+    }
+    return customTwr * 100;
+  });
+
+  const includeCustom = active.includes("Custom Stocks");
+  const directActive = active.filter((l): l is DirectBenchmarkLabel => l !== "Custom Stocks");
+
+  // Anchor each benchmark to its first non-null point.
+  const baseBench: Partial<Record<DirectBenchmarkLabel, number | null>> = {};
+  for (const label of directActive) {
     const k = benchmarkKeys[label];
     const firstValid = snapshots.find((s) => {
       const v = s[k];
@@ -99,10 +111,16 @@ function buildPerformanceData(
     });
     baseBench[label] = firstValid ? (firstValid[k] as number) : null;
   }
-  const activeWithData = active.filter((l) => baseBench[l] != null);
+  const directWithData = directActive.filter((l) => baseBench[l] != null);
+  const activeWithData: BenchmarkLabel[] = [
+    ...(includeCustom ? (["Custom Stocks"] as const) : []),
+    ...directWithData,
+  ];
+
   const rows: Row[] = snapshots.map((s, i) => {
     const r: Row = { date: s.date, Portfolio: stockValues[i] };
-    for (const label of activeWithData) {
+    if (includeCustom) r["Custom Stocks"] = customTwrValues[i];
+    for (const label of directWithData) {
       const k = benchmarkKeys[label];
       const v = s[k];
       const b = baseBench[label]!;
@@ -165,7 +183,7 @@ function CustomTooltip({
 export default function PortfolioChart({ snapshots }: { snapshots: PortfolioSnapshot[] }) {
   const [granularity, setGranularity] = useState<Granularity>("D");
   const [mode, setMode] = useState<Mode>("value");
-  const [active, setActive] = useState<BenchmarkLabel[]>(["S&P 500"]);
+  const [active, setActive] = useState<BenchmarkLabel[]>(["S&P 500", "MAGG", "Custom Stocks"]);
 
   const aggregated = useMemo(() => aggregate(snapshots, granularity), [snapshots, granularity]);
 
@@ -237,7 +255,7 @@ export default function PortfolioChart({ snapshots }: { snapshots: PortfolioSnap
 
       {mode === "performance" && (
         <div className="flex flex-wrap gap-1.5 mb-4">
-          {benchmarkLabels.map((label) => {
+          {ALL_BENCHMARKS.map((label) => {
             const on = active.includes(label);
             return (
               <button
@@ -270,8 +288,8 @@ export default function PortfolioChart({ snapshots }: { snapshots: PortfolioSnap
             <ComposedChart data={rows} margin={{ top: 10, right: 10, left: 0, bottom: 0 }}>
               <defs>
                 <linearGradient id="portfolioFill" x1="0" y1="0" x2="0" y2="1">
-                  <stop offset="0%" stopColor="#2563eb" stopOpacity={0.25} />
-                  <stop offset="100%" stopColor="#2563eb" stopOpacity={0} />
+                  <stop offset="0%" stopColor="#0f172a" stopOpacity={0.18} />
+                  <stop offset="100%" stopColor="#0f172a" stopOpacity={0} />
                 </linearGradient>
               </defs>
               <CartesianGrid strokeDasharray="3 3" stroke="rgb(var(--grid, 229 231 235))" className="stroke-gray-200 dark:stroke-gray-800" vertical={false} />
@@ -315,8 +333,8 @@ export default function PortfolioChart({ snapshots }: { snapshots: PortfolioSnap
               <Area
                 type="monotone"
                 dataKey="Portfolio"
-                stroke="#2563eb"
-                strokeWidth={2.25}
+                stroke="#0f172a"
+                strokeWidth={3}
                 fill="url(#portfolioFill)"
                 dot={false}
                 activeDot={{ r: 4 }}
