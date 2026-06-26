@@ -775,12 +775,14 @@ function findClosestOnOrBefore(
 
 function delta(latest: PortfolioSnapshot, prev: PortfolioSnapshot | null): Delta | null {
   if (!prev) return null;
-  // Organic change only (£ and %), for stocks + managed funds (vadym_total
-  // excludes cash). Strip the change in each tracking-started value: a BUY or a
-  // fund deposit adds equal £ to the value AND its started-value baseline, so
-  // they cancel — leaving pure market movement. Without this, a contribution
-  // (e.g. a Nutmeg deposit) would show as a phantom gain and the £ would
-  // disagree with the %.
+  // Organic change only (£ and %), for invested assets (stocks + managed funds).
+  // Strip the change in each tracking-started value: a BUY or a fund deposit adds
+  // equal £ to the value AND its started-value baseline, so they cancel — leaving
+  // pure market movement. Without this, a contribution (e.g. a Nutmeg deposit)
+  // would show as a phantom gain and the £ would disagree with the %.
+  // NOTE: vadym_total now INCLUDES uninvested cash (sheet G7 = stocks + cash,
+  // 2026-06), so the % base must be the invested-assets total (self_managed +
+  // managed) — not vadym_total — to keep the performance % undistorted by cash.
   const stockOrganic =
     (latest.self_managed - prev.self_managed) -
     ((latest.stocks_started_value ?? 0) - (prev.stocks_started_value ?? 0));
@@ -788,7 +790,7 @@ function delta(latest: PortfolioSnapshot, prev: PortfolioSnapshot | null): Delta
     (latest.managed - prev.managed) -
     ((latest.managed_started_value ?? 0) - (prev.managed_started_value ?? 0));
   const absolute = stockOrganic + managedOrganic;
-  const prevBase = prev.vadym_total;
+  const prevBase = prev.self_managed + prev.managed;
   const pct = prevBase === 0 ? 0 : (absolute / prevBase) * 100;
   return { absolute, pct, fromDate: prev.date };
 }

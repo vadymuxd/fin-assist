@@ -102,8 +102,15 @@ function portfolioDelta(snapshots: PortfolioSnapshot[], targetISO: string): numb
   const candidates = sorted.filter((s) => s.date <= targetISO && s.date < latest.date);
   if (candidates.length === 0) return null;
   const prev = candidates[candidates.length - 1];
-  if (prev.vadym_total === 0) return null;
-  return ((latest.vadym_total - prev.vadym_total) / prev.vadym_total) * 100;
+  // Organic stocks performance only — exclude uninvested cash (vadym_total now
+  // includes it, 2026-06) and strip contributions via the tracking-started
+  // baseline so a BUY doesn't read as a gain. Mirrors delta() in queries.ts.
+  const base = prev.self_managed;
+  if (base === 0) return null;
+  const organic =
+    (latest.self_managed - prev.self_managed) -
+    ((latest.stocks_started_value ?? 0) - (prev.stocks_started_value ?? 0));
+  return (organic / base) * 100;
 }
 
 const PERIOD_LABELS: Record<Period, string> = { W: "WoW", M: "MoM", START: "All time" };

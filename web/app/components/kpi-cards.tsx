@@ -132,7 +132,8 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
   const managed = latest.managed ?? 0;
 
   // Use self_managed + managed + cash — same components as the Allocation chart —
-  // so both totals agree. vadym_total / joint_total from the sheet exclude cash.
+  // so both totals agree. This now matches vadym_total too (sheet G7 = stocks +
+  // cash since 2026-06); joint_total likewise includes cash.
   const total =
     owner === "Joint" ? (latest.joint_total ?? 0)
     : owner === "Lisa" ? (latest.lisa_total ?? 0)
