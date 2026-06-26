@@ -77,9 +77,24 @@ function buildValueData(snapshots: PortfolioSnapshot[]): Row[] {
 
 function buildPerformanceData(
   snapshots: PortfolioSnapshot[],
-  active: BenchmarkLabel[]
+  active: BenchmarkLabel[],
+  maggQty = 0,
+  sglnQty = 0
 ): { rows: Row[]; activeWithData: BenchmarkLabel[] } {
   if (snapshots.length === 0) return { rows: [], activeWithData: [] };
+
+  // Forward-fill magg and sgln_price so weekends/holidays (no market data) use
+  // the last known trading-day price instead of falling back to 0.
+  let lastMagg: number | null = null;
+  let lastSgln: number | null = null;
+  const maggFilled: (number | null)[] = snapshots.map((s) => {
+    if ((s.magg as number | null) != null) lastMagg = s.magg as number;
+    return lastMagg;
+  });
+  const sglnFilled: (number | null)[] = snapshots.map((s) => {
+    if (s.sgln_price != null) lastSgln = s.sgln_price;
+    return lastSgln;
+  });
 
   // Portfolio line = stocks-only organic performance, indexed to 100.
   const stockValues: number[] = snapshots.map((s) => {
@@ -87,13 +102,21 @@ function buildPerformanceData(
     return started > 0 ? (s.self_managed / started) * 100 : 100;
   });
 
-  // Custom Stocks = deposit-neutral TWR of the self-managed portfolio.
+  // pure equity = self_managed minus bond/gold ETF positions (MAGG, SGLN)
+  const pureEquity = (s: PortfolioSnapshot, i: number) =>
+    s.self_managed
+    - (maggFilled[i] != null ? maggQty * maggFilled[i]! : 0)
+    - (sglnFilled[i] != null ? sglnQty * sglnFilled[i]! : 0);
+
+  // Custom Stocks = deposit-neutral TWR of pure equity (excludes MAGG & SGLN).
   let customTwr = 1.0;
   const customTwrValues: number[] = snapshots.map((s, i) => {
     if (i > 0) {
       const prev = snapshots[i - 1];
-      const base = prev.self_managed + ((s.stocks_started_value ?? 0) - (prev.stocks_started_value ?? 0));
-      if (base > 0) customTwr *= 1 + (s.self_managed - base) / base;
+      const prevPure = pureEquity(prev, i - 1);
+      const currPure = pureEquity(s, i);
+      const base = prevPure + ((s.stocks_started_value ?? 0) - (prev.stocks_started_value ?? 0));
+      if (base > 0) customTwr *= 1 + (currPure - base) / base;
     }
     return customTwr * 100;
   });
@@ -180,7 +203,15 @@ function CustomTooltip({
   );
 }
 
-export default function PortfolioChart({ snapshots }: { snapshots: PortfolioSnapshot[] }) {
+export default function PortfolioChart({
+  snapshots,
+  maggQty = 0,
+  sglnQty = 0,
+}: {
+  snapshots: PortfolioSnapshot[];
+  maggQty?: number;
+  sglnQty?: number;
+}) {
   const [granularity, setGranularity] = useState<Granularity>("D");
   const [mode, setMode] = useState<Mode>("value");
   const [active, setActive] = useState<BenchmarkLabel[]>(["S&P 500", "MAGG", "Custom Stocks"]);
@@ -191,8 +222,8 @@ export default function PortfolioChart({ snapshots }: { snapshots: PortfolioSnap
     if (mode === "value") {
       return { rows: buildValueData(aggregated), activeWithData: [] as BenchmarkLabel[] };
     }
-    return buildPerformanceData(aggregated, active);
-  }, [aggregated, mode, active]);
+    return buildPerformanceData(aggregated, active, maggQty, sglnQty);
+  }, [aggregated, mode, active, maggQty, sglnQty]);
 
   const series: string[] = mode === "value" ? ["Portfolio"] : ["Portfolio", ...activeWithData];
 

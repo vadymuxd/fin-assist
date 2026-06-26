@@ -49,6 +49,7 @@ export type PortfolioSnapshot = {
   msci: number | null;
   gold: number | null;
   magg: number | null;
+  sgln_price: number | null;
 };
 
 export type SectorLookup = {
@@ -82,12 +83,19 @@ export type HoldingsAlert = {
 };
 
 export async function getPortfolioSnapshots(): Promise<PortfolioSnapshot[]> {
-  const { data, error } = await supabase
-    .from("portfolio_snapshots")
-    .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, managed_started_value, cash, net_deposits, spx, ftse, ndx, msci, gold, magg")
-    .order("date", { ascending: true });
+  const [{ data: snaps, error }, { data: sglnRows }] = await Promise.all([
+    supabase
+      .from("portfolio_snapshots")
+      .select("date, vadym_total, lisa_total, joint_total, self_managed, stocks_started_value, lisa_started_value, managed, managed_started_value, cash, net_deposits, spx, ftse, ndx, msci, gold, magg")
+      .order("date", { ascending: true }),
+    supabase
+      .from("holding_price_history")
+      .select("date, price")
+      .eq("ticker", "SGLN"),
+  ]);
   if (error) throw error;
-  return data ?? [];
+  const sglnMap = new Map<string, number>((sglnRows ?? []).map((r) => [r.date as string, Number(r.price)]));
+  return (snaps ?? []).map((s) => ({ ...s, sgln_price: sglnMap.get(s.date) ?? null }));
 }
 
 export async function getLatestSnapshot(): Promise<PortfolioSnapshot | null> {
@@ -98,7 +106,7 @@ export async function getLatestSnapshot(): Promise<PortfolioSnapshot | null> {
     .limit(1)
     .maybeSingle();
   if (error) throw error;
-  return data;
+  return data ? { ...data, sgln_price: null } : null;
 }
 
 export async function getHoldings(): Promise<Holding[]> {

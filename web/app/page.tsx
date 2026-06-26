@@ -14,6 +14,8 @@ export default async function DashboardPage() {
     getHoldingsWithSectors(),
   ]);
   const deltas = computeDeltas(snapshots);
+  const maggQty = holdings.find((h) => h.ticker === "MAGG")?.qty ?? 0;
+  const sglnQty = holdings.find((h) => h.ticker === "SGLN")?.qty ?? 0;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -35,7 +37,7 @@ export default async function DashboardPage() {
         </div>
       </div>
       <KpiCards deltas={deltas} />
-      <PortfolioChart snapshots={snapshots} />
+      <PortfolioChart snapshots={snapshots} maggQty={maggQty} sglnQty={sglnQty} />
       <AllocationChart holdings={holdings} managed={deltas?.latest.managed} cash={deltas?.latest.cash} />
       <HoldingsTable holdings={holdings} snapshots={snapshots} />
     </div>
