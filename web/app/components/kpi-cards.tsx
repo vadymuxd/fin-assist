@@ -210,10 +210,10 @@ export default function KpiCards({ deltas }: { deltas: DashboardDeltas | null })
               </div>
             )}
             {owner === "Vadym" && (
-              <div className="grid grid-cols-3 gap-4 sm:gap-6 shrink-0">
+              <div className={`grid ${managed > 0 ? "grid-cols-3" : "grid-cols-2"} gap-4 sm:gap-6 shrink-0`}>
                 <BreakdownChip label="Stocks" value={stocks} total={total} />
                 <BreakdownChip label="Cash" value={cash} total={total} />
-                <BreakdownChip label="Managed" value={managed} total={total} />
+                {managed > 0 && <BreakdownChip label="Managed" value={managed} total={total} />}
               </div>
             )}
           </div>
