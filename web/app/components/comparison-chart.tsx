@@ -13,13 +13,14 @@ import {
 import type { PensionSnapshot, PortfolioSnapshot } from "@/lib/queries";
 import { buildComparisonData } from "@/lib/queries";
 
-type SeriesKey = "customStocks" | "magg" | "spx" | "pensions" | "lisa";
+type SeriesKey = "customStocks" | "magg" | "spx" | "gold" | "pensions" | "lisa";
 
 const SERIES: { key: SeriesKey; label: string; color: string }[] = [
   { key: "customStocks", label: "Custom Stocks", color: "#2563eb" },
   { key: "magg",         label: "MAGG",          color: "#10b981" },
   { key: "spx",          label: "S&P 500",       color: "#0ea5e9" },
-  { key: "pensions",     label: "Pensions",       color: "#f59e0b" },
+  { key: "gold",         label: "Gold",           color: "#f59e0b" },
+  { key: "pensions",     label: "Pensions",       color: "#a855f7" },
   { key: "lisa",         label: "Lisa",           color: "#d946ef" },
 ];
 
@@ -95,7 +96,7 @@ export default function ComparisonChart({
   portfolioSnapshots: PortfolioSnapshot[];
   pensionSnapshots: PensionSnapshot[];
 }) {
-  const [active, setActive] = useState<SeriesKey[]>(["customStocks", "spx", "magg"]);
+  const [active, setActive] = useState<SeriesKey[]>(["customStocks", "magg", "spx", "gold", "pensions", "lisa"]);
 
   const data = useMemo(
     () => aggregateWeekly(buildComparisonData(portfolioSnapshots, pensionSnapshots)),

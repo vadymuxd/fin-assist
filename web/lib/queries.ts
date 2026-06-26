@@ -858,6 +858,7 @@ export type ComparisonPoint = {
   customStocks: number;
   magg: number | null;
   spx: number | null;
+  gold: number | null;
   pensions: number | null;
   lisa: number | null;
 };
@@ -870,8 +871,9 @@ export function buildComparisonData(
   const sorted = [...portfolioSnapshots].sort((a, b) => a.date.localeCompare(b.date));
   const sortedPensions = [...pensionSnapshots].sort((a, b) => a.date.localeCompare(b.date));
 
-  const baseSpx = sorted.find((s) => s.spx != null && s.spx > 0)?.spx ?? null;
+  const baseSpx  = sorted.find((s) => s.spx  != null && s.spx  > 0)?.spx  ?? null;
   const baseMagg = sorted.find((s) => s.magg != null && s.magg > 0)?.magg ?? null;
+  const baseGold = sorted.find((s) => s.gold != null && s.gold > 0)?.gold ?? null;
   const basePension = sortedPensions.find((s) => s.total > 0)?.total ?? null;
 
   // Time-Weighted Return: chain sub-period returns between each cash flow.
@@ -899,7 +901,8 @@ export function buildComparisonData(
       date: s.date,
       customStocks: stocksTwr * 100,
       magg: s.magg != null && baseMagg != null ? (s.magg / baseMagg) * 100 : null,
-      spx: s.spx != null && baseSpx != null ? (s.spx / baseSpx) * 100 : null,
+      spx:  s.spx  != null && baseSpx  != null ? (s.spx  / baseSpx)  * 100 : null,
+      gold: s.gold != null && baseGold != null ? (s.gold / baseGold) * 100 : null,
       pensions: pensionRow && basePension ? (pensionRow.total / basePension) * 100 : null,
       lisa: (s.lisa_total ?? 0) > 0 && (s.lisa_started_value ?? 0) > 0 ? lisaTwr * 100 : null,
     };
