@@ -57,6 +57,11 @@ def find_investment_rows(ws):
             rows['managed_total']     = i + 1  # snapshot_worker: first managed fund value row
 
         elif 'BENCHMARK' in a and 'sp500' not in rows:
+            # The BENCHMARKS header is the lower boundary of the stocks section.
+            # log_trades uses this to know where the stock list ends now that the
+            # legacy platform-subtotal rows (Total T212 / Total Freetrade) and the
+            # Managed Funds row have been removed (2026-06 consolidation).
+            rows['stocks_end_row'] = i
             rows['sp500']      = i + 1
             rows['ftse100']    = i + 2
             rows['nasdaq100']  = i + 3

@@ -78,11 +78,15 @@ def last_stock_row(ws, layout):
     """Last row with a ticker in col A, within the stocks section."""
     col_a = ws.col_values(1)
     last = layout['first_stock_row'] - 1
-    end_excl = min(
-        layout.get('t212_total_row', layout['managed_funds_row']),
-        layout.get('freetrade_total_row', layout['managed_funds_row']),
-        layout['managed_funds_row'],
-    )
+    # Stocks end just above the BENCHMARKS header. Fall back to the legacy
+    # platform-subtotal / managed-fund boundary rows for older sheet layouts.
+    end_excl = layout.get('stocks_end_row')
+    if end_excl is None:
+        end_excl = min(
+            layout.get('t212_total_row', 10**9),
+            layout.get('freetrade_total_row', 10**9),
+            layout.get('managed_funds_row', 10**9),
+        )
     for i in range(layout['first_stock_row'] - 1, end_excl - 1):
         if i < len(col_a) and col_a[i].strip():
             last = i + 1
