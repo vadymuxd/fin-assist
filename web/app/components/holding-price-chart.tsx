@@ -153,10 +153,10 @@ export default function HoldingPriceChart({
   const domainMax = maxV + padding;
   const domain: [number, number] = [domainMin, domainMax];
 
-  // Fraction of the y-range (from the top) where the 0% line sits — used to
-  // split the gradient so the line/area is green above it and red below it.
-  const off =
-    domainMax <= 0 ? 0 : domainMin >= 0 ? 1 : domainMax / (domainMax - domainMin);
+  // Fraction from the top of the path bounding box where 0% sits.
+  // Must use maxV/minV (actual data extremes), NOT the padded domain — the SVG
+  // gradient uses objectBoundingBox which maps to the path extent, not the axis.
+  const off = maxV <= 0 ? 0 : minV >= 0 ? 1 : maxV / (maxV - minV);
 
   const realPct = trackingPct ?? tickerPct ?? 0;
   const realUp = realPct >= 0;
