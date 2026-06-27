@@ -41,7 +41,7 @@ TICKERS: dict[str, tuple[str, bool, str | None]] = {
     'RHM':    ('RHM.DE',     False, 'EUR'),
     'MAGG':   ('MAGG.L',     False, None),   # GBP already
     'PCGH':   ('PCGH.L',     True,  None),   # pence → GBP
-    'UKRN':   ('UKRN.L',     False, None),   # GBP already
+    'UKRN':   ('UKRN.L',     False, 'USD'),  # LSE-listed but quoted in USD → convert
     'KYIV':   ('KYIV',       False, 'USD'),
     'PLTR':   ('PLTR',       False, 'USD'),
     'SWMR':   ('SWMR',       False, 'USD'),

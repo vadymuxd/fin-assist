@@ -10,6 +10,10 @@ export type Holding = {
   value_gbp: number | null;
   pnl_abs: number | null;
   pnl_pct: number | null;
+  /** Sheet col I — value of the position at tracking start (Apr 13), or cost if acquired later. */
+  tracking_started_value: number | null;
+  /** Sheet col K — real return since tracking start (Apr 13), money-weighted across actual buys. */
+  tracking_pnl_pct: number | null;
   sector: string | null;
   market: string | null;
   last_updated: string | null;
@@ -139,6 +143,45 @@ export async function getHoldingByTicker(ticker: string): Promise<Holding | null
 }
 
 export type PricePoint = { date: string; price: number };
+export type HoldingPriceHistoryMap = Record<string, PricePoint[]>;
+
+export type HoldingTrade = {
+  id: number;
+  date: string;
+  ticker: string;
+  action: "BUY" | "SELL";
+  qty: number;
+  price_gbp: number;
+  total_gbp: number;
+  platform: string | null;
+  notes: string | null;
+};
+
+export async function getHoldingTrades(ticker: string): Promise<HoldingTrade[]> {
+  const { data, error } = await supabase
+    .from("holding_trades")
+    .select("id, date, ticker, action, qty, price_gbp, total_gbp, platform, notes")
+    .eq("ticker", ticker)
+    .order("date");
+  if (error) throw error;
+  return (data ?? []) as HoldingTrade[];
+}
+
+export async function getAllHoldingsPriceHistoryFrom(fromDate: string): Promise<HoldingPriceHistoryMap> {
+  const { data, error } = await supabase
+    .from("holding_price_history")
+    .select("ticker, date, price")
+    .gte("date", fromDate)
+    .order("date");
+  if (error) throw error;
+  const map: HoldingPriceHistoryMap = {};
+  for (const row of data ?? []) {
+    const t = row.ticker as string;
+    if (!map[t]) map[t] = [];
+    map[t].push({ date: row.date as string, price: Number(row.price) });
+  }
+  return map;
+}
 
 export async function getHoldingPriceHistory(ticker: string): Promise<PricePoint[]> {
   const { data, error } = await supabase

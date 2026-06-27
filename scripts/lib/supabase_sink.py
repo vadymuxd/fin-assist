@@ -197,6 +197,24 @@ def write_news_items(items: list[dict]) -> bool:
     return ok
 
 
+def write_holding_trade(trade: dict) -> bool:
+    """
+    Insert one BUY/SELL row into holding_trades.
+    trade keys: date, ticker, action, qty, price_gbp, total_gbp, platform, notes
+    """
+    row = {
+        'date':       trade['date'],
+        'ticker':     trade['ticker'],
+        'action':     trade['action'].upper(),
+        'qty':        trade['qty'],
+        'price_gbp':  trade['price_gbp'],
+        'total_gbp':  trade['total_gbp'],
+        'platform':   trade.get('platform') or None,
+        'notes':      trade.get('notes') or None,
+    }
+    return _insert('holding_trades', [row])
+
+
 def write_sectors(entries: list[dict]) -> bool:
     """Upsert ticker→sector/market lookup rows. Each dict must have 'ticker'."""
     return _upsert('sectors', entries, on_conflict='ticker')

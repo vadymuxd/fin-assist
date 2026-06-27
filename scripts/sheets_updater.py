@@ -164,6 +164,7 @@ def update_notion_snapshot(sh, results):
                 'avg_buy':     parse_float(row[4]) if len(row) > 4 else 0,
                 'price':       parse_float(row[5]) if len(row) > 5 else 0,
                 'value':       parse_float(row[6]) if len(row) > 6 else 0,
+                'tracking_started': parse_float(row[8]) if len(row) > 8 else 0,
                 'tracking_pnl':    parse_float(row[9])  if len(row) > 9  else 0,
                 'tracking_pct':    parse_float(row[10]) if len(row) > 10 else 0,
                 'total_pnl':   parse_float(row[11]) if len(row) > 11 else 0,
@@ -186,6 +187,8 @@ def update_notion_snapshot(sh, results):
                 'value_gbp':     p['value'],
                 'pnl_abs':       p['total_pnl'],
                 'pnl_pct':       p['total_pnl_pct'],
+                'tracking_started_value': p['tracking_started'],
+                'tracking_pnl_pct':       p['tracking_pct'],
                 'last_updated':  run_time,
             }
             for p in positions

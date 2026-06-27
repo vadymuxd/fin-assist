@@ -2,7 +2,7 @@
 
 import Link from "next/link";
 import { useMemo, useState } from "react";
-import type { Holding, PortfolioSnapshot } from "@/lib/queries";
+import type { Holding, HoldingPriceHistoryMap, PortfolioSnapshot } from "@/lib/queries";
 import TickerLogo from "./ticker-logo";
 
 type SortKey = "ticker" | "platform" | "sector" | "market" | "value_gbp" | "pnl_abs" | "pnl_pct";
@@ -14,8 +14,6 @@ const gbp = new Intl.NumberFormat("en-GB", {
   currency: "GBP",
   maximumFractionDigits: 0,
 });
-
-const START_DATE = "2026-04-13";
 
 function fmtPct(v: number | null) {
   if (v === null || v === undefined) return "—";
@@ -95,6 +93,11 @@ function daysAgoISO(days: number): string {
   return d.toISOString().slice(0, 10);
 }
 
+function findClosestPrice(pts: { date: string; price: number }[], targetDate: string): number | null {
+  const candidates = pts.filter((p) => p.date <= targetDate);
+  return candidates.length > 0 ? candidates[candidates.length - 1].price : null;
+}
+
 function portfolioDelta(snapshots: PortfolioSnapshot[], targetISO: string): number | null {
   if (snapshots.length < 2) return null;
   const sorted = [...snapshots].sort((a, b) => a.date.localeCompare(b.date));
@@ -102,9 +105,6 @@ function portfolioDelta(snapshots: PortfolioSnapshot[], targetISO: string): numb
   const candidates = sorted.filter((s) => s.date <= targetISO && s.date < latest.date);
   if (candidates.length === 0) return null;
   const prev = candidates[candidates.length - 1];
-  // Organic stocks performance only — exclude uninvested cash (vadym_total now
-  // includes it, 2026-06) and strip contributions via the tracking-started
-  // baseline so a BUY doesn't read as a gain. Mirrors delta() in queries.ts.
   const base = prev.self_managed;
   if (base === 0) return null;
   const organic =
@@ -118,9 +118,11 @@ const PERIOD_LABELS: Record<Period, string> = { W: "WoW", M: "MoM", START: "All 
 export default function HoldingsTable({
   holdings,
   snapshots = [],
+  priceHistoryMap,
 }: {
   holdings: Holding[];
   snapshots?: PortfolioSnapshot[];
+  priceHistoryMap?: HoldingPriceHistoryMap;
 }) {
   const [sortKey, setSortKey] = useState<SortKey>("value_gbp");
   const [dir, setDir] = useState<Dir>("desc");
@@ -141,36 +143,66 @@ export default function HoldingsTable({
     }
   };
 
-  // Portfolio-level delta for W/M context badge
+  // Portfolio-level delta for the header badge.
+  // START matches the Sheet: aggregate current value vs aggregate tracking-started
+  // value. W/M use snapshot deltas (no per-holding history for arbitrary windows).
   const portfolioPct = useMemo(() => {
-    if (period === "START") return portfolioDelta(snapshots, START_DATE);
+    if (period === "START") {
+      let value = 0;
+      let started = 0;
+      for (const h of holdings) {
+        if (h.value_gbp !== null && h.tracking_started_value) {
+          value += h.value_gbp;
+          started += h.tracking_started_value;
+        }
+      }
+      return started > 0 ? (value / started - 1) * 100 : null;
+    }
     if (period === "W") return portfolioDelta(snapshots, daysAgoISO(7));
     return portfolioDelta(snapshots, daysAgoISO(30));
-  }, [snapshots, period]);
+  }, [snapshots, holdings, period]);
 
-  // Per-holding % to display: START shows pnl_pct; W/M have no per-holding history → null
+  // Per-holding % derived from price history for all periods
   function rowPct(h: Holding): number | null {
-    if (period === "START") return h.pnl_pct ?? null;
-    return null;
+    const current = h.current_price;
+    if (current === null) return null;
+
+    const pts = (priceHistoryMap ?? {})[h.ticker] ?? [];
+
+    if (period === "START") {
+      // Real money-weighted return since Apr 13 (Sheet col K) — accounts for
+      // actual purchase timing, unlike the raw price-window returns below.
+      return h.tracking_pnl_pct ?? h.pnl_pct ?? null;
+    }
+    if (period === "W") {
+      const basePrice = findClosestPrice(pts, daysAgoISO(7));
+      if (basePrice === null || basePrice === 0) return null;
+      return ((current - basePrice) / basePrice) * 100;
+    }
+    // M
+    const basePrice = findClosestPrice(pts, daysAgoISO(30));
+    if (basePrice === null || basePrice === 0) return null;
+    return ((current - basePrice) / basePrice) * 100;
   }
 
   const pctColLabel =
     period === "W" ? "7d %" :
     period === "M" ? "30d %" :
-    "P&L %";
+    "Since 13 Apr";
 
   return (
     <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 overflow-hidden">
       <div className="px-4 sm:px-6 py-4 border-b border-gray-200 dark:border-gray-800 flex items-center justify-between gap-3">
         <div className="flex items-center gap-3">
           <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50">Holdings</h2>
-          {(period === "W" || period === "M") && portfolioPct !== null && (
+          {portfolioPct !== null && (
             <span className={`text-[11px] font-medium px-2 py-0.5 rounded-full ${
               portfolioPct >= 0
                 ? "bg-emerald-50 dark:bg-emerald-500/10 text-emerald-600 dark:text-emerald-400"
                 : "bg-rose-50 dark:bg-rose-500/10 text-rose-600 dark:text-rose-400"
             }`}>
-              Portfolio {portfolioPct >= 0 ? "+" : ""}{portfolioPct.toFixed(2)}% {period === "W" ? "this week" : "this month"}
+              Portfolio {portfolioPct >= 0 ? "+" : ""}{portfolioPct.toFixed(2)}%{" "}
+              {period === "W" ? "this week" : period === "M" ? "this month" : "since 13 Apr"}
             </span>
           )}
         </div>

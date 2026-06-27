@@ -4,6 +4,7 @@ import { notFound } from "next/navigation";
 import {
   getHoldingByTicker,
   getHoldingPriceHistory,
+  getHoldingTrades,
   getLatestAlertForTicker,
   getNewsForTicker,
 } from "@/lib/queries";
@@ -63,14 +64,23 @@ export default async function HoldingDetailPage({
   const { ticker: rawTicker } = await params;
   const ticker = decodeURIComponent(rawTicker);
 
-  const [holding, alert, news, priceHistory] = await Promise.all([
+  const [holding, alert, news, priceHistory, trades] = await Promise.all([
     getHoldingByTicker(ticker),
     getLatestAlertForTicker(ticker),
     getNewsForTicker(ticker, 10),
     getHoldingPriceHistory(ticker),
+    getHoldingTrades(ticker),
   ]);
 
   if (!holding) notFound();
+
+  // The Sheet has no all-time P&L % column, so holdings.pnl_pct arrives as 0.
+  // Derive it from the absolute P&L and cost basis (matches the holdings table).
+  const costBasis = (holding.avg_buy ?? 0) * (holding.qty ?? 0);
+  const pnlPct =
+    costBasis > 0 && holding.pnl_abs !== null
+      ? (holding.pnl_abs / costBasis) * 100
+      : holding.pnl_pct;
 
   return (
     <div className="space-y-4 sm:space-y-6">
@@ -111,8 +121,8 @@ export default async function HoldingDetailPage({
             <div className="text-2xl font-semibold tabular-nums text-gray-900 dark:text-gray-50">
               {holding.value_gbp !== null ? gbp.format(holding.value_gbp) : "—"}
             </div>
-            <div className={`text-sm tabular-nums ${pnlColor(holding.pnl_pct)}`}>
-              {fmtAbs(holding.pnl_abs)} ({fmtPct(holding.pnl_pct)})
+            <div className={`text-sm tabular-nums ${pnlColor(pnlPct)}`}>
+              {fmtAbs(holding.pnl_abs)} ({fmtPct(pnlPct)})
             </div>
           </div>
         </div>
@@ -143,11 +153,12 @@ export default async function HoldingDetailPage({
 
       {/* Price return chart */}
       <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6">
-        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50 mb-3">Return vs Cost Basis</h2>
+        <h2 className="text-sm font-semibold text-gray-900 dark:text-gray-50 mb-3">Return since 13 Apr 2026</h2>
         <HoldingPriceChart
           history={priceHistory}
-          avgBuy={holding.avg_buy}
+          trades={trades}
           ticker={holding.ticker}
+          trackingPct={holding.tracking_pnl_pct}
         />
       </div>
 

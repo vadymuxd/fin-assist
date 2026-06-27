@@ -1,4 +1,4 @@
-import { computeDeltas, getHoldingsWithSectors, getPortfolioSnapshots } from "@/lib/queries";
+import { computeDeltas, getAllHoldingsPriceHistoryFrom, getHoldingsWithSectors, getPortfolioSnapshots } from "@/lib/queries";
 import KpiCards from "./components/kpi-cards";
 import PortfolioChart from "./components/portfolio-chart";
 import AllocationChart from "./components/allocation-chart";
@@ -9,9 +9,10 @@ import { Compass } from "lucide-react";
 export const revalidate = 300;
 
 export default async function DashboardPage() {
-  const [snapshots, holdings] = await Promise.all([
+  const [snapshots, holdings, priceHistoryMap] = await Promise.all([
     getPortfolioSnapshots(),
     getHoldingsWithSectors(),
+    getAllHoldingsPriceHistoryFrom("2026-04-10"),
   ]);
   const deltas = computeDeltas(snapshots);
   const maggQty = holdings.find((h) => h.ticker === "MAGG")?.qty ?? 0;
@@ -39,7 +40,7 @@ export default async function DashboardPage() {
       <KpiCards deltas={deltas} />
       <PortfolioChart snapshots={snapshots} maggQty={maggQty} sglnQty={sglnQty} />
       <AllocationChart holdings={holdings} managed={deltas?.latest.managed} cash={deltas?.latest.cash} />
-      <HoldingsTable holdings={holdings} snapshots={snapshots} />
+      <HoldingsTable holdings={holdings} snapshots={snapshots} priceHistoryMap={priceHistoryMap} />
     </div>
   );
 }

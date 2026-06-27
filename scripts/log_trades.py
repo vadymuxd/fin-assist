@@ -42,7 +42,7 @@ from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
 
-from lib.supabase_sink import write_transaction, delete_holding, write_sectors
+from lib.supabase_sink import write_transaction, write_holding_trade, delete_holding, write_sectors
 from lib.sheets_layout import find_investment_rows
 
 load_dotenv()
@@ -340,6 +340,22 @@ def process_trade(ws_inv, ws_inv_tx, trade):
     if action not in ('BUY', 'SELL'):
         print(f"  ⚠ Unsupported action: {action} — only InvTransactions row appended")
         return
+
+    # Write to holding_trades for the web app chart
+    ok = write_holding_trade({
+        'date':      trade['date'],
+        'ticker':    trade['ticker'],
+        'action':    action,
+        'qty':       trade['qty'],
+        'price_gbp': trade['price'],
+        'total_gbp': trade['total'],
+        'platform':  trade.get('platform'),
+        'notes':     trade.get('notes'),
+    })
+    if ok:
+        print(f"  ✓ Supabase holding_trades: {action} {trade['ticker']} {trade['qty']} @ £{trade['price']:.4f}")
+    else:
+        print(f"  ⚠ Supabase holding_trades insert failed for {action} {trade['ticker']}")
 
     layout = find_layout(ws_inv)
     col_a  = ws_inv.col_values(1)

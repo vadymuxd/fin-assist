@@ -214,7 +214,7 @@ export default function PortfolioChart({
 }) {
   const [granularity, setGranularity] = useState<Granularity>("D");
   const [mode, setMode] = useState<Mode>("value");
-  const [active, setActive] = useState<BenchmarkLabel[]>(["S&P 500", "MAGG", "Custom Stocks"]);
+  const [active, setActive] = useState<BenchmarkLabel[]>([]);
 
   const aggregated = useMemo(() => aggregate(snapshots, granularity), [snapshots, granularity]);
 
