@@ -1123,6 +1123,7 @@ export async function getMonzoTransactions(
 export type SpendingRow = { month: string; category: string; total: number };
 export type MonthlySpend = { month: string; total: number };
 export type WeeklySpend = { week: string; total: number };
+export type DailySpend = { date: string; total: number };
 export type MerchantSpend = { name: string; total: number; count: number };
 export type DaySpend = { day: string; total: number };
 
@@ -1130,6 +1131,7 @@ export type SpendingAccountData = {
   byCategory: SpendingRow[];
   monthly: MonthlySpend[];
   weekly: WeeklySpend[];
+  daily: DailySpend[];
   topMerchants: MerchantSpend[];
   byDayOfWeek: DaySpend[];
 };
@@ -1150,6 +1152,7 @@ function aggregateSpending(
   const catMap: Record<string, number> = {};
   const monthMap: Record<string, number> = {};
   const weekMap: Record<string, number> = {};
+  const dailyMap: Record<string, number> = {};
   const merchantMap: Record<string, { total: number; count: number }> = {};
   const dayMap: Record<string, number> = {};
 
@@ -1162,6 +1165,7 @@ function aggregateSpending(
 
     catMap[`${month}|${cat}`] = (catMap[`${month}|${cat}`] ?? 0) + abs;
     monthMap[month] = (monthMap[month] ?? 0) + abs;
+    dailyMap[row.date] = (dailyMap[row.date] ?? 0) + abs;
 
     const dayIdx = d.getUTCDay();
     const diff = dayIdx === 0 ? -6 : 1 - dayIdx;
@@ -1193,6 +1197,10 @@ function aggregateSpending(
       .map(([week, total]) => ({ week, total: round2(total) }))
       .sort((a, b) => a.week.localeCompare(b.week)),
 
+    daily: Object.entries(dailyMap)
+      .map(([date, total]) => ({ date, total: round2(total) }))
+      .sort((a, b) => a.date.localeCompare(b.date)),
+
     topMerchants: Object.entries(merchantMap)
       .map(([name, { total, count }]) => ({ name, total: round2(total), count }))
       .sort((a, b) => b.total - a.total)
@@ -1211,7 +1219,7 @@ export async function getSpendingData(): Promise<SpendingData> {
     .limit(10000);
 
   const empty: SpendingAccountData = {
-    byCategory: [], monthly: [], weekly: [], topMerchants: [], byDayOfWeek: [],
+    byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [],
   };
 
   if (error || !data) return { personal: empty, joint: empty, all: empty };

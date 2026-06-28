@@ -34,7 +34,7 @@ export default function SpendingClient({ data }: Props) {
       </div>
 
       <CategoryChart byCategory={d.byCategory} />
-      <SpendingChart monthly={d.monthly} weekly={d.weekly} />
+      <SpendingChart monthly={d.monthly} weekly={d.weekly} daily={d.daily} />
       <SpendingInsights monthly={d.monthly} topMerchants={d.topMerchants} byDayOfWeek={d.byDayOfWeek} />
     </div>
   );
