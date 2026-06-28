@@ -1,4 +1,4 @@
-import { supabase } from "./supabase";
+import { supabase, supabaseServer } from "./supabase";
 
 export type Holding = {
   ticker: string;
@@ -1211,18 +1211,31 @@ function aggregateSpending(
 }
 
 export async function getSpendingData(): Promise<SpendingData> {
-  const { data, error } = await supabase
-    .from("monzo_transactions")
-    .select("date, category, amount, account_type, name, type")
-    .lt("amount", 0)
-    .gte("date", "2025-01-01")
-    .limit(10000);
+  // Paginate to bypass the anon-key 1000-row cap (service role key has no cap,
+  // but pagination makes this robust regardless of which key is in use).
+  const PAGE = 1000;
+  const allRows: { date: string | null; category: string | null; amount: number | null; account_type: string | null; name: string | null; type: string | null }[] = [];
+  let from = 0;
+  while (true) {
+    const { data: page, error } = await supabaseServer
+      .from("monzo_transactions")
+      .select("date, category, amount, account_type, name, type")
+      .lt("amount", 0)
+      .gte("date", "2025-01-01")
+      .order("date", { ascending: true })
+      .range(from, from + PAGE - 1);
+    if (error || !page || page.length === 0) break;
+    allRows.push(...page);
+    if (page.length < PAGE) break;
+    from += PAGE;
+  }
 
   const empty: SpendingAccountData = {
     byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [],
   };
 
-  if (error || !data) return { personal: empty, joint: empty, all: empty };
+  const data = allRows;
+  if (!data.length) return { personal: empty, joint: empty, all: empty };
 
   const spending = data.filter(
     r => r.type !== "Pot transfer" && !EXCLUDED_CATEGORIES.has(r.category ?? "")
