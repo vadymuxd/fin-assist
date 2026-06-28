@@ -11,7 +11,7 @@ type Account = "all" | "personal" | "joint";
 type Props = { data: SpendingData };
 
 export default function SpendingClient({ data }: Props) {
-  const [account, setAccount] = useState<Account>("all");
+  const [account, setAccount] = useState<Account>("joint");
   const d = data[account];
 
   return (
