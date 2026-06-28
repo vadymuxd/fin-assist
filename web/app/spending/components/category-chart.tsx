@@ -217,7 +217,8 @@ export default function CategoryChart({ byCategory }: Props) {
     })
     .filter(s => s.val > 0 && s.endA - s.startA > 0.01);
 
-  const PIE_CX = W / 2, PIE_CY = H / 2, OUTER_R = 95, INNER_R = 52;
+  const PIE_H = 380;
+  const PIE_CX = W / 2, PIE_CY = PIE_H / 2, OUTER_R = 155, INNER_R = 85;
 
   // ── Drill-down bar data ────────────────────────────────────────────────────
   const drillData = pagedDrillMonths.map(m => {
@@ -251,7 +252,7 @@ export default function CategoryChart({ byCategory }: Props) {
   }
 
   const exclusionOffers = allVisible.filter(c => ["Mortgage", "Home", "Bills"].includes(c));
-  const legendGrand     = allVisible.reduce((s, c) => s + (legendTotals[c] ?? 0), 0);
+  const legendGrand     = effectiveCats.reduce((s, c) => s + (legendTotals[c] ?? 0), 0);
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -259,20 +260,21 @@ export default function CategoryChart({ byCategory }: Props) {
 
       {/* Header */}
       {drillCat ? (
-        <div className="flex items-center gap-2 mb-3">
+        <div className="mb-3">
           <button
             onClick={() => setDrillCat(null)}
-            className="text-xs text-blue-500 hover:text-blue-600 font-medium"
+            className="text-xs text-gray-500 dark:text-gray-400 hover:underline mb-1"
           >
             ← Overview
           </button>
-          <span className="text-xs text-gray-400">·</span>
-          <span className="text-sm font-semibold text-gray-900 dark:text-gray-50">
-            {CATEGORY_EMOJIS[drillCat] ?? "📦"} {drillCat} — monthly spend
-          </span>
-          <span className="ml-auto text-xs text-gray-400 tabular-nums shrink-0">
-            avg {gbp.format(Math.round(drillAvg))}/mo
-          </span>
+          <div className="flex items-center justify-between">
+            <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">
+              {CATEGORY_EMOJIS[drillCat] ?? "📦"} {drillCat}
+            </h2>
+            <span className="text-xs text-gray-400 tabular-nums shrink-0">
+              avg {gbp.format(Math.round(drillAvg))}/mo
+            </span>
+          </div>
         </div>
       ) : (
         <div className="flex items-center justify-between mb-3">
@@ -316,14 +318,14 @@ export default function CategoryChart({ byCategory }: Props) {
                   {d.val > 0 && (
                     <text
                       x={x0 + drillBarW / 2} y={Math.max(PAD_T + 10, y - 3)}
-                      textAnchor="middle" fontSize={8} fill="currentColor" opacity={0.55}
+                      textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.55}
                     >
                       {fmtBarLabel(d.val)}
                     </text>
                   )}
                   <text
                     x={x0 + drillBarW / 2} y={H - 4}
-                    textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.5}
+                    textAnchor="middle" fontSize={11} fill="currentColor" opacity={0.5}
                   >
                     {d.label}
                   </text>
@@ -377,7 +379,7 @@ export default function CategoryChart({ byCategory }: Props) {
                     <text
                       x={x0 + barW / 2}
                       y={Math.max(PAD_T + 10, scaleY(d.total, domainMax) - 3)}
-                      textAnchor="middle" fontSize={8} fill="currentColor" opacity={0.55}
+                      textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.55}
                     >
                       {fmtBarLabel(d.total)}
                     </text>
@@ -399,9 +401,9 @@ export default function CategoryChart({ byCategory }: Props) {
         ) : (
           /* Donut chart */
           <svg
-            viewBox={`0 0 ${W} ${H}`}
+            viewBox={`0 0 ${W} ${PIE_H}`}
             className="w-full"
-            style={{ height: 240 }}
+            style={{ height: PIE_H }}
             onMouseLeave={() => setPieTooltip(null)}
           >
             {pieSlices.map(slice => (
@@ -420,20 +422,20 @@ export default function CategoryChart({ byCategory }: Props) {
                     value: slice.val,
                     pct: slice.pct,
                     x: ((e.clientX - rect.left) / rect.width)  * W,
-                    y: ((e.clientY - rect.top)  / rect.height) * H,
+                    y: ((e.clientY - rect.top)  / rect.height) * PIE_H,
                   });
                 }}
               />
             ))}
             <text
-              x={PIE_CX} y={PIE_CY - 9}
-              textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.45}
+              x={PIE_CX} y={PIE_CY - 12}
+              textAnchor="middle" fontSize={13} fill="currentColor" opacity={0.45}
             >
               {selectedPieMonth ? monthLabel(selectedPieMonth) : "Total"}
             </text>
             <text
-              x={PIE_CX} y={PIE_CY + 10}
-              textAnchor="middle" fontSize={15} fontWeight={600} fill="currentColor"
+              x={PIE_CX} y={PIE_CY + 14}
+              textAnchor="middle" fontSize={20} fontWeight={600} fill="currentColor"
             >
               {pieGrand >= 1000 ? `£${(pieGrand / 1000).toFixed(1)}k` : `£${Math.round(pieGrand)}`}
             </text>
@@ -475,7 +477,7 @@ export default function CategoryChart({ byCategory }: Props) {
             className="pointer-events-none absolute z-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-xs"
             style={{
               left: `${(pieTooltip.x / W) * 100}%`,
-              top:  `${(pieTooltip.y / H) * 100}%`,
+              top:  `${(pieTooltip.y / PIE_H) * 100}%`,
               transform: "translate(-50%, -115%)",
               minWidth: 140,
             }}
@@ -567,16 +569,13 @@ export default function CategoryChart({ byCategory }: Props) {
       {/* Category legend — vertical list with drill-down */}
       {!drillCat && (
         <div className="mt-3 space-y-0.5">
-          {allVisible.map(cat => {
-            const total      = legendTotals[cat] ?? 0;
-            const pct        = legendGrand > 0 ? total / legendGrand : 0;
-            const isExcluded = excludedCats.has(cat);
+          {effectiveCats.map(cat => {
+            const total = legendTotals[cat] ?? 0;
+            const pct   = legendGrand > 0 ? total / legendGrand : 0;
             return (
               <button
                 key={cat}
-                className={`w-full flex items-center gap-2 py-1.5 px-2 rounded-lg text-left
-                  hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group
-                  ${isExcluded ? "opacity-35" : ""}`}
+                className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
                 onClick={() => { setDrillCat(cat); setDrillYearIdx(-1); }}
               >
                 <span
