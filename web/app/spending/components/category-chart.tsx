@@ -1,17 +1,15 @@
 "use client";
 
-import { useState } from "react";
+import { useEffect, useRef, useState } from "react";
+import {
+  Bar, BarChart, CartesianGrid, LabelList,
+  ResponsiveContainer, Tooltip, XAxis, YAxis,
+} from "recharts";
 import { type SpendingRow } from "@/lib/queries";
 import { CATEGORY_EMOJIS, getCategoryColor } from "@/lib/category-emojis";
 import NavBtn from "./nav-btn";
 
 type Props = { byCategory: SpendingRow[] };
-
-type BarTooltip = {
-  x: number;
-  month: string;
-  items: { cat: string; value: number }[];
-};
 
 type PieTooltip = {
   cat: string;
@@ -33,15 +31,10 @@ function monthLabel(m: string) {
   return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 }
 
-// SVG layout constants
-const W = 620, H = 240;
-const PAD_L = 44, PAD_R = 8, PAD_T = 8, PAD_B = 24;
-const plotW = W - PAD_L - PAD_R;
-const plotH = H - PAD_T - PAD_B;
-const BAR_GAP = 0.2;
-
-function scaleY(v: number, domainMax: number) {
-  return PAD_T + plotH - (v / domainMax) * plotH;
+function fmtBarLabel(v: number): string {
+  if (!v) return "";
+  if (v >= 1000) return `£${(v / 1000).toFixed(1)}k`;
+  return `£${Math.round(v)}`;
 }
 
 function donutArc(
@@ -60,63 +53,68 @@ function donutArc(
   );
 }
 
-function fmtBarLabel(v: number): string {
-  if (v <= 0) return "";
-  if (v >= 1000) return `£${(v / 1000).toFixed(1)}k`;
-  return `£${Math.round(v)}`;
-}
+const tickFmt = (v: number) => {
+  if (v === 0) return "£0";
+  if (v >= 1000) return `£${(v / 1000).toFixed(0)}k`;
+  return `£${v}`;
+};
 
-function fmtTick(tick: number, domainMax: number): string {
-  if (tick === 0) return "£0";
-  if (domainMax >= 2000) return `£${Math.round(tick / 1000)}k`;
-  if (domainMax >= 1000) return `£${(tick / 1000).toFixed(1)}k`;
-  return `£${Math.round(tick)}`;
-}
-
-function GridAndTicks({ domainMax }: { domainMax: number }) {
-  // Step-aligned ticks so labels never duplicate
-  const step = domainMax >= 5000 ? 2000
-    : domainMax >= 2000 ? 1000
-    : domainMax >= 1000 ? 500
-    : domainMax >= 400  ? 200
-    : 100;
-  const ticks = Array.from(
-    { length: Math.floor(domainMax / step) + 1 },
-    (_, i) => i * step,
-  );
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function BarTip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  const items = [...payload].reverse().filter((p: any) => (p.value as number) > 0);
+  const total = payload.reduce((s: number, p: any) => s + (p.value as number), 0);
   return (
-    <>
-      {ticks.map(tick => {
-        const y = scaleY(tick, domainMax);
-        return (
-          <g key={tick}>
-            <line
-              x1={PAD_L} x2={W - PAD_R} y1={y} y2={y}
-              stroke="currentColor" strokeOpacity={0.08} strokeWidth={1}
-            />
-            <text
-              x={PAD_L - 4} y={y}
-              textAnchor="end" dominantBaseline="middle"
-              fontSize={11} fill="currentColor" opacity={0.5}
-            >
-              {fmtTick(tick, domainMax)}
-            </text>
-          </g>
-        );
-      })}
-    </>
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-xs">
+      <div className="font-semibold mb-1.5 text-gray-800 dark:text-gray-200">{label}</div>
+      {items.map((p: any) => (
+        <div key={p.name} className="flex justify-between gap-3 text-gray-600 dark:text-gray-400">
+          <span>{CATEGORY_EMOJIS[p.name] ?? "📦"} {p.name}</span>
+          <span className="font-medium text-gray-800 dark:text-gray-200">{gbp.format(p.value)}</span>
+        </div>
+      ))}
+      <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-gray-800 flex justify-between font-semibold text-gray-800 dark:text-gray-200">
+        <span>Total</span>
+        <span>{gbp.format(Math.round(total))}</span>
+      </div>
+    </div>
+  );
+}
+
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function DrillTip({ active, payload, label }: any) {
+  if (!active || !payload?.length) return null;
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-xs">
+      <div className="font-semibold mb-1 text-gray-800 dark:text-gray-200">{label}</div>
+      <span className="font-medium text-gray-800 dark:text-gray-200">{gbp.format(payload[0].value)}</span>
+    </div>
   );
 }
 
 export default function CategoryChart({ byCategory }: Props) {
-  const [chartType, setChartType]         = useState<"bars" | "pie">("bars");
-  const [excludedCats, setExcludedCats]   = useState<Set<string>>(new Set());
-  const [yearIdx, setYearIdx]             = useState(-1); // -1 = most recent year
-  const [drillCat, setDrillCat]           = useState<string | null>(null);
-  const [drillYearIdx, setDrillYearIdx]   = useState(-1);
-  const [pieMonthIdx, setPieMonthIdx]     = useState(-1); // -1 = most recent month
-  const [barTooltip, setBarTooltip]       = useState<BarTooltip | null>(null);
-  const [pieTooltip, setPieTooltip]       = useState<PieTooltip | null>(null);
+  const [chartType, setChartType]       = useState<"bars" | "pie">("bars");
+  const [excludedCats, setExcludedCats] = useState<Set<string>>(new Set());
+  const [yearIdx, setYearIdx]           = useState(-1);
+  const [drillCat, setDrillCat]         = useState<string | null>(null);
+  const [drillYearIdx, setDrillYearIdx] = useState(-1);
+  const [pieMonthIdx, setPieMonthIdx]   = useState(-1);
+  const [pieTooltip, setPieTooltip]     = useState<PieTooltip | null>(null);
+
+  // Measure container width for the pie SVG (so it never uses viewBox scaling)
+  const pieContainerRef = useRef<HTMLDivElement>(null);
+  const [containerW, setContainerW] = useState(320);
+  useEffect(() => {
+    const el = pieContainerRef.current;
+    if (!el) return;
+    const ro = new ResizeObserver(entries => {
+      const w = entries[0]?.contentRect.width;
+      if (w) setContainerW(Math.round(w));
+    });
+    ro.observe(el);
+    setContainerW(el.clientWidth || 320);
+    return () => ro.disconnect();
+  }, []);
 
   // ── Base data ───────────────────────────────────────────────────────────────
   const monthSet = new Set<string>();
@@ -126,11 +124,10 @@ export default function CategoryChart({ byCategory }: Props) {
     catTotals[row.category] = (catTotals[row.category] ?? 0) + row.total;
   }
 
-  const allCats   = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-  const topCats   = allCats.slice(0, 9).map(([c]) => c);
-  const hasOther  = allCats.length > 9;
+  const allCats    = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
+  const topCats    = allCats.slice(0, 9).map(([c]) => c);
+  const hasOther   = allCats.length > 9;
   const allVisible = hasOther ? [...topCats, "Other"] : topCats;
-
   const effectiveCats = allVisible.filter(c => !excludedCats.has(c));
 
   const months = [...monthSet].sort();
@@ -140,7 +137,6 @@ export default function CategoryChart({ byCategory }: Props) {
   const actualPieMonthIdx = pieMonthIdx === -1 ? months.length - 1 : Math.min(pieMonthIdx, months.length - 1);
   const selectedPieMonth  = months[actualPieMonthIdx] ?? "";
 
-  // Extended totals for legend/pie — per-month in pie mode, all-time otherwise
   const legendTotals: Record<string, number> = {};
   if (chartType === "pie" && selectedPieMonth) {
     for (const [cat] of allCats) {
@@ -165,32 +161,44 @@ export default function CategoryChart({ byCategory }: Props) {
   }
   const years = Object.keys(monthsByYear).sort();
 
-  const actualYearIdx   = yearIdx === -1 ? years.length - 1 : Math.min(yearIdx, years.length - 1);
-  const selectedYear    = years[actualYearIdx] ?? "";
-  const pagedMonths     = monthsByYear[selectedYear] ?? [];
+  const actualYearIdx      = yearIdx === -1 ? years.length - 1 : Math.min(yearIdx, years.length - 1);
+  const selectedYear       = years[actualYearIdx] ?? "";
+  const pagedMonths        = monthsByYear[selectedYear] ?? [];
 
   const actualDrillYearIdx = drillYearIdx === -1 ? years.length - 1 : Math.min(drillYearIdx, years.length - 1);
   const drillYear          = years[actualDrillYearIdx] ?? "";
   const pagedDrillMonths   = monthsByYear[drillYear] ?? [];
 
-  // ── Stacked bar month data ─────────────────────────────────────────────────
-  const monthData = pagedMonths.map(m => {
-    const rawVals: Record<string, number> = {};
-    let other = 0;
-    for (const [cat] of allCats) {
-      const val = rowByMonthCat.get(`${m}|${cat}`) ?? 0;
-      if (topCats.includes(cat)) rawVals[cat] = val;
-      else other += val;
+  // ── Stacked bar data (for Recharts) ───────────────────────────────────────
+  const stackBarData = pagedMonths.map(m => {
+    const row: Record<string, string | number> = { label: monthLabel(m) };
+    let total = 0;
+    for (const cat of effectiveCats) {
+      const val = cat === "Other"
+        ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0)
+        : (rowByMonthCat.get(`${m}|${cat}`) ?? 0);
+      row[cat] = Math.round(val * 100) / 100;
+      total += val;
     }
-    if (hasOther) rawVals["Other"] = Math.round(other * 100) / 100;
-    const total = effectiveCats.reduce((s, c) => s + (rawVals[c] ?? 0), 0);
-    return { month: m, label: monthLabel(m), rawVals, total };
+    row.__total = Math.round(total);
+    return row;
   });
 
-  const maxTotal  = Math.max(...monthData.map(d => d.total), 1);
-  const domainMax = Math.ceil(maxTotal / 1000) * 1000;
-  const barW  = (plotW / Math.max(pagedMonths.length, 1)) * (1 - BAR_GAP);
-  const bandW = plotW / Math.max(pagedMonths.length, 1);
+  // ── Drill-down bar data (for Recharts) ────────────────────────────────────
+  const drillAllTotal = months.reduce((s, m) => {
+    const val = drillCat === "Other"
+      ? allCats.slice(9).reduce((ss, [cat]) => ss + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
+      : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
+    return s + val;
+  }, 0);
+  const drillAvg = months.length > 0 ? drillAllTotal / months.length : 0;
+
+  const drillBarData = pagedDrillMonths.map(m => {
+    const val = drillCat === "Other"
+      ? allCats.slice(9).reduce((s, [cat]) => s + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
+      : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
+    return { label: monthLabel(m), val: Math.round(val * 100) / 100 };
+  });
 
   // ── Pie/donut data ─────────────────────────────────────────────────────────
   const pieTotals: Record<string, number> = {};
@@ -217,30 +225,12 @@ export default function CategoryChart({ byCategory }: Props) {
     })
     .filter(s => s.val > 0 && s.endA - s.startA > 0.01);
 
-  const PIE_H = 380;
-  const PIE_CX = W / 2, PIE_CY = PIE_H / 2, OUTER_R = 155, INNER_R = 85;
-
-  // ── Drill-down bar data ────────────────────────────────────────────────────
-  const drillData = pagedDrillMonths.map(m => {
-    const val = drillCat === "Other"
-      ? allCats.slice(9).reduce((s, [cat]) => s + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
-      : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
-    return { month: m, label: monthLabel(m), val: Math.round(val * 100) / 100 };
-  });
-
-  const drillAllTotal = months.reduce((s, m) => {
-    const val = drillCat === "Other"
-      ? allCats.slice(9).reduce((ss, [cat]) => ss + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
-      : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
-    return s + val;
-  }, 0);
-  const drillAvg = months.length > 0 ? drillAllTotal / months.length : 0;
-
-  const drillMax = Math.max(...drillData.map(d => d.val), 1);
-  const drillStep = drillMax < 200 ? 50 : drillMax < 1000 ? 200 : drillMax < 5000 ? 500 : 1000;
-  const drillDomain = Math.ceil(drillMax / drillStep) * drillStep || drillStep;
-  const drillBarW   = (plotW / Math.max(pagedDrillMonths.length, 1)) * (1 - BAR_GAP);
-  const drillBandW  = plotW / Math.max(pagedDrillMonths.length, 1);
+  // Pie dimensions — computed from actual container width, no viewBox scaling
+  const OUTER_R = Math.min(150, Math.floor((containerW - 20) / 2));
+  const INNER_R = Math.round(OUTER_R * 0.55);
+  const PIE_H   = OUTER_R * 2 + 20;
+  const PIE_CX  = containerW / 2;
+  const PIE_CY  = PIE_H / 2;
 
   // ── Helpers ────────────────────────────────────────────────────────────────
   function toggleExclude(cat: string) {
@@ -253,6 +243,7 @@ export default function CategoryChart({ byCategory }: Props) {
 
   const exclusionOffers = allVisible.filter(c => ["Mortgage", "Home", "Bills"].includes(c));
   const legendGrand     = effectiveCats.reduce((s, c) => s + (legendTotals[c] ?? 0), 0);
+  const drillColor      = drillCat ? getCategoryColor(drillCat) : "#3b82f6";
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
@@ -300,110 +291,47 @@ export default function CategoryChart({ byCategory }: Props) {
       )}
 
       {/* Chart area */}
-      <div className="relative">
+      <div className="relative" ref={pieContainerRef}>
         {drillCat ? (
-          /* Single-category drill-down */
-          <svg viewBox={`0 0 ${W} ${H}`} className="w-full" style={{ height: 240 }}>
-            <GridAndTicks domainMax={drillDomain} />
-            {drillData.map((d, mi) => {
-              const x0   = PAD_L + mi * drillBandW + (drillBandW - drillBarW) / 2;
-              const barH = (d.val / drillDomain) * plotH;
-              const y    = PAD_T + plotH - barH;
-              return (
-                <g key={d.month}>
-                  <rect
-                    x={x0} y={y} width={drillBarW} height={barH}
-                    fill={getCategoryColor(drillCat)} rx={2} ry={2}
-                  />
-                  {d.val > 0 && (
-                    <text
-                      x={x0 + drillBarW / 2} y={Math.max(PAD_T + 10, y - 3)}
-                      textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.55}
-                    >
-                      {fmtBarLabel(d.val)}
-                    </text>
-                  )}
-                  <text
-                    x={x0 + drillBarW / 2} y={H - 4}
-                    textAnchor="middle" fontSize={11} fill="currentColor" opacity={0.5}
-                  >
-                    {d.label}
-                  </text>
-                </g>
-              );
-            })}
-          </svg>
+          /* Single-category drill-down — Recharts bar */
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={drillBarData} margin={{ top: 20, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={tickFmt} width={42} />
+              <Tooltip content={<DrillTip />} />
+              <Bar dataKey="val" fill={drillColor} radius={[3, 3, 0, 0]}>
+                <LabelList dataKey="val" position="top" formatter={fmtBarLabel} style={{ fontSize: 11, fill: "currentColor", opacity: 0.55 }} />
+              </Bar>
+            </BarChart>
+          </ResponsiveContainer>
 
         ) : chartType === "bars" ? (
-          /* Stacked bar chart */
-          <svg
-            viewBox={`0 0 ${W} ${H}`}
-            className="w-full"
-            style={{ height: 240 }}
-            onMouseLeave={() => setBarTooltip(null)}
-          >
-            <GridAndTicks domainMax={domainMax} />
-            {monthData.map((d, mi) => {
-              const x0 = PAD_L + mi * bandW + (bandW - barW) / 2;
-              let cumY = scaleY(0, domainMax);
-              return (
-                <g
-                  key={d.month}
-                  onMouseEnter={() =>
-                    setBarTooltip({
-                      x: x0 + barW / 2,
-                      month: d.label,
-                      items: effectiveCats
-                        .map(c => ({ cat: c, value: d.rawVals[c] ?? 0 }))
-                        .filter(i => i.value > 0),
-                    })
-                  }
-                >
-                  {effectiveCats.map((cat, ci) => {
-                    const val = d.rawVals[cat] ?? 0;
-                    if (val === 0) return null;
-                    const barH = (val / domainMax) * plotH;
-                    const y    = cumY - barH;
-                    cumY = y;
-                    const isTop = effectiveCats.slice(ci + 1).every(c => (d.rawVals[c] ?? 0) === 0);
-                    return (
-                      <rect
-                        key={cat}
-                        x={x0} y={y} width={barW} height={barH}
-                        fill={getCategoryColor(cat)}
-                        rx={isTop ? 2 : 0} ry={isTop ? 2 : 0}
-                      />
-                    );
-                  })}
-                  {d.total > 0 && (
-                    <text
-                      x={x0 + barW / 2}
-                      y={Math.max(PAD_T + 10, scaleY(d.total, domainMax) - 3)}
-                      textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.55}
-                    >
-                      {fmtBarLabel(d.total)}
-                    </text>
-                  )}
-                </g>
-              );
-            })}
-            {pagedMonths.map((m, mi) => (
-              <text
-                key={m}
-                x={PAD_L + mi * bandW + bandW / 2} y={H - 4}
-                textAnchor="middle" fontSize={11} fill="currentColor" opacity={0.5}
-              >
-                {monthLabel(m)}
-              </text>
-            ))}
-          </svg>
+          /* Stacked bar chart — Recharts */
+          <ResponsiveContainer width="100%" height={220}>
+            <BarChart data={stackBarData} margin={{ top: 20, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
+              <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
+              <XAxis dataKey="label" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
+              <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={tickFmt} width={42} />
+              <Tooltip content={<BarTip />} />
+              {effectiveCats.map((cat, i) => {
+                const isTop = i === effectiveCats.length - 1;
+                return (
+                  <Bar key={cat} dataKey={cat} stackId="a" fill={getCategoryColor(cat)} radius={isTop ? [3, 3, 0, 0] : 0}>
+                    {isTop && (
+                      <LabelList dataKey="__total" position="top" formatter={fmtBarLabel} style={{ fontSize: 11, fill: "currentColor", opacity: 0.55 }} />
+                    )}
+                  </Bar>
+                );
+              })}
+            </BarChart>
+          </ResponsiveContainer>
 
         ) : (
-          /* Donut chart */
+          /* Donut chart — custom SVG with explicit width (no viewBox scaling) */
           <svg
-            viewBox={`0 0 ${W} ${PIE_H}`}
-            className="w-full"
-            style={{ height: PIE_H }}
+            width={containerW}
+            height={PIE_H}
             onMouseLeave={() => setPieTooltip(null)}
           >
             {pieSlices.map(slice => (
@@ -421,8 +349,8 @@ export default function CategoryChart({ byCategory }: Props) {
                     cat: slice.cat,
                     value: slice.val,
                     pct: slice.pct,
-                    x: ((e.clientX - rect.left) / rect.width)  * W,
-                    y: ((e.clientY - rect.top)  / rect.height) * PIE_H,
+                    x: e.clientX - rect.left,
+                    y: e.clientY - rect.top,
                   });
                 }}
               />
@@ -442,41 +370,12 @@ export default function CategoryChart({ byCategory }: Props) {
           </svg>
         )}
 
-        {/* Bar hover tooltip */}
-        {barTooltip && (
-          <div
-            className="pointer-events-none absolute z-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-xs"
-            style={{
-              left: `${(barTooltip.x / W) * 100}%`,
-              top: "8%",
-              transform: "translateX(-50%)",
-              minWidth: 160,
-            }}
-          >
-            <div className="font-semibold mb-1.5 text-gray-800 dark:text-gray-200">
-              {barTooltip.month}
-            </div>
-            {barTooltip.items.map(item => (
-              <div key={item.cat} className="flex justify-between gap-3 text-gray-600 dark:text-gray-400">
-                <span>{CATEGORY_EMOJIS[item.cat] ?? "📦"} {item.cat}</span>
-                <span className="font-medium text-gray-800 dark:text-gray-200">
-                  {gbp.format(item.value)}
-                </span>
-              </div>
-            ))}
-            <div className="mt-1.5 pt-1.5 border-t border-gray-100 dark:border-gray-800 flex justify-between font-semibold text-gray-800 dark:text-gray-200">
-              <span>Total</span>
-              <span>{gbp.format(barTooltip.items.reduce((s, i) => s + i.value, 0))}</span>
-            </div>
-          </div>
-        )}
-
         {/* Pie hover tooltip */}
         {pieTooltip && (
           <div
             className="pointer-events-none absolute z-10 rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-xs"
             style={{
-              left: `${(pieTooltip.x / W) * 100}%`,
+              left: `${(pieTooltip.x / containerW) * 100}%`,
               top:  `${(pieTooltip.y / PIE_H) * 100}%`,
               transform: "translate(-50%, -115%)",
               minWidth: 140,
