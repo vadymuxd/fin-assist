@@ -31,10 +31,12 @@ function monthLabel(m: string) {
   return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 }
 
-function fmtBarLabel(v: number): string {
-  if (!v) return "";
-  if (v >= 1000) return `£${(v / 1000).toFixed(1)}k`;
-  return `£${Math.round(v)}`;
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function fmtBarLabel(v: any): string {
+  const n = Number(v);
+  if (!n) return "";
+  if (n >= 1000) return `£${(n / 1000).toFixed(1)}k`;
+  return `£${Math.round(n)}`;
 }
 
 function donutArc(
@@ -95,7 +97,7 @@ function DrillTip({ active, payload, label }: any) {
 export default function CategoryChart({ byCategory }: Props) {
   const [chartType, setChartType]       = useState<"bars" | "pie">("bars");
   const [excludedCats, setExcludedCats] = useState<Set<string>>(new Set());
-  const [yearIdx, setYearIdx]           = useState(-1);
+  const [barPage, setBarPage]           = useState(-1); // -1 = last page
   const [drillCat, setDrillCat]         = useState<string | null>(null);
   const [drillYearIdx, setDrillYearIdx] = useState(-1);
   const [pieMonthIdx, setPieMonthIdx]   = useState(-1);
@@ -152,7 +154,16 @@ export default function CategoryChart({ byCategory }: Props) {
     }
   }
 
-  // ── Year-based pagination ──────────────────────────────────────────────────
+  // ── Bar chart: 6-month page pagination ────────────────────────────────────
+  const BAR_PAGE_SIZE  = 6;
+  const totalBarPages  = Math.max(1, Math.ceil(months.length / BAR_PAGE_SIZE));
+  const actualBarPage  = barPage === -1 ? totalBarPages - 1 : Math.min(barPage, totalBarPages - 1);
+  const pagedMonths    = months.slice(actualBarPage * BAR_PAGE_SIZE, (actualBarPage + 1) * BAR_PAGE_SIZE);
+  const barPageLabel   = pagedMonths.length > 0
+    ? `${monthLabel(pagedMonths[0])}${pagedMonths.length > 1 ? ` – ${monthLabel(pagedMonths[pagedMonths.length - 1])}` : ""}`
+    : "";
+
+  // ── Drill-down: year-based pagination ─────────────────────────────────────
   const monthsByYear: Record<string, string[]> = {};
   for (const m of months) {
     const yr = m.slice(0, 4);
@@ -160,10 +171,6 @@ export default function CategoryChart({ byCategory }: Props) {
     monthsByYear[yr].push(m);
   }
   const years = Object.keys(monthsByYear).sort();
-
-  const actualYearIdx      = yearIdx === -1 ? years.length - 1 : Math.min(yearIdx, years.length - 1);
-  const selectedYear       = years[actualYearIdx] ?? "";
-  const pagedMonths        = monthsByYear[selectedYear] ?? [];
 
   const actualDrillYearIdx = drillYearIdx === -1 ? years.length - 1 : Math.min(drillYearIdx, years.length - 1);
   const drillYear          = years[actualDrillYearIdx] ?? "";
@@ -400,28 +407,21 @@ export default function CategoryChart({ byCategory }: Props) {
         )}
       </div>
 
-      {/* Year navigation (bars & drill-down) */}
-      {years.length > 1 && (chartType === "bars" || !!drillCat) && (
+      {/* Bars: 6-month page navigation */}
+      {!drillCat && chartType === "bars" && totalBarPages > 1 && (
         <div className="flex items-center justify-between mt-3">
-          <NavBtn
-            direction="left"
-            onClick={() => {
-              if (drillCat) setDrillYearIdx(Math.max(0, actualDrillYearIdx - 1));
-              else setYearIdx(Math.max(0, actualYearIdx - 1));
-            }}
-            disabled={drillCat ? actualDrillYearIdx === 0 : actualYearIdx === 0}
-          />
-          <span className="text-xs font-medium text-gray-500 tabular-nums">
-            {drillCat ? drillYear : selectedYear}
-          </span>
-          <NavBtn
-            direction="right"
-            onClick={() => {
-              if (drillCat) setDrillYearIdx(Math.min(years.length - 1, actualDrillYearIdx + 1));
-              else setYearIdx(Math.min(years.length - 1, actualYearIdx + 1));
-            }}
-            disabled={drillCat ? actualDrillYearIdx === years.length - 1 : actualYearIdx === years.length - 1}
-          />
+          <NavBtn direction="left" onClick={() => setBarPage(Math.max(0, actualBarPage - 1))} disabled={actualBarPage === 0} />
+          <span className="text-xs font-medium text-gray-500 tabular-nums">{barPageLabel}</span>
+          <NavBtn direction="right" onClick={() => setBarPage(Math.min(totalBarPages - 1, actualBarPage + 1))} disabled={actualBarPage === totalBarPages - 1} />
+        </div>
+      )}
+
+      {/* Drill-down: year navigation */}
+      {!!drillCat && years.length > 1 && (
+        <div className="flex items-center justify-between mt-3">
+          <NavBtn direction="left" onClick={() => setDrillYearIdx(Math.max(0, actualDrillYearIdx - 1))} disabled={actualDrillYearIdx === 0} />
+          <span className="text-xs font-medium text-gray-500 tabular-nums">{drillYear}</span>
+          <NavBtn direction="right" onClick={() => setDrillYearIdx(Math.min(years.length - 1, actualDrillYearIdx + 1))} disabled={actualDrillYearIdx === years.length - 1} />
         </div>
       )}
 

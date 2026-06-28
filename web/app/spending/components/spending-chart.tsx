@@ -129,10 +129,12 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fmtGbp = (v: any, name: string) => [gbp.format(Number(v ?? 0)), name];
-  const fmtBarLabel = (v: number) => {
-    if (!v) return "";
-    if (v >= 1000) return `£${(v / 1000).toFixed(1)}k`;
-    return `£${Math.round(v)}`;
+  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+  const fmtBarLabel = (v: any): string => {
+    const n = Number(v);
+    if (!n) return "";
+    if (n >= 1000) return `£${(n / 1000).toFixed(1)}k`;
+    return `£${Math.round(n)}`;
   };
 
   const navLabelClass = "text-xs font-medium text-gray-500 tabular-nums";
