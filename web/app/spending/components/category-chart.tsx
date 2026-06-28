@@ -107,6 +107,7 @@ export default function CategoryChart({ byCategory }: Props) {
   const [yearIdx, setYearIdx]             = useState(-1); // -1 = most recent year
   const [drillCat, setDrillCat]           = useState<string | null>(null);
   const [drillYearIdx, setDrillYearIdx]   = useState(-1);
+  const [pieMonthIdx, setPieMonthIdx]     = useState(-1); // -1 = most recent month
   const [barTooltip, setBarTooltip]       = useState<BarTooltip | null>(null);
   const [pieTooltip, setPieTooltip]       = useState<PieTooltip | null>(null);
 
@@ -123,16 +124,30 @@ export default function CategoryChart({ byCategory }: Props) {
   const hasOther  = allCats.length > 9;
   const allVisible = hasOther ? [...topCats, "Other"] : topCats;
 
-  // Extended totals including "Other" bucket for legend/pie
-  const legendTotals: Record<string, number> = { ...catTotals };
-  if (hasOther) {
-    legendTotals["Other"] = allCats.slice(9).reduce((s, [, v]) => s + v, 0);
-  }
-
   const effectiveCats = allVisible.filter(c => !excludedCats.has(c));
 
   const months = [...monthSet].sort();
   const rowByMonthCat = new Map(byCategory.map(r => [`${r.month}|${r.category}`, r.total]));
+
+  // ── Pie month selection ────────────────────────────────────────────────────
+  const actualPieMonthIdx = pieMonthIdx === -1 ? months.length - 1 : Math.min(pieMonthIdx, months.length - 1);
+  const selectedPieMonth  = months[actualPieMonthIdx] ?? "";
+
+  // Extended totals for legend/pie — per-month in pie mode, all-time otherwise
+  const legendTotals: Record<string, number> = {};
+  if (chartType === "pie" && selectedPieMonth) {
+    for (const [cat] of allCats) {
+      legendTotals[cat] = rowByMonthCat.get(`${selectedPieMonth}|${cat}`) ?? 0;
+    }
+    if (hasOther) {
+      legendTotals["Other"] = allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${selectedPieMonth}|${c}`) ?? 0), 0);
+    }
+  } else {
+    Object.assign(legendTotals, catTotals);
+    if (hasOther) {
+      legendTotals["Other"] = allCats.slice(9).reduce((s, [, v]) => s + v, 0);
+    }
+  }
 
   // ── Year-based pagination ──────────────────────────────────────────────────
   const monthsByYear: Record<string, string[]> = {};
@@ -173,9 +188,15 @@ export default function CategoryChart({ byCategory }: Props) {
   // ── Pie/donut data ─────────────────────────────────────────────────────────
   const pieTotals: Record<string, number> = {};
   for (const cat of effectiveCats) {
-    pieTotals[cat] = cat === "Other"
-      ? allCats.slice(9).reduce((s, [, v]) => s + v, 0)
-      : (catTotals[cat] ?? 0);
+    if (selectedPieMonth) {
+      pieTotals[cat] = cat === "Other"
+        ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${selectedPieMonth}|${c}`) ?? 0), 0)
+        : (rowByMonthCat.get(`${selectedPieMonth}|${cat}`) ?? 0);
+    } else {
+      pieTotals[cat] = cat === "Other"
+        ? allCats.slice(9).reduce((s, [, v]) => s + v, 0)
+        : (catTotals[cat] ?? 0);
+    }
   }
   const pieGrand = Object.values(pieTotals).reduce((s, v) => s + v, 0);
   let cumA = -Math.PI / 2;
@@ -373,13 +394,13 @@ export default function CategoryChart({ byCategory }: Props) {
               x={PIE_CX} y={PIE_CY - 9}
               textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.45}
             >
-              Total
+              {selectedPieMonth ? monthLabel(selectedPieMonth) : "Total"}
             </text>
             <text
               x={PIE_CX} y={PIE_CY + 10}
               textAnchor="middle" fontSize={15} fontWeight={600} fill="currentColor"
             >
-              {`£${(pieGrand / 1000).toFixed(0)}k`}
+              {pieGrand >= 1000 ? `£${(pieGrand / 1000).toFixed(1)}k` : `£${Math.round(pieGrand)}`}
             </text>
           </svg>
         )}
@@ -443,7 +464,7 @@ export default function CategoryChart({ byCategory }: Props) {
         )}
       </div>
 
-      {/* Year navigation */}
+      {/* Year navigation (bars & drill-down) */}
       {years.length > 1 && (chartType === "bars" || !!drillCat) && (
         <div className="flex items-center justify-between mt-2 px-1">
           <button
@@ -465,6 +486,29 @@ export default function CategoryChart({ byCategory }: Props) {
               else setYearIdx(Math.min(years.length - 1, actualYearIdx + 1));
             }}
             disabled={drillCat ? actualDrillYearIdx === years.length - 1 : actualYearIdx === years.length - 1}
+            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
+          >
+            →
+          </button>
+        </div>
+      )}
+
+      {/* Pie month navigation */}
+      {chartType === "pie" && !drillCat && months.length > 1 && (
+        <div className="flex items-center justify-between mt-2 px-1">
+          <button
+            onClick={() => setPieMonthIdx(Math.max(0, actualPieMonthIdx - 1))}
+            disabled={actualPieMonthIdx === 0}
+            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
+          >
+            ←
+          </button>
+          <span className="text-xs font-medium text-gray-500 tabular-nums">
+            {monthLabel(selectedPieMonth)}
+          </span>
+          <button
+            onClick={() => setPieMonthIdx(Math.min(months.length - 1, actualPieMonthIdx + 1))}
+            disabled={actualPieMonthIdx === months.length - 1}
             className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
           >
             →
