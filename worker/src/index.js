@@ -15,6 +15,8 @@
  *   GH_PAT              — GitHub PAT with actions:write scope
  *   NOTION_API_KEY      — Notion integration token
  *   CLAUDE_API_KEY      — Anthropic API key
+ *   SUPABASE_URL        — Supabase project URL (Phase 18: spending queries)
+ *   SUPABASE_ANON_KEY   — Supabase anon key (Phase 18: spending queries)
  *
  * Env var (set in wrangler.toml [vars]):
  *   GH_REPO             — "owner/repo" e.g. "vadymuxd/fin-assist"
@@ -48,6 +50,14 @@ const NOTION_FINANCE_ACCOUNTS_ID     = '35b416f2-7566-81ed-a062-cf44a590ffdc';
 
 // Phase 16 — Financial Updates DB (Claude writes NL updates here)
 const NOTION_FINANCIAL_UPDATES_DB_ID = 'a863ed07-0e62-4419-b8a2-e2c0dc17c596';
+
+// Phase 18 — spending keywords that trigger a monzo_transactions Supabase query
+const SPENDING_KEYWORDS = [
+  'spend', 'spending', 'spent', 'transaction', 'monzo',
+  'groceries', 'eating out', 'how much did i', 'what did i',
+  'last week', 'this week', 'this month', 'last month', 'today',
+  'yesterday', 'recent purchases', 'recent transactions',
+];
 
 // ---------------------------------------------------------------------------
 // Entry point
@@ -140,8 +150,19 @@ async function handleConversation(text, chatId, env) {
       body: JSON.stringify({ chat_id: chatId, action: 'typing' }) },
   ).catch(() => {});
 
-  const context = await fetchNotionContext(env);
-  const rawReply = await callClaude(text, context, env);
+  const lower = text.toLowerCase();
+  const isSpendingQuery = SPENDING_KEYWORDS.some(kw => lower.includes(kw));
+
+  const [context, spendingContext] = await Promise.all([
+    fetchNotionContext(env),
+    isSpendingQuery ? fetchSpendingContext(text, env) : Promise.resolve(''),
+  ]);
+
+  const fullContext = spendingContext
+    ? context + '\n\n' + spendingContext
+    : context;
+
+  const rawReply = await callClaude(text, fullContext, env);
 
   // Phase 16: Claude may embed [FIN_UPDATE]{...}[/FIN_UPDATE] in its reply
   // when it detects a financial update. Parse it, write to Notion, then
@@ -280,6 +301,37 @@ async function fetchNotionContext(env) {
     '\n=== PENSIONS CONTEXT (latest snapshot) ===', pensions || '(not yet populated)',
     '\n=== MEMORY INDEX ===', memoryIndex,
   ].join('\n');
+}
+
+// ---------------------------------------------------------------------------
+// Phase 18: fetch recent Monzo transactions from Supabase for spending queries
+// ---------------------------------------------------------------------------
+
+async function fetchSpendingContext(userMessage, env) {
+  const url  = env.SUPABASE_URL;
+  const key  = env.SUPABASE_ANON_KEY;
+  if (!url || !key) return '';
+
+  try {
+    // Fetch last 60 transactions ordered by date desc
+    const resp = await fetch(
+      `${url}/rest/v1/monzo_transactions?select=date,name,emoji,category,type,amount,currency,notes,pot_name,account_type&order=date.desc,time.desc&limit=60`,
+      { headers: { 'apikey': key, 'Authorization': `Bearer ${key}` } },
+    );
+    if (!resp.ok) return '';
+    const rows = await resp.json();
+    if (!rows?.length) return '';
+
+    const lines = rows.map(r => {
+      const amt  = r.amount != null ? (r.amount < 0 ? `-£${Math.abs(r.amount).toFixed(2)}` : `+£${r.amount.toFixed(2)}`) : '';
+      const name = [r.emoji, r.name].filter(Boolean).join(' ');
+      return `${r.date} | ${name} | ${r.category ?? ''} | ${amt} | ${r.account_type}`;
+    });
+
+    return `=== RECENT MONZO TRANSACTIONS (last 60, newest first — query Supabase directly for analysis; never read the raw Google Sheet) ===\ndate | name | category | amount | account\n${lines.join('\n')}`;
+  } catch {
+    return '';
+  }
 }
 
 async function fetchNotionPage(pageId, notionKey) {
