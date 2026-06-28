@@ -1,0 +1,55 @@
+export const CATEGORY_EMOJIS: Record<string, string> = {
+  "Eating out":    "🍽️",
+  "Groceries":     "🛒",
+  "Entertainment": "🎬",
+  "Shopping":      "🛍️",
+  "Transport":     "🚇",
+  "Bills":         "💡",
+  "General":       "📦",
+  "Savings":       "💰",
+  "Transfers":     "🔄",
+  "Cash":          "💵",
+  "Finances":      "📊",
+  "Family":        "👨‍👩‍👧",
+  "Personal care": "💆",
+  "Health":        "❤️‍🩹",
+  "Education":     "📚",
+  "Holidays":      "✈️",
+  "Mortgage":      "🏠",
+  "Home":          "🏡",
+  "Subscription":  "🔔",
+  "Cats":          "🐱",
+};
+
+export const CATEGORY_COLORS: Record<string, string> = {
+  "Eating out":    "#f97316",
+  "Groceries":     "#22c55e",
+  "Entertainment": "#a855f7",
+  "Shopping":      "#ec4899",
+  "Transport":     "#3b82f6",
+  "Bills":         "#64748b",
+  "General":       "#94a3b8",
+  "Savings":       "#10b981",
+  "Transfers":     "#6b7280",
+  "Cash":          "#eab308",
+  "Finances":      "#8b5cf6",
+  "Family":        "#f43f5e",
+  "Personal care": "#14b8a6",
+  "Health":        "#ef4444",
+  "Education":     "#0ea5e9",
+  "Holidays":      "#f59e0b",
+  "Mortgage":      "#1d4ed8",
+  "Home":          "#16a34a",
+  "Subscription":  "#7c3aed",
+  "Cats":          "#f97316",
+};
+
+export function getCategoryEmoji(category: string | null | undefined): string {
+  if (!category) return "📦";
+  return CATEGORY_EMOJIS[category] ?? "📦";
+}
+
+export function getCategoryColor(category: string | null | undefined): string {
+  if (!category) return "#94a3b8";
+  return CATEGORY_COLORS[category] ?? "#94a3b8";
+}

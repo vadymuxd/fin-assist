@@ -3,6 +3,7 @@
 import { useRouter, useSearchParams, usePathname } from "next/navigation";
 import { useCallback, useTransition, useState, useRef, useEffect } from "react";
 import { type MonzoTransaction, type MonzoFilters } from "@/lib/queries";
+import { getCategoryEmoji } from "@/lib/category-emojis";
 import {
   Search, ChevronLeft, ChevronRight, SlidersHorizontal,
   Users, Tag, CalendarDays, X, ChevronDown, Layers,
@@ -365,6 +366,8 @@ export default function TransactionsClient({ rows, total, filters }: Props) {
                         <div className="w-8 h-8 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-base shrink-0 select-none">
                           {row.emoji ? (
                             <span>{row.emoji}</span>
+                          ) : row.category ? (
+                            <span>{getCategoryEmoji(row.category)}</span>
                           ) : (
                             <span className="text-gray-400 text-xs font-bold">
                               {(row.name ?? "?")[0]?.toUpperCase()}

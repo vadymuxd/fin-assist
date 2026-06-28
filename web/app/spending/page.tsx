@@ -1,17 +1,20 @@
-import { ShoppingCart } from "lucide-react";
+import { getSpendingData } from "@/lib/queries";
+import SpendingClient from "./components/spending-client";
 
+export const revalidate = 300;
 export const metadata = { title: "Spending" };
 
-export default function SpendingPage() {
+export default async function SpendingPage() {
+  const data = await getSpendingData().catch(() => ({
+    personal: { byCategory: [], monthly: [], weekly: [], topMerchants: [], byDayOfWeek: [] },
+    joint:    { byCategory: [], monthly: [], weekly: [], topMerchants: [], byDayOfWeek: [] },
+    all:      { byCategory: [], monthly: [], weekly: [], topMerchants: [], byDayOfWeek: [] },
+  }));
+
   return (
-    <div className="flex flex-col items-center justify-center min-h-[50vh] gap-3 text-center">
-      <div className="w-12 h-12 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center">
-        <ShoppingCart size={24} className="text-gray-400" strokeWidth={1.5} />
-      </div>
-      <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-50">Spending</h1>
-      <p className="text-sm text-gray-400 max-w-xs">
-        Category breakdown and spending trends coming in Phase 22.
-      </p>
+    <div className="space-y-4">
+      <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-50">Spending</h1>
+      <SpendingClient data={data} />
     </div>
   );
 }

@@ -1117,3 +1117,112 @@ export async function getMonzoTransactions(
   if (error) throw error;
   return { rows: (data ?? []) as MonzoTransaction[], total: count ?? 0 };
 }
+
+// ─── Spending analytics ───────────────────────────────────────────────────────
+
+export type SpendingRow = { month: string; category: string; total: number };
+export type MonthlySpend = { month: string; total: number };
+export type WeeklySpend = { week: string; total: number };
+export type MerchantSpend = { name: string; total: number; count: number };
+export type DaySpend = { day: string; total: number };
+
+export type SpendingAccountData = {
+  byCategory: SpendingRow[];
+  monthly: MonthlySpend[];
+  weekly: WeeklySpend[];
+  topMerchants: MerchantSpend[];
+  byDayOfWeek: DaySpend[];
+};
+
+export type SpendingData = {
+  personal: SpendingAccountData;
+  joint: SpendingAccountData;
+  all: SpendingAccountData;
+};
+
+const EXCLUDED_CATEGORIES = new Set(["Savings", "Transfers"]);
+const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
+const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+function aggregateSpending(
+  rows: { date: string | null; category: string | null; amount: number | null; name: string | null }[]
+): SpendingAccountData {
+  const catMap: Record<string, number> = {};
+  const monthMap: Record<string, number> = {};
+  const weekMap: Record<string, number> = {};
+  const merchantMap: Record<string, { total: number; count: number }> = {};
+  const dayMap: Record<string, number> = {};
+
+  for (const row of rows) {
+    if (!row.date || !row.amount) continue;
+    const d = new Date(row.date + "T12:00:00Z");
+    const month = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, "0")}`;
+    const cat = row.category ?? "General";
+    const abs = Math.abs(Number(row.amount));
+
+    catMap[`${month}|${cat}`] = (catMap[`${month}|${cat}`] ?? 0) + abs;
+    monthMap[month] = (monthMap[month] ?? 0) + abs;
+
+    const dayIdx = d.getUTCDay();
+    const diff = dayIdx === 0 ? -6 : 1 - dayIdx;
+    const monday = new Date(d);
+    monday.setUTCDate(d.getUTCDate() + diff);
+    weekMap[monday.toISOString().slice(0, 10)] = (weekMap[monday.toISOString().slice(0, 10)] ?? 0) + abs;
+
+    const merchant = row.name ?? "Unknown";
+    if (!merchantMap[merchant]) merchantMap[merchant] = { total: 0, count: 0 };
+    merchantMap[merchant].total += abs;
+    merchantMap[merchant].count++;
+
+    dayMap[DAY_NAMES[d.getUTCDay()]] = (dayMap[DAY_NAMES[d.getUTCDay()]] ?? 0) + abs;
+  }
+
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
+  return {
+    byCategory: Object.entries(catMap).map(([k, total]) => {
+      const pipe = k.indexOf("|");
+      return { month: k.slice(0, pipe), category: k.slice(pipe + 1), total: round2(total) };
+    }).sort((a, b) => a.month.localeCompare(b.month)),
+
+    monthly: Object.entries(monthMap)
+      .map(([month, total]) => ({ month, total: round2(total) }))
+      .sort((a, b) => a.month.localeCompare(b.month)),
+
+    weekly: Object.entries(weekMap)
+      .map(([week, total]) => ({ week, total: round2(total) }))
+      .sort((a, b) => a.week.localeCompare(b.week)),
+
+    topMerchants: Object.entries(merchantMap)
+      .map(([name, { total, count }]) => ({ name, total: round2(total), count }))
+      .sort((a, b) => b.total - a.total)
+      .slice(0, 10),
+
+    byDayOfWeek: DAY_ORDER.map(d => ({ day: d, total: round2(dayMap[d] ?? 0) })),
+  };
+}
+
+export async function getSpendingData(): Promise<SpendingData> {
+  const { data, error } = await supabase
+    .from("monzo_transactions")
+    .select("date, category, amount, account_type, name, type")
+    .lt("amount", 0)
+    .gte("date", "2025-01-01")
+    .limit(10000);
+
+  const empty: SpendingAccountData = {
+    byCategory: [], monthly: [], weekly: [], topMerchants: [], byDayOfWeek: [],
+  };
+
+  if (error || !data) return { personal: empty, joint: empty, all: empty };
+
+  const spending = data.filter(
+    r => r.type !== "Pot transfer" && !EXCLUDED_CATEGORIES.has(r.category ?? "")
+  );
+
+  return {
+    personal: aggregateSpending(spending.filter(r => r.account_type === "personal")),
+    joint:    aggregateSpending(spending.filter(r => r.account_type === "joint")),
+    all:      aggregateSpending(spending),
+  };
+}
