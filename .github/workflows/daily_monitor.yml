@@ -92,10 +92,10 @@ jobs:
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
           APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
-        # Now that this workflow runs once daily (the close run), always drain the
-        # queue + snapshot. Phase 16: drain Notion Financial Updates first so the
-        # subsequent snapshot picks up any Sheets changes from NL entries.
+        # Phase 18: Monzo sync first (new rows → monzo_transactions), then drain
+        # Notion Financial Updates, then snapshot so final numbers are current.
         run: |
+          python3 scripts/monzo_sync.py
           python3 scripts/sync_worker.py
           python3 scripts/snapshot_worker.py --domain all
           python3 scripts/sheets_updater.py --snapshot

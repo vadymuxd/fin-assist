@@ -427,6 +427,35 @@ def get_holding_price_history(days: int = 30) -> dict:
     return history
 
 
+def get_monzo_cursor(account_type: str) -> int:
+    """Return MAX row_index for account_type, or 0 if no rows yet."""
+    client = _get_client()
+    if not client:
+        return 0
+    try:
+        resp = (
+            client.table('monzo_transactions')
+            .select('row_index')
+            .eq('account_type', account_type)
+            .order('row_index', desc=True)
+            .limit(1)
+            .execute()
+        )
+        rows = resp.data or []
+        return rows[0]['row_index'] if rows else 0
+    except Exception as e:
+        logger.warning(f'get_monzo_cursor failed for {account_type}: {e}')
+        return 0
+
+
+def write_monzo_transactions(rows: list[dict]) -> bool:
+    """Upsert monzo_transactions rows. Unique on (transaction_id, account_type)."""
+    ok = _upsert('monzo_transactions', rows, on_conflict='transaction_id,account_type')
+    if ok:
+        _trigger_revalidate()
+    return ok
+
+
 def purge_stale_market_scan_news(days: int = 30) -> int:
     """
     Delete market_scan news older than `days`. Per-holding news is kept

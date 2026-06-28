@@ -1025,3 +1025,95 @@ export const DEPOSIT = 60000;
 export const MORTGAGE_START = "2022-09-01";
 
 export { HALIFAX_LOAN, HALIFAX_PROPERTY };
+
+// ─── Monzo Transactions ───────────────────────────────────────────────────────
+
+export type MonzoTransaction = {
+  id: number;
+  transaction_id: string;
+  account_type: "personal" | "joint";
+  row_index: number;
+  date: string | null;
+  time: string | null;
+  type: string | null;
+  name: string | null;
+  emoji: string | null;
+  category: string | null;
+  amount: number | null;
+  currency: string | null;
+  local_amount: number | null;
+  local_currency: string | null;
+  notes: string | null;
+  address: string | null;
+  receipt: string | null;
+  description: string | null;
+  category_split: string | null;
+  pot_name: string | null;
+  synced_at: string;
+};
+
+export type MonzoFilters = {
+  account?: string;
+  category?: string;
+  type?: string;
+  search?: string;
+  dateFrom?: string;
+  dateTo?: string;
+  amountMin?: string;
+  amountMax?: string;
+  pot?: string;
+  page?: number;
+  perPage?: number;
+};
+
+export async function getMonzoTransactions(
+  filters: MonzoFilters = {}
+): Promise<{ rows: MonzoTransaction[]; total: number }> {
+  const perPage = filters.perPage ?? 50;
+  const page = filters.page ?? 1;
+  const offset = (page - 1) * perPage;
+
+  let q = supabase
+    .from("monzo_transactions")
+    .select("*", { count: "exact" });
+
+  if (filters.account && filters.account !== "all") {
+    q = q.eq("account_type", filters.account);
+  }
+  if (filters.category) {
+    q = q.ilike("category", `%${filters.category}%`);
+  }
+  if (filters.type) {
+    q = q.ilike("type", `%${filters.type}%`);
+  }
+  if (filters.search) {
+    q = q.or(
+      `name.ilike.%${filters.search}%,description.ilike.%${filters.search}%,notes.ilike.%${filters.search}%`
+    );
+  }
+  if (filters.dateFrom) {
+    q = q.gte("date", filters.dateFrom);
+  }
+  if (filters.dateTo) {
+    q = q.lte("date", filters.dateTo);
+  }
+  if (filters.amountMin) {
+    const v = parseFloat(filters.amountMin);
+    if (!isNaN(v)) q = q.gte("amount", -Math.abs(v));
+  }
+  if (filters.amountMax) {
+    const v = parseFloat(filters.amountMax);
+    if (!isNaN(v)) q = q.lte("amount", -Math.abs(v));
+  }
+  if (filters.pot) {
+    q = q.ilike("pot_name", `%${filters.pot}%`);
+  }
+
+  const { data, count, error } = await q
+    .order("date", { ascending: false })
+    .order("time", { ascending: false })
+    .range(offset, offset + perPage - 1);
+
+  if (error) throw error;
+  return { rows: (data ?? []) as MonzoTransaction[], total: count ?? 0 };
+}

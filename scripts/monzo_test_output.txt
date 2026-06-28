@@ -1,0 +1,78 @@
+SA file: config/service_account.json
+
+All tabs in sheet:
+  - 'Hello 👋'  rowCount=1000
+  - 'Personal Account Transactions'  rowCount=5027
+  - 'Joint Account Transactions'  rowCount=7583
+
+============================================================
+Last 2 rows — PERSONAL (Personal Account Transactions)
+  Fetching: 'Personal Account Transactions'!A4037:Q4038
+
+  --- Row 4037 (sheet row) ---
+    transaction_id    : tx_0000B7iX3nJqolptwtDHRk
+    date              : 26/06/2026
+    time              : 06:55:30
+    type              : Pot transfer
+    name              : Flexible Fund Pot
+    emoji             : 
+    category          : Savings
+    amount            : -2000.00
+    currency          : GBP
+    local_amount      : -2000.00
+    local_currency    : GBP
+
+  --- Row 4038 (sheet row) ---
+    transaction_id    : tx_0000B7iXYKgfJxOQStWB1e
+    date              : 26/06/2026
+    time              : 07:01:01
+    type              : Faster payment
+    name              : Trading 212
+    emoji             : 
+    category          : General
+    amount            : -2000.00
+    currency          : GBP
+    local_amount      : -2000.00
+    local_currency    : GBP
+    notes             : 212TNV2E3212T
+    address           : 
+    receipt           : 
+    description       : 212TNV2E3212T
+
+============================================================
+Last 2 rows — JOINT (Joint Account Transactions)
+  Fetching: 'Joint Account Transactions'!A6617:Q6618
+
+  --- Row 6617 (sheet row) ---
+    transaction_id    : tx_0000B7lgKP5rci3MEmi1L7
+    date              : 27/06/2026
+    time              : 19:23:29
+    type              : Card payment
+    name              : Co-op
+    emoji             : 🍏
+    category          : Groceries
+    amount            : -3.80
+    currency          : GBP
+    local_amount      : -3.80
+    local_currency    : GBP
+    notes             : 
+    address           : 191 Watford Road
+    receipt           : 
+    description       : CO-OP GROUP FOOD       RICKMANSWORTH GBR
+
+  --- Row 6618 (sheet row) ---
+    transaction_id    : tx_0000B7lkpb3vZbQCTuMYkc
+    date              : 27/06/2026
+    time              : 20:13:56
+    type              : Card payment
+    name              : Amazon Prime Video
+    emoji             : 🎥
+    category          : Entertainment
+    amount            : -4.99
+    currency          : GBP
+    local_amount      : -4.99
+    local_currency    : GBP
+    notes             : 
+    address           : 1 Principale Place
+    receipt           : 
+    description       : Prime Video Rent / Buy LONDON        GBR

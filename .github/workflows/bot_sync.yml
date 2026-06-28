@@ -25,6 +25,20 @@ jobs:
           mkdir -p config
           echo '${{ secrets.GOOGLE_SERVICE_ACCOUNT_JSON }}' > config/service_account.json
 
+      # Phase 18: pull new Monzo rows → monzo_transactions (cursor-based, idempotent).
+      # Runs before sync_worker so any Monzo-sourced events are in Supabase before
+      # the snapshot runs.
+      - name: Sync Monzo transactions → Supabase
+        env:
+          GOOGLE_APPLICATION_CREDENTIALS: config/service_account.json
+          SUPABASE_URL:                   ${{ secrets.SUPABASE_URL }}
+          SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
+          APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
+          APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
+          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
+        run: python3 scripts/monzo_sync.py
+
       # Phase 16: drain Notion Financial Updates → Sheets BEFORE snapshot_worker.
       # sync_worker reads confirmed rows from the Notion DB, writes them to
       # Sheets (per-domain routing), and inserts Supabase transactions for
