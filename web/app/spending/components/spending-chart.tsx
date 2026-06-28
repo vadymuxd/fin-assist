@@ -6,6 +6,7 @@ import {
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { type MonthlySpend, type WeeklySpend, type DailySpend } from "@/lib/queries";
+import NavBtn from "./nav-btn";
 
 type Props = {
   monthly: MonthlySpend[];
@@ -129,7 +130,6 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fmtGbp = (v: any, name: string) => [gbp.format(Number(v ?? 0)), name];
 
-  const navBtnClass = "text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5";
   const navLabelClass = "text-xs font-medium text-gray-500 tabular-nums";
 
   return (
@@ -206,19 +206,19 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
 
         {/* Year navigation */}
         {trendView === "year" && availableYears.length > 1 && (
-          <div className="flex items-center justify-between mt-2 px-1">
-            <button onClick={() => setYearViewIdx(Math.max(0, actualYearIdx - 1))} disabled={actualYearIdx === 0} className={navBtnClass}>←</button>
+          <div className="flex items-center justify-between mt-3">
+            <NavBtn direction="left" onClick={() => setYearViewIdx(Math.max(0, actualYearIdx - 1))} disabled={actualYearIdx === 0} />
             <span className={navLabelClass}>{selYear} vs {compYear}</span>
-            <button onClick={() => setYearViewIdx(Math.min(availableYears.length - 1, actualYearIdx + 1))} disabled={actualYearIdx === availableYears.length - 1} className={navBtnClass}>→</button>
+            <NavBtn direction="right" onClick={() => setYearViewIdx(Math.min(availableYears.length - 1, actualYearIdx + 1))} disabled={actualYearIdx === availableYears.length - 1} />
           </div>
         )}
 
         {/* Month navigation */}
         {trendView === "month" && availableMonths.length > 1 && (
-          <div className="flex items-center justify-between mt-2 px-1">
-            <button onClick={() => setMonthViewIdx(Math.max(0, actualMonthIdx - 1))} disabled={actualMonthIdx === 0} className={navBtnClass}>←</button>
+          <div className="flex items-center justify-between mt-3">
+            <NavBtn direction="left" onClick={() => setMonthViewIdx(Math.max(0, actualMonthIdx - 1))} disabled={actualMonthIdx === 0} />
             <span className={navLabelClass}>{selMonLabel} vs {prevMonLabel}</span>
-            <button onClick={() => setMonthViewIdx(Math.min(availableMonths.length - 1, actualMonthIdx + 1))} disabled={actualMonthIdx === availableMonths.length - 1} className={navBtnClass}>→</button>
+            <NavBtn direction="right" onClick={() => setMonthViewIdx(Math.min(availableMonths.length - 1, actualMonthIdx + 1))} disabled={actualMonthIdx === availableMonths.length - 1} />
           </div>
         )}
       </div>
@@ -259,10 +259,10 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
         </ResponsiveContainer>
 
         {totalBarPages > 1 && (
-          <div className="flex items-center justify-between mt-2 px-1">
-            <button onClick={() => setBarPage(Math.max(0, actualBarPage - 1))} disabled={actualBarPage === 0} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-1">←</button>
+          <div className="flex items-center justify-between mt-3">
+            <NavBtn direction="left" onClick={() => setBarPage(Math.max(0, actualBarPage - 1))} disabled={actualBarPage === 0} />
             <span className="text-xs text-gray-400 tabular-nums">{barPageLabel}</span>
-            <button onClick={() => setBarPage(Math.min(totalBarPages - 1, actualBarPage + 1))} disabled={actualBarPage === totalBarPages - 1} className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-1">→</button>
+            <NavBtn direction="right" onClick={() => setBarPage(Math.min(totalBarPages - 1, actualBarPage + 1))} disabled={actualBarPage === totalBarPages - 1} />
           </div>
         )}
       </div>

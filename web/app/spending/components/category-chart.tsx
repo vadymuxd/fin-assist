@@ -3,6 +3,7 @@
 import { useState } from "react";
 import { type SpendingRow } from "@/lib/queries";
 import { CATEGORY_EMOJIS, getCategoryColor } from "@/lib/category-emojis";
+import NavBtn from "./nav-btn";
 
 type Props = { byCategory: SpendingRow[] };
 
@@ -466,53 +467,45 @@ export default function CategoryChart({ byCategory }: Props) {
 
       {/* Year navigation (bars & drill-down) */}
       {years.length > 1 && (chartType === "bars" || !!drillCat) && (
-        <div className="flex items-center justify-between mt-2 px-1">
-          <button
+        <div className="flex items-center justify-between mt-3">
+          <NavBtn
+            direction="left"
             onClick={() => {
               if (drillCat) setDrillYearIdx(Math.max(0, actualDrillYearIdx - 1));
               else setYearIdx(Math.max(0, actualYearIdx - 1));
             }}
             disabled={drillCat ? actualDrillYearIdx === 0 : actualYearIdx === 0}
-            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
-          >
-            ←
-          </button>
+          />
           <span className="text-xs font-medium text-gray-500 tabular-nums">
             {drillCat ? drillYear : selectedYear}
           </span>
-          <button
+          <NavBtn
+            direction="right"
             onClick={() => {
               if (drillCat) setDrillYearIdx(Math.min(years.length - 1, actualDrillYearIdx + 1));
               else setYearIdx(Math.min(years.length - 1, actualYearIdx + 1));
             }}
             disabled={drillCat ? actualDrillYearIdx === years.length - 1 : actualYearIdx === years.length - 1}
-            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
-          >
-            →
-          </button>
+          />
         </div>
       )}
 
       {/* Pie month navigation */}
       {chartType === "pie" && !drillCat && months.length > 1 && (
-        <div className="flex items-center justify-between mt-2 px-1">
-          <button
+        <div className="flex items-center justify-between mt-3">
+          <NavBtn
+            direction="left"
             onClick={() => setPieMonthIdx(Math.max(0, actualPieMonthIdx - 1))}
             disabled={actualPieMonthIdx === 0}
-            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
-          >
-            ←
-          </button>
+          />
           <span className="text-xs font-medium text-gray-500 tabular-nums">
             {monthLabel(selectedPieMonth)}
           </span>
-          <button
+          <NavBtn
+            direction="right"
             onClick={() => setPieMonthIdx(Math.min(months.length - 1, actualPieMonthIdx + 1))}
             disabled={actualPieMonthIdx === months.length - 1}
-            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
-          >
-            →
-          </button>
+          />
         </div>
       )}
 
