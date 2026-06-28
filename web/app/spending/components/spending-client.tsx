@@ -33,8 +33,8 @@ export default function SpendingClient({ data }: Props) {
         ))}
       </div>
 
-      <CategoryChart key={account} byCategory={d.byCategory} />
-      <SpendingChart key={account} monthly={d.monthly} weekly={d.weekly} daily={d.daily} />
+      <CategoryChart key={`cat-${account}`} byCategory={d.byCategory} />
+      <SpendingChart key={`spend-${account}`} monthly={d.monthly} weekly={d.weekly} daily={d.daily} />
       <SpendingInsights monthly={d.monthly} topMerchants={d.topMerchants} byDayOfWeek={d.byDayOfWeek} />
     </div>
   );
