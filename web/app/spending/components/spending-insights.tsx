@@ -58,7 +58,7 @@ export function ThisMonthHero({ monthly, daily, budget }: { monthly: MonthlySpen
   const yMin = Math.min(0, Math.floor(minActual / 500) * 500);
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fmtTooltip = (v: any, name: string) => [gbp.format(Number(v ?? 0)), name === "actual" ? "Remaining" : "Target pace"];
+  const fmtTooltip = (v: any, name: any): [string, string] => [gbp.format(Number(v ?? 0)), name === "actual" ? "Remaining" : "Target pace"];
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">

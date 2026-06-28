@@ -128,7 +128,7 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
     : "";
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fmtGbp = (v: any, name: string) => [gbp.format(Number(v ?? 0)), name];
+  const fmtGbp = (v: any, name: any): [string, string] => [gbp.format(Number(v ?? 0)), String(name)];
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fmtBarLabel = (v: any): string => {
     const n = Number(v);
