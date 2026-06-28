@@ -2,7 +2,7 @@
 
 import { useState } from "react";
 import {
-  Bar, BarChart, CartesianGrid, Line, LineChart,
+  Bar, BarChart, CartesianGrid, LabelList, Line, LineChart,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { type MonthlySpend, type WeeklySpend, type DailySpend } from "@/lib/queries";
@@ -129,6 +129,11 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
 
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   const fmtGbp = (v: any, name: string) => [gbp.format(Number(v ?? 0)), name];
+  const fmtBarLabel = (v: number) => {
+    if (!v) return "";
+    if (v >= 1000) return `£${(v / 1000).toFixed(1)}k`;
+    return `£${Math.round(v)}`;
+  };
 
   const navLabelClass = "text-xs font-medium text-gray-500 tabular-nums";
 
@@ -136,18 +141,18 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
     <div className="flex flex-col gap-4">
 
       {/* ── Spending Trend ─────────────────────────────────────────────────── */}
-      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4">
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Spending Trend</h2>
-          <div className="flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Spending Trend</h2>
+          <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
             {(["year", "month"] as const).map(v => (
               <button
                 key={v}
                 onClick={() => setTrendView(v)}
-                className={`px-2.5 py-1 font-medium capitalize transition-colors ${
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
                   trendView === v
-                    ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-                    : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-900"
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
                 }`}
               >
                 {v === "year" ? "Year" : "Month"}
@@ -224,18 +229,18 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
       </div>
 
       {/* ── Spend by Period (paginated) ──────────────────────────────────── */}
-      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4">
+      <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Spend by Period</h2>
-          <div className="flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">Spend by Period</h2>
+          <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
             {(["W", "M"] as const).map(g => (
               <button
                 key={g}
                 onClick={() => { setBarGranularity(g); setBarPage(-1); }}
-                className={`px-2.5 py-1 font-medium transition-colors ${
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
                   barGranularity === g
-                    ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-                    : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-900"
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
                 }`}
               >
                 {g === "W" ? "Weekly" : "Monthly"}
@@ -245,7 +250,7 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
         </div>
 
         <ResponsiveContainer width="100%" height={180}>
-          <BarChart data={barData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
+          <BarChart data={barData} margin={{ top: 20, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
             <XAxis dataKey="period" tick={{ fontSize: 9, fill: "currentColor" }} tickLine={false} axisLine={false} />
             <YAxis tick={{ fontSize: 10, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
@@ -254,7 +259,9 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
               formatter={(v: any) => [gbp.format(Number(v ?? 0)), "Spend"]}
               contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }}
             />
-            <Bar dataKey="total" fill="#3b82f6" radius={[3, 3, 0, 0]} />
+            <Bar dataKey="total" fill="#3b82f6" radius={[3, 3, 0, 0]}>
+              <LabelList dataKey="total" position="top" formatter={fmtBarLabel} style={{ fontSize: 8, fill: "currentColor", opacity: 0.55 }} />
+            </Bar>
           </BarChart>
         </ResponsiveContainer>
 

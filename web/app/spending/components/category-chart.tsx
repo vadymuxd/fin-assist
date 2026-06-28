@@ -60,6 +60,12 @@ function donutArc(
   );
 }
 
+function fmtBarLabel(v: number): string {
+  if (v <= 0) return "";
+  if (v >= 1000) return `£${(v / 1000).toFixed(1)}k`;
+  return `£${Math.round(v)}`;
+}
+
 function fmtTick(tick: number, domainMax: number): string {
   if (tick === 0) return "£0";
   if (domainMax >= 2000) return `£${Math.round(tick / 1000)}k`;
@@ -221,6 +227,14 @@ export default function CategoryChart({ byCategory }: Props) {
     return { month: m, label: monthLabel(m), val: Math.round(val * 100) / 100 };
   });
 
+  const drillAllTotal = months.reduce((s, m) => {
+    const val = drillCat === "Other"
+      ? allCats.slice(9).reduce((ss, [cat]) => ss + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
+      : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
+    return s + val;
+  }, 0);
+  const drillAvg = months.length > 0 ? drillAllTotal / months.length : 0;
+
   const drillMax = Math.max(...drillData.map(d => d.val), 1);
   const drillStep = drillMax < 200 ? 50 : drillMax < 1000 ? 200 : drillMax < 5000 ? 500 : 1000;
   const drillDomain = Math.ceil(drillMax / drillStep) * drillStep || drillStep;
@@ -241,7 +255,7 @@ export default function CategoryChart({ byCategory }: Props) {
 
   // ── Render ──────────────────────────────────────────────────────────────────
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
 
       {/* Header */}
       {drillCat ? (
@@ -253,24 +267,27 @@ export default function CategoryChart({ byCategory }: Props) {
             ← Overview
           </button>
           <span className="text-xs text-gray-400">·</span>
-          <span className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <span className="text-sm font-semibold text-gray-900 dark:text-gray-50">
             {CATEGORY_EMOJIS[drillCat] ?? "📦"} {drillCat} — monthly spend
+          </span>
+          <span className="ml-auto text-xs text-gray-400 tabular-nums shrink-0">
+            avg {gbp.format(Math.round(drillAvg))}/mo
           </span>
         </div>
       ) : (
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50">
             Spending by Category
           </h2>
-          <div className="flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden text-xs">
+          <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
             {(["bars", "pie"] as const).map(t => (
               <button
                 key={t}
                 onClick={() => setChartType(t)}
-                className={`px-2.5 py-1 font-medium capitalize transition-colors ${
+                className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
                   chartType === t
-                    ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-                    : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-900"
+                    ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                    : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
                 }`}
               >
                 {t === "bars" ? "Bars" : "Pie"}
@@ -296,6 +313,14 @@ export default function CategoryChart({ byCategory }: Props) {
                     x={x0} y={y} width={drillBarW} height={barH}
                     fill={getCategoryColor(drillCat)} rx={2} ry={2}
                   />
+                  {d.val > 0 && (
+                    <text
+                      x={x0 + drillBarW / 2} y={Math.max(PAD_T + 10, y - 3)}
+                      textAnchor="middle" fontSize={8} fill="currentColor" opacity={0.55}
+                    >
+                      {fmtBarLabel(d.val)}
+                    </text>
+                  )}
                   <text
                     x={x0 + drillBarW / 2} y={H - 4}
                     textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.5}
@@ -348,6 +373,15 @@ export default function CategoryChart({ byCategory }: Props) {
                       />
                     );
                   })}
+                  {d.total > 0 && (
+                    <text
+                      x={x0 + barW / 2}
+                      y={Math.max(PAD_T + 10, scaleY(d.total, domainMax) - 3)}
+                      textAnchor="middle" fontSize={8} fill="currentColor" opacity={0.55}
+                    >
+                      {fmtBarLabel(d.total)}
+                    </text>
+                  )}
                 </g>
               );
             })}

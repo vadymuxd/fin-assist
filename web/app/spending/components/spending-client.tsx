@@ -17,15 +17,15 @@ export default function SpendingClient({ data }: Props) {
   return (
     <div className="flex flex-col gap-5">
       {/* Account toggle */}
-      <div className="flex rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden w-fit text-sm">
+      <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5 w-fit">
         {(["all", "personal", "joint"] as const).map((a) => (
           <button
             key={a}
             onClick={() => setAccount(a)}
-            className={`px-4 py-1.5 font-medium capitalize transition-colors ${
+            className={`px-3 py-1 text-xs font-medium rounded transition-colors ${
               account === a
-                ? "bg-gray-900 dark:bg-gray-100 text-white dark:text-gray-900"
-                : "text-gray-500 hover:bg-gray-50 dark:hover:bg-gray-900"
+                ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
             }`}
           >
             {a === "all" ? "All" : a === "personal" ? "Personal" : "Joint"}

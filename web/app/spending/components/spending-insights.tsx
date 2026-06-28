@@ -42,7 +42,7 @@ function MonthPaceCard({ monthly }: { monthly: MonthlySpend[] }) {
   const pctChange = lastTotal > 0 ? ((projected - lastTotal) / lastTotal) * 100 : null;
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4 flex flex-col gap-3">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col gap-3">
       <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">This Month</span>
       <div>
         <div className="text-2xl font-bold text-gray-900 dark:text-gray-50 tabular-nums">
@@ -85,7 +85,7 @@ function TopMerchantsCard({ topMerchants }: { topMerchants: MerchantSpend[] }) {
   const maxTotal = top5[0]?.total ?? 1;
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4 flex flex-col gap-3">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col gap-3">
       <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Top Merchants</span>
       <div className="flex flex-col gap-2.5">
         {top5.map((m, i) => (
@@ -117,7 +117,7 @@ function DayPatternCard({ byDayOfWeek }: { byDayOfWeek: DaySpend[] }) {
   const peakDay = byDayOfWeek.reduce((best, d) => d.total > best.total ? d : best, byDayOfWeek[0]);
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 p-4 flex flex-col gap-3">
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col gap-3">
       <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Spend by Day</span>
       <div className="flex items-end gap-1.5 h-16">
         {byDayOfWeek.map((d) => {
@@ -158,7 +158,7 @@ function DayPatternCard({ byDayOfWeek }: { byDayOfWeek: DaySpend[] }) {
 export default function SpendingInsights({ monthly, topMerchants, byDayOfWeek }: Props) {
   return (
     <div>
-      <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3">Insights</h2>
+      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50 mb-3">Insights</h2>
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <MonthPaceCard monthly={monthly} />
         <TopMerchantsCard topMerchants={topMerchants} />
