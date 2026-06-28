@@ -75,10 +75,11 @@ type FilterPillProps = {
   label: string;
   active: boolean;
   onClear: () => void;
+  align?: "left" | "right";
   children: React.ReactNode;
 };
 
-function FilterPill({ icon, label, active, onClear, children }: FilterPillProps) {
+function FilterPill({ icon, label, active, onClear, align = "left", children }: FilterPillProps) {
   const [open, setOpen] = useState(false);
   const ref = useRef<HTMLDivElement>(null);
 
@@ -91,7 +92,7 @@ function FilterPill({ icon, label, active, onClear, children }: FilterPillProps)
   }, [open]);
 
   return (
-    <div ref={ref} className="relative">
+    <div ref={ref} className="relative shrink-0">
       <button
         onClick={() => setOpen((v) => !v)}
         className={`inline-flex items-center gap-1 px-2.5 h-8 rounded-full text-xs font-medium transition-colors border ${
@@ -115,7 +116,7 @@ function FilterPill({ icon, label, active, onClear, children }: FilterPillProps)
         )}
       </button>
       {open && (
-        <div className="absolute left-0 top-full mt-1.5 z-50 min-w-[180px] rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg p-3">
+        <div className={`absolute top-full mt-1.5 z-50 min-w-[180px] rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-950 shadow-lg p-3 ${align === "right" ? "right-0" : "left-0"}`}>
           {children}
         </div>
       )}
@@ -200,7 +201,7 @@ export default function TransactionsClient({ rows, total, filters }: Props) {
         </div>
 
         {/* Filter pills row */}
-        <div className="flex items-center gap-1.5 overflow-x-auto pb-0.5 scrollbar-none">
+        <div className="flex items-center gap-1.5 flex-wrap">
           <SlidersHorizontal size={13} className="shrink-0 text-gray-400 ml-0.5" />
 
           {/* Account */}
@@ -279,6 +280,7 @@ export default function TransactionsClient({ rows, total, filters }: Props) {
 
           {/* Date */}
           <FilterPill
+            align="right"
             icon={<CalendarDays size={11} strokeWidth={2} />}
             label={
               filters.dateFrom && filters.dateTo
