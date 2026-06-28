@@ -32,8 +32,6 @@ function monthLabel(m: string) {
   return d.toLocaleDateString("en-GB", { month: "short", year: "2-digit" });
 }
 
-const MONTHS_PER_PAGE = 12;
-
 // SVG layout constants
 const W = 620, H = 240;
 const PAD_L = 44, PAD_R = 8, PAD_T = 8, PAD_B = 24;
@@ -104,13 +102,13 @@ function GridAndTicks({ domainMax }: { domainMax: number }) {
 }
 
 export default function CategoryChart({ byCategory }: Props) {
-  const [chartType, setChartType]       = useState<"bars" | "pie">("bars");
-  const [excludedCats, setExcludedCats] = useState<Set<string>>(new Set());
-  const [page, setPage]                 = useState(-1); // -1 = last page
-  const [drillCat, setDrillCat]         = useState<string | null>(null);
-  const [drillPage, setDrillPage]       = useState(-1);
-  const [barTooltip, setBarTooltip]     = useState<BarTooltip | null>(null);
-  const [pieTooltip, setPieTooltip]     = useState<PieTooltip | null>(null);
+  const [chartType, setChartType]         = useState<"bars" | "pie">("bars");
+  const [excludedCats, setExcludedCats]   = useState<Set<string>>(new Set());
+  const [yearIdx, setYearIdx]             = useState(-1); // -1 = most recent year
+  const [drillCat, setDrillCat]           = useState<string | null>(null);
+  const [drillYearIdx, setDrillYearIdx]   = useState(-1);
+  const [barTooltip, setBarTooltip]       = useState<BarTooltip | null>(null);
+  const [pieTooltip, setPieTooltip]       = useState<PieTooltip | null>(null);
 
   // ── Base data ───────────────────────────────────────────────────────────────
   const monthSet = new Set<string>();
@@ -136,15 +134,22 @@ export default function CategoryChart({ byCategory }: Props) {
   const months = [...monthSet].sort();
   const rowByMonthCat = new Map(byCategory.map(r => [`${r.month}|${r.category}`, r.total]));
 
-  // ── Overview pagination ────────────────────────────────────────────────────
-  const totalPages  = Math.max(1, Math.ceil(months.length / MONTHS_PER_PAGE));
-  const actualPage  = page === -1 ? totalPages - 1 : Math.min(page, totalPages - 1);
-  const pagedMonths = months.slice(actualPage * MONTHS_PER_PAGE, (actualPage + 1) * MONTHS_PER_PAGE);
+  // ── Year-based pagination ──────────────────────────────────────────────────
+  const monthsByYear: Record<string, string[]> = {};
+  for (const m of months) {
+    const yr = m.slice(0, 4);
+    if (!monthsByYear[yr]) monthsByYear[yr] = [];
+    monthsByYear[yr].push(m);
+  }
+  const years = Object.keys(monthsByYear).sort();
 
-  // ── Drill-down pagination ──────────────────────────────────────────────────
-  const totalDrillPages  = Math.max(1, Math.ceil(months.length / MONTHS_PER_PAGE));
-  const actualDrillPage  = drillPage === -1 ? totalDrillPages - 1 : Math.min(drillPage, totalDrillPages - 1);
-  const pagedDrillMonths = months.slice(actualDrillPage * MONTHS_PER_PAGE, (actualDrillPage + 1) * MONTHS_PER_PAGE);
+  const actualYearIdx   = yearIdx === -1 ? years.length - 1 : Math.min(yearIdx, years.length - 1);
+  const selectedYear    = years[actualYearIdx] ?? "";
+  const pagedMonths     = monthsByYear[selectedYear] ?? [];
+
+  const actualDrillYearIdx = drillYearIdx === -1 ? years.length - 1 : Math.min(drillYearIdx, years.length - 1);
+  const drillYear          = years[actualDrillYearIdx] ?? "";
+  const pagedDrillMonths   = monthsByYear[drillYear] ?? [];
 
   // ── Stacked bar month data ─────────────────────────────────────────────────
   const monthData = pagedMonths.map(m => {
@@ -201,13 +206,6 @@ export default function CategoryChart({ byCategory }: Props) {
   const drillBandW  = plotW / Math.max(pagedDrillMonths.length, 1);
 
   // ── Helpers ────────────────────────────────────────────────────────────────
-  function pageRangeLabel(ms: string[]) {
-    if (ms.length === 0) return "";
-    const a = monthLabel(ms[0]);
-    const b = monthLabel(ms[ms.length - 1]);
-    return a === b ? a : `${a} – ${b}`;
-  }
-
   function toggleExclude(cat: string) {
     setExcludedCats(prev => {
       const next = new Set(prev);
@@ -445,39 +443,34 @@ export default function CategoryChart({ byCategory }: Props) {
         )}
       </div>
 
-      {/* Pagination */}
-      {(() => {
-        const isDrill  = !!drillCat;
-        const showPage = isDrill || chartType === "bars";
-        const total    = isDrill ? totalDrillPages : totalPages;
-        if (!showPage || total <= 1) return null;
-        const actual = isDrill ? actualDrillPage : actualPage;
-        const paged  = isDrill ? pagedDrillMonths : pagedMonths;
-        const setP   = isDrill
-          ? (n: number) => setDrillPage(n)
-          : (n: number) => setPage(n);
-        return (
-          <div className="flex items-center justify-between mt-2 px-1">
-            <button
-              onClick={() => setP(Math.max(0, actual - 1))}
-              disabled={actual === 0}
-              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-1"
-            >
-              ←
-            </button>
-            <span className="text-xs text-gray-400 tabular-nums">
-              {pageRangeLabel(paged)}
-            </span>
-            <button
-              onClick={() => setP(Math.min(total - 1, actual + 1))}
-              disabled={actual === total - 1}
-              className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-1"
-            >
-              →
-            </button>
-          </div>
-        );
-      })()}
+      {/* Year navigation */}
+      {years.length > 1 && (chartType === "bars" || !!drillCat) && (
+        <div className="flex items-center justify-between mt-2 px-1">
+          <button
+            onClick={() => {
+              if (drillCat) setDrillYearIdx(Math.max(0, actualDrillYearIdx - 1));
+              else setYearIdx(Math.max(0, actualYearIdx - 1));
+            }}
+            disabled={drillCat ? actualDrillYearIdx === 0 : actualYearIdx === 0}
+            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
+          >
+            ←
+          </button>
+          <span className="text-xs font-medium text-gray-500 tabular-nums">
+            {drillCat ? drillYear : selectedYear}
+          </span>
+          <button
+            onClick={() => {
+              if (drillCat) setDrillYearIdx(Math.min(years.length - 1, actualDrillYearIdx + 1));
+              else setYearIdx(Math.min(years.length - 1, actualYearIdx + 1));
+            }}
+            disabled={drillCat ? actualDrillYearIdx === years.length - 1 : actualYearIdx === years.length - 1}
+            className="text-xs text-gray-400 hover:text-gray-600 dark:hover:text-gray-300 disabled:opacity-25 px-2 py-0.5"
+          >
+            →
+          </button>
+        </div>
+      )}
 
       {/* Exclusion checkboxes */}
       {!drillCat && exclusionOffers.length > 0 && (
@@ -513,7 +506,7 @@ export default function CategoryChart({ byCategory }: Props) {
                 className={`w-full flex items-center gap-2 py-1.5 px-2 rounded-lg text-left
                   hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group
                   ${isExcluded ? "opacity-35" : ""}`}
-                onClick={() => { setDrillCat(cat); setDrillPage(-1); }}
+                onClick={() => { setDrillCat(cat); setDrillYearIdx(-1); }}
               >
                 <span
                   className="w-2.5 h-2.5 rounded-sm shrink-0"
