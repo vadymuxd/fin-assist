@@ -5,8 +5,6 @@ import {
 } from "recharts";
 import { type MonthlySpend, type DailySpend, type MerchantSpend, type DaySpend } from "@/lib/queries";
 
-const BUDGET = 5200;
-
 const gbp    = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
 const gbpDec = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 });
 
@@ -15,7 +13,7 @@ function daysInMonth(year: number, month: number) {
 }
 
 // ── Hero: This month with budget chart ────────────────────────────────────────
-export function ThisMonthHero({ monthly, daily }: { monthly: MonthlySpend[]; daily: DailySpend[] }) {
+export function ThisMonthHero({ monthly, daily, budget }: { monthly: MonthlySpend[]; daily: DailySpend[]; budget: number }) {
   const now          = new Date();
   const year         = now.getFullYear();
   const month        = now.getMonth() + 1;
@@ -27,12 +25,12 @@ export function ThisMonthHero({ monthly, daily }: { monthly: MonthlySpend[]; dai
     ? `${year - 1}-12`
     : `${year}-${String(month - 1).padStart(2, "0")}`;
 
-  const spent    = monthly.find(m => m.month === currentKey)?.total ?? 0;
+  const spent     = monthly.find(m => m.month === currentKey)?.total ?? 0;
   const lastTotal = monthly.find(m => m.month === prevKey)?.total ?? 0;
   const dailyRate = dayOfMonth > 0 ? spent / dayOfMonth : 0;
   const projected = Math.round(dailyRate * totalDays);
   const pctChange = lastTotal > 0 ? ((projected - lastTotal) / lastTotal) * 100 : null;
-  const overBudget = spent > BUDGET;
+  const overBudget = spent > budget;
 
   // Cumulative daily spend for current month
   const dayMap: Record<number, number> = {};
@@ -43,6 +41,7 @@ export function ThisMonthHero({ monthly, daily }: { monthly: MonthlySpend[]; dai
     }
   }
 
+  // Both lines descend: budget → 0 (remaining budget left)
   let cumul = 0;
   const chartData = Array.from({ length: totalDays }, (_, i) => {
     const day    = i + 1;
@@ -50,13 +49,16 @@ export function ThisMonthHero({ monthly, daily }: { monthly: MonthlySpend[]; dai
     if (isDone) cumul += dayMap[day] ?? 0;
     return {
       day: String(day),
-      actual: isDone ? Math.round(cumul) : null,
-      target: Math.round((BUDGET / totalDays) * day),
+      actual: isDone ? Math.round(budget - cumul) : null,
+      target: Math.round(budget - (budget / totalDays) * day),
     };
   });
 
+  const minActual = Math.min(...chartData.map(d => d.actual ?? 0));
+  const yMin = Math.min(0, Math.floor(minActual / 500) * 500);
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
-  const fmtTooltip = (v: any, name: string) => [gbp.format(Number(v ?? 0)), name === "actual" ? "Spent" : "Budget pace"];
+  const fmtTooltip = (v: any, name: string) => [gbp.format(Number(v ?? 0)), name === "actual" ? "Remaining" : "Target pace"];
 
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 sm:p-6 shadow-sm">
@@ -70,7 +72,7 @@ export function ThisMonthHero({ monthly, daily }: { monthly: MonthlySpend[]; dai
             {gbp.format(spent)}
           </div>
           <p className="text-xs text-gray-400 dark:text-gray-500 mt-0.5">
-            Budget: <span className="font-medium text-gray-600 dark:text-gray-400">{gbp.format(BUDGET)}</span>
+            Budget: <span className="font-medium text-gray-600 dark:text-gray-400">{gbp.format(budget)}</span>
             {"  ·  "}{daysLeft} days left{"  ·  "}{gbpDec.format(dailyRate)}/day
           </p>
         </div>
@@ -103,8 +105,9 @@ export function ThisMonthHero({ monthly, daily }: { monthly: MonthlySpend[]; dai
             tick={{ fontSize: 11, fill: "currentColor" }}
             tickLine={false}
             axisLine={false}
-            tickFormatter={v => `£${(v / 1000).toFixed(1)}k`}
+            tickFormatter={v => v === 0 ? "£0" : `£${(v / 1000).toFixed(0)}k`}
             width={42}
+            domain={[yMin, budget]}
           />
           <Tooltip
             formatter={fmtTooltip}
@@ -122,13 +125,13 @@ export function ThisMonthHero({ monthly, daily }: { monthly: MonthlySpend[]; dai
           <svg width="20" height="4" className="shrink-0">
             <line x1="0" y1="2" x2="20" y2="2" stroke="#3b82f6" strokeWidth="2" />
           </svg>
-          Actual spend
+          Budget remaining
         </span>
         <span className="flex items-center gap-1.5">
           <svg width="20" height="4" className="shrink-0">
             <line x1="0" y1="2" x2="20" y2="2" stroke="#ef4444" strokeWidth="2" strokeDasharray="5 4" />
           </svg>
-          Budget {gbp.format(BUDGET)}
+          Target pace
         </span>
       </div>
     </div>

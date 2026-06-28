@@ -8,6 +8,8 @@ import SpendingInsights, { ThisMonthHero } from "./spending-insights";
 
 type Account = "all" | "personal" | "joint";
 
+const BUDGETS: Record<Account, number> = { all: 5800, personal: 800, joint: 5200 };
+
 type Props = { data: SpendingData };
 
 export default function SpendingClient({ data }: Props) {
@@ -33,7 +35,7 @@ export default function SpendingClient({ data }: Props) {
         ))}
       </div>
 
-      <ThisMonthHero monthly={d.monthly} daily={d.daily} />
+      <ThisMonthHero monthly={d.monthly} daily={d.daily} budget={BUDGETS[account]} />
       <CategoryChart key={`cat-${account}`} byCategory={d.byCategory} />
       <SpendingChart key={`spend-${account}`} monthly={d.monthly} weekly={d.weekly} daily={d.daily} />
       <SpendingInsights topMerchants={d.topMerchants} byDayOfWeek={d.byDayOfWeek} />
