@@ -97,7 +97,7 @@ function GridAndTicks({ domainMax }: { domainMax: number }) {
             <text
               x={PAD_L - 4} y={y}
               textAnchor="end" dominantBaseline="middle"
-              fontSize={9} fill="currentColor" opacity={0.5}
+              fontSize={11} fill="currentColor" opacity={0.5}
             >
               {fmtTick(tick, domainMax)}
             </text>
@@ -318,7 +318,7 @@ export default function CategoryChart({ byCategory }: Props) {
                   {d.val > 0 && (
                     <text
                       x={x0 + drillBarW / 2} y={Math.max(PAD_T + 10, y - 3)}
-                      textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.55}
+                      textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.55}
                     >
                       {fmtBarLabel(d.val)}
                     </text>
@@ -379,7 +379,7 @@ export default function CategoryChart({ byCategory }: Props) {
                     <text
                       x={x0 + barW / 2}
                       y={Math.max(PAD_T + 10, scaleY(d.total, domainMax) - 3)}
-                      textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.55}
+                      textAnchor="middle" fontSize={10} fill="currentColor" opacity={0.55}
                     >
                       {fmtBarLabel(d.total)}
                     </text>
@@ -391,7 +391,7 @@ export default function CategoryChart({ byCategory }: Props) {
               <text
                 key={m}
                 x={PAD_L + mi * bandW + bandW / 2} y={H - 4}
-                textAnchor="middle" fontSize={9} fill="currentColor" opacity={0.5}
+                textAnchor="middle" fontSize={11} fill="currentColor" opacity={0.5}
               >
                 {monthLabel(m)}
               </text>

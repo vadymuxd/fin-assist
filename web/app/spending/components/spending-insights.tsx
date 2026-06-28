@@ -187,7 +187,7 @@ function DayPatternCard({ byDayOfWeek }: { byDayOfWeek: DaySpend[] }) {
                   style={{ height: `${Math.max(pct * 100, 4)}%` }}
                 />
               </div>
-              <span className={`text-[9px] font-medium ${isPeak ? "text-blue-500" : "text-gray-400"}`}>{d.day}</span>
+              <span className={`text-[11px] font-medium ${isPeak ? "text-blue-500" : "text-gray-400"}`}>{d.day}</span>
             </div>
           );
         })}

@@ -176,7 +176,7 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
             {trendView === "year" ? compYear : prevMonLabel}
           </span>
           {trendView === "month" && (
-            <span className="text-gray-400 text-[10px]">cumulative</span>
+            <span className="text-gray-400 text-xs">cumulative</span>
           )}
         </div>
 
@@ -185,7 +185,7 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
             <LineChart data={yearViewData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
               <XAxis dataKey="month" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 10, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
+              <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
               <Tooltip
                 formatter={(v, name) => fmtGbp(v, name === "current" ? selYear : compYear)}
                 contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }}
@@ -197,7 +197,7 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
             <LineChart data={monthViewData} margin={{ top: 4, right: 4, left: 0, bottom: 4 }}>
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
               <XAxis dataKey="day" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} interval={4} />
-              <YAxis tick={{ fontSize: 10, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
+              <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
               <Tooltip
                 formatter={(v, name) => fmtGbp(v, name === "current" ? selMonLabel : prevMonLabel)}
                 labelFormatter={l => `Day ${l}`}
@@ -253,14 +253,14 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
           <BarChart data={barData} margin={{ top: 20, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 10, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
+            <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
             <Tooltip
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               formatter={(v: any) => [gbp.format(Number(v ?? 0)), "Spend"]}
               contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }}
             />
             <Bar dataKey="total" fill="#3b82f6" radius={[3, 3, 0, 0]}>
-              <LabelList dataKey="total" position="top" formatter={fmtBarLabel} style={{ fontSize: 9, fill: "currentColor", opacity: 0.55 }} />
+              <LabelList dataKey="total" position="top" formatter={fmtBarLabel} style={{ fontSize: 11, fill: "currentColor", opacity: 0.55 }} />
             </Bar>
           </BarChart>
         </ResponsiveContainer>
