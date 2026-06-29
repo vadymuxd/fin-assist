@@ -14,17 +14,17 @@ type Tab = {
 };
 
 const tabs: Tab[] = [
-  { label: "Investments", href: "/",                  icon: LineChart,  activeColor: "text-blue-600 dark:text-blue-400"     },
-  { label: "Savings",     href: "/savings",           icon: PiggyBank,  activeColor: "text-emerald-500 dark:text-emerald-400" },
-  { label: "Pensions",    href: "/pensions",          icon: Landmark,   activeColor: "text-amber-500 dark:text-amber-400"   },
-  { label: "House",       href: "/mortgage",          icon: Home,       activeColor: "text-orange-500 dark:text-orange-400" },
-  { label: "Net Worth",   href: "/net-worth",         icon: TrendingUp, activeColor: "text-violet-500 dark:text-violet-400" },
+  { label: "Investments", href: "/",                  icon: LineChart,    activeColor: "text-blue-600 dark:text-blue-400"     },
+  { label: "Savings",     href: "/savings",           icon: PiggyBank,    activeColor: "text-emerald-500 dark:text-emerald-400" },
+  { label: "Pensions",    href: "/pensions",          icon: Landmark,     activeColor: "text-amber-500 dark:text-amber-400"   },
+  { label: "House",       href: "/mortgage",          icon: Home,         activeColor: "text-orange-500 dark:text-orange-400" },
+  { label: "Net Worth",   href: "/net-worth",         icon: TrendingUp,   activeColor: "text-violet-500 dark:text-violet-400" },
+  { label: "Spending",    href: "/spending",          icon: ShoppingCart, activeColor: "text-rose-500 dark:text-rose-400"     },
 ];
 
 const menuLinks = [
   { label: "Transactions", href: "/transactions", icon: Receipt },
   { label: "Budgets",      href: "/budgets",      icon: LayoutDashboard },
-  { label: "Spending",     href: "/spending",      icon: ShoppingCart },
 ];
 
 // Longest matching prefix wins, so /mortgage/insights activates Insights, not House.

@@ -9,7 +9,7 @@ import DiscoveriesFeed from "../components/discoveries-feed";
 import AlertsList from "../components/alerts-list";
 import NewsStream from "../components/news-stream";
 import Link from "next/link";
-import { ArrowLeft } from "lucide-react";
+import { ChevronLeft } from "lucide-react";
 
 export const revalidate = 300;
 
@@ -29,10 +29,10 @@ export default async function InsightsPage() {
         <div className="flex items-center gap-3">
           <Link
             href="/"
-            className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-lg text-xs font-medium text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            className="inline-flex items-center justify-center w-8 h-8 rounded-lg text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-800 transition-colors"
+            aria-label="Back to Investments"
           >
-            <ArrowLeft size={13} strokeWidth={2} />
-            Investments
+            <ChevronLeft size={20} strokeWidth={2} />
           </Link>
           <h1 className="text-lg sm:text-xl font-semibold text-gray-900 dark:text-gray-50">Insights</h1>
         </div>

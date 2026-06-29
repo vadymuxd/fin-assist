@@ -170,8 +170,13 @@ export default function HoldingsTable({
     const pts = (priceHistoryMap ?? {})[h.ticker] ?? [];
 
     if (period === "START") {
-      // Real money-weighted return since Apr 13 (Sheet col K) — accounts for
-      // actual purchase timing, unlike the raw price-window returns below.
+      // Return since tracking start (Apr 13) — current value vs tracking-started
+      // value (Sheet col K). Derived live so the row matches the header badge and
+      // is immune to a stale/zeroed stored tracking_pnl_pct. Falls back to the
+      // stored column only when the started value is missing.
+      if (h.value_gbp !== null && h.tracking_started_value) {
+        return (h.value_gbp / h.tracking_started_value - 1) * 100;
+      }
       return h.tracking_pnl_pct ?? h.pnl_pct ?? null;
     }
     if (period === "W") {

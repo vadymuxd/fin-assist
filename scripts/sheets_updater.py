@@ -50,7 +50,7 @@ RESULTS_PATH = 'data/analysis_results.json'
 def parse_float(val):
     if not val and val != 0:
         return 0.0
-    cleaned = str(val).replace('£', '').replace(',', '').strip()
+    cleaned = str(val).replace('£', '').replace(',', '').replace('%', '').strip()
     try:
         return float(cleaned)
     except (ValueError, TypeError):
