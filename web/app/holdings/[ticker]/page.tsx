@@ -82,6 +82,14 @@ export default async function HoldingDetailPage({
       ? (holding.pnl_abs / costBasis) * 100
       : holding.pnl_pct;
 
+  // tracking_pnl_pct (Sheet col K) is derived live from value vs tracking-started
+  // value — same as the holdings table — rather than trusting the stored column,
+  // which can be stale/zeroed by a sync bug.
+  const trackingPct =
+    holding.value_gbp !== null && holding.tracking_started_value
+      ? (holding.value_gbp / holding.tracking_started_value - 1) * 100
+      : holding.tracking_pnl_pct;
+
   return (
     <div className="space-y-4 sm:space-y-6">
       <div>
@@ -158,7 +166,7 @@ export default async function HoldingDetailPage({
           history={priceHistory}
           trades={trades}
           ticker={holding.ticker}
-          trackingPct={holding.tracking_pnl_pct}
+          trackingPct={trackingPct}
         />
       </div>
 
