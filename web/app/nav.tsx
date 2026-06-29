@@ -8,18 +8,19 @@ import { useState, useRef, useEffect } from "react";
 
 type Tab = {
   label: string;
+  shortLabel?: string; // used in the mobile bottom tab bar, falls back to label
   href: string;
   icon: LucideIcon;
   activeColor: string; // Tailwind text colour class for active state
 };
 
 const tabs: Tab[] = [
-  { label: "Investments", href: "/",                  icon: LineChart,    activeColor: "text-blue-600 dark:text-blue-400"     },
+  { label: "Investments", shortLabel: "Invest", href: "/",          icon: LineChart,    activeColor: "text-blue-600 dark:text-blue-400"     },
   { label: "Savings",     href: "/savings",           icon: PiggyBank,    activeColor: "text-emerald-500 dark:text-emerald-400" },
   { label: "Pensions",    href: "/pensions",          icon: Landmark,     activeColor: "text-amber-500 dark:text-amber-400"   },
   { label: "House",       href: "/mortgage",          icon: Home,         activeColor: "text-orange-500 dark:text-orange-400" },
   { label: "Net Worth",   href: "/net-worth",         icon: TrendingUp,   activeColor: "text-violet-500 dark:text-violet-400" },
-  { label: "Spending",    href: "/spending",          icon: ShoppingCart, activeColor: "text-rose-500 dark:text-rose-400"     },
+  { label: "Spending",    shortLabel: "Spent", href: "/spending",    icon: ShoppingCart, activeColor: "text-rose-500 dark:text-rose-400"     },
 ];
 
 const menuLinks = [
@@ -174,7 +175,7 @@ export default function Nav() {
         aria-label="Primary"
       >
         <div className="flex h-16">
-          {tabs.map(({ label, href, icon: Icon, activeColor }) => {
+          {tabs.map(({ label, shortLabel, href, icon: Icon, activeColor }) => {
             const active = href === current;
             return (
               <Link
@@ -189,7 +190,7 @@ export default function Nav() {
                   strokeWidth={active ? 2.25 : 1.75}
                   aria-hidden="true"
                 />
-                <span>{label}</span>
+                <span>{shortLabel ?? label}</span>
               </Link>
             );
           })}
