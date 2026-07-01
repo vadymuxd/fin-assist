@@ -177,35 +177,46 @@ export default function CategoryChart({ byCategory }: Props) {
   const pagedDrillMonths   = monthsByYear[drillYear] ?? [];
 
   // ── Stacked bar data (for Recharts) ───────────────────────────────────────
+  function monthStackTotal(m: string): number {
+    let total = 0;
+    for (const cat of effectiveCats) {
+      total += cat === "Other"
+        ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0)
+        : (rowByMonthCat.get(`${m}|${cat}`) ?? 0);
+    }
+    return total;
+  }
+
   const stackBarData = pagedMonths.map(m => {
     const row: Record<string, string | number> = { label: monthLabel(m) };
-    let total = 0;
     for (const cat of effectiveCats) {
       const val = cat === "Other"
         ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0)
         : (rowByMonthCat.get(`${m}|${cat}`) ?? 0);
       row[cat] = Math.round(val * 100) / 100;
-      total += val;
     }
-    row.__total = Math.round(total);
+    row.__total = Math.round(monthStackTotal(m));
     return row;
   });
+  // Fixed across all pages so stacked-bar heights stay comparable while paginating.
+  const globalStackMax = Math.max(0, ...months.map(monthStackTotal));
 
   // ── Drill-down bar data (for Recharts) ────────────────────────────────────
-  const drillAllTotal = months.reduce((s, m) => {
-    const val = drillCat === "Other"
-      ? allCats.slice(9).reduce((ss, [cat]) => ss + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
-      : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
-    return s + val;
-  }, 0);
-  const drillAvg = months.length > 0 ? drillAllTotal / months.length : 0;
-
-  const drillBarData = pagedDrillMonths.map(m => {
-    const val = drillCat === "Other"
+  function monthDrillValue(m: string): number {
+    return drillCat === "Other"
       ? allCats.slice(9).reduce((s, [cat]) => s + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
       : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
-    return { label: monthLabel(m), val: Math.round(val * 100) / 100 };
-  });
+  }
+
+  const drillAllTotal = months.reduce((s, m) => s + monthDrillValue(m), 0);
+  const drillAvg = months.length > 0 ? drillAllTotal / months.length : 0;
+
+  const drillBarData = pagedDrillMonths.map(m => ({
+    label: monthLabel(m),
+    val: Math.round(monthDrillValue(m) * 100) / 100,
+  }));
+  // Fixed across all years so drill-down bar heights stay comparable while paginating.
+  const globalDrillMax = Math.max(0, ...months.map(monthDrillValue));
 
   // ── Pie/donut data ─────────────────────────────────────────────────────────
   const pieTotals: Record<string, number> = {};
@@ -305,7 +316,14 @@ export default function CategoryChart({ byCategory }: Props) {
             <BarChart data={drillBarData} margin={{ top: 20, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={tickFmt} width={42} />
+              <YAxis
+                tick={{ fontSize: 11, fill: "currentColor" }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={tickFmt}
+                width={42}
+                domain={[0, (dataMax: number) => Math.max(dataMax, globalDrillMax)]}
+              />
               <Tooltip content={<DrillTip />} />
               <Bar dataKey="val" fill={drillColor} radius={[3, 3, 0, 0]}>
                 <LabelList dataKey="val" position="top" formatter={fmtBarLabel} style={{ fontSize: 11, fill: "currentColor", opacity: 0.55 }} />
@@ -319,7 +337,14 @@ export default function CategoryChart({ byCategory }: Props) {
             <BarChart data={stackBarData} margin={{ top: 20, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
               <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
               <XAxis dataKey="label" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-              <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={tickFmt} width={42} />
+              <YAxis
+                tick={{ fontSize: 11, fill: "currentColor" }}
+                tickLine={false}
+                axisLine={false}
+                tickFormatter={tickFmt}
+                width={42}
+                domain={[0, (dataMax: number) => Math.max(dataMax, globalStackMax)]}
+              />
               <Tooltip content={<BarTip />} />
               {effectiveCats.map((cat, i) => {
                 const isTop = i === effectiveCats.length - 1;

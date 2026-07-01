@@ -91,6 +91,8 @@ def find_or_create_date_column(ws, header_text):
         if h.strip() == header_text.strip():
             return i, False  # found, not created
     new_col = len(headers) + 1
+    if new_col > ws.col_count:
+        ws.add_cols(new_col - ws.col_count)
     ws.update_cell(1, new_col, header_text)
     return new_col, True
 

@@ -122,6 +122,8 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
   const totalBarPages = Math.max(1, Math.ceil(allBarItems.length / BAR_PAGE_SIZE));
   const actualBarPage = barPage === -1 ? totalBarPages - 1 : Math.min(barPage, totalBarPages - 1);
   const barData       = allBarItems.slice(actualBarPage * BAR_PAGE_SIZE, (actualBarPage + 1) * BAR_PAGE_SIZE);
+  // Fixed across all pages so bar heights stay comparable while paginating.
+  const globalBarMax  = Math.max(0, ...allBarItems.map(d => d.total));
 
   const barPageLabel = barData.length > 0
     ? `${barData[0].period}${barData.length > 1 ? ` – ${barData[barData.length - 1].period}` : ""}`
@@ -255,7 +257,14 @@ export default function SpendingChart({ monthly, weekly, daily }: Props) {
           <BarChart data={barData} margin={{ top: 20, right: 4, left: 0, bottom: 4 }} barCategoryGap="20%">
             <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
             <XAxis dataKey="period" tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} />
-            <YAxis tick={{ fontSize: 11, fill: "currentColor" }} tickLine={false} axisLine={false} tickFormatter={v => `£${(v / 1000).toFixed(1)}k`} width={42} />
+            <YAxis
+              tick={{ fontSize: 11, fill: "currentColor" }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={v => `£${(v / 1000).toFixed(1)}k`}
+              width={42}
+              domain={[0, (dataMax: number) => Math.max(dataMax, globalBarMax)]}
+            />
             <Tooltip
               // eslint-disable-next-line @typescript-eslint/no-explicit-any
               formatter={(v: any) => [gbp.format(Number(v ?? 0)), "Spend"]}
