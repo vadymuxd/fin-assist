@@ -31,7 +31,6 @@ import google.auth.transport.requests
 from lib.supabase_sink import (
     write_monzo_transactions,
     get_monzo_cursor,
-    write_transaction,
     force_revalidate,
 )
 
@@ -178,38 +177,12 @@ def classify(row: dict) -> str:
     return 'general_expense'
 
 
-# ─── Balance writers (monzo.7) ───────────────────────────────────────────────
-
-def _write_balance_event(row: dict, label: str) -> None:
-    """Write a Supabase transaction for classifiable balance events."""
-    amount = row.get('amount') or 0
-    date   = row.get('date') or ''
-    name   = row.get('name') or ''
-    notes  = row.get('notes') or ''
-
-    if label == 'investment_deposit' and amount < 0:
-        write_transaction({
-            'date':         date,
-            'domain':       'investments',
-            'account_name': name,
-            'amount_gbp':   abs(amount),
-            'type':         'DEPOSIT',
-            'notes':        f'Monzo auto-sync: {name} {notes}'.strip(),
-            'source':       'monzo_sync',
-        })
-    elif label == 'savings_deposit' and amount < 0:
-        write_transaction({
-            'date':         date,
-            'domain':       'savings',
-            'account_name': name or 'Savings',
-            'amount_gbp':   abs(amount),
-            'type':         'DEPOSIT',
-            'notes':        f'Monzo auto-sync: {name}'.strip(),
-            'source':       'monzo_sync',
-        })
-
-
 # ─── Per-account sync ────────────────────────────────────────────────────────
+# Balance writers (monzo.7) — superseded by monzo_balance_sync.py (feature.1),
+# which runs after this script in bot_sync.yml / daily_monitor.yml and routes
+# recognised savings-pot transfers + investment deposits through the Notion
+# Financial Updates DB → sync_worker.py pipeline instead of writing Supabase
+# `transactions` directly.
 
 def sync_account(
     headers: dict,

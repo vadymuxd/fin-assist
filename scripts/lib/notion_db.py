@@ -156,6 +156,46 @@ def prop_text(value):
     return {'rich_text': [{'type': 'text', 'text': {'content': str(value)}}]} if value else {'rich_text': []}
 
 
+def prop_number(value):
+    return {'number': value}
+
+
+def prop_title(value):
+    return {'title': [{'type': 'text', 'text': {'content': str(value)}}]}
+
+
+def create_financial_update(fields, headers=None):
+    """Create a new confirmed Financial Updates DB row (feature.1 — Monzo auto
+    balance recognition). fields: title, type, domain, account, amount,
+    event_date (ISO date), notes, source. Leaves Sheets Written / Supabase
+    Written unset (defaults to false) so sync_worker picks the row up on its
+    next run exactly like a manually-logged entry. Returns the new page id,
+    or None on failure (row is NOT marked processed by the caller in that case
+    so it gets retried on the next run)."""
+    headers = headers or notion_headers()
+    properties = {
+        'Title':      prop_title(fields['title']),
+        'Type':       prop_select(fields['type']),
+        'Domain':     prop_select(fields['domain']),
+        'Status':     prop_select('confirmed'),
+        'Source':     prop_select(fields.get('source', 'monzo_auto')),
+        'Account':    prop_text(fields.get('account', '')),
+        'Amount':     prop_number(fields.get('amount')),
+        'Notes':      prop_text(fields.get('notes', '')),
+        'Event Date': prop_date(fields.get('event_date')),
+    }
+    resp = requests.post(
+        'https://api.notion.com/v1/pages',
+        headers=headers,
+        json={'parent': {'database_id': FINANCIAL_UPDATES_DB_ID}, 'properties': properties},
+        timeout=30,
+    )
+    if resp.status_code >= 300:
+        print(f"  ⚠ Notion page create failed ({resp.status_code}): {resp.text[:300]}")
+        return None
+    return resp.json().get('id')
+
+
 def mark_row_synced(page_id, headers=None):
     """Mark a Financial Updates row as fully synced — sets all flags + Status."""
     import datetime

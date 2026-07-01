@@ -456,6 +456,44 @@ def write_monzo_transactions(rows: list[dict]) -> bool:
     return ok
 
 
+def get_unprocessed_monzo_transactions() -> list[dict]:
+    """Return monzo_transactions rows not yet considered by monzo_balance_sync.py
+    (feature.1) — i.e. balance_processed_at IS NULL. Fails open: returns []
+    on any error so a Supabase hiccup never blocks bot_sync.yml."""
+    client = _get_client()
+    if not client:
+        return []
+    try:
+        resp = (
+            client.table('monzo_transactions')
+            .select('id,transaction_id,account_type,row_index,date,type,name,category,amount,pot_name,notes')
+            .is_('balance_processed_at', 'null')
+            .order('row_index')
+            .execute()
+        )
+        return resp.data or []
+    except Exception as e:
+        logger.warning(f'get_unprocessed_monzo_transactions failed: {e}')
+        return []
+
+
+def mark_monzo_transactions_processed(ids: list[int]) -> bool:
+    """Stamp balance_processed_at=now() on monzo_transactions rows by primary
+    key id. Called for every row monzo_balance_sync.py scans (matched,
+    unresolved, or irrelevant) so history is never re-scanned and a
+    transaction is never considered twice."""
+    client = _get_client()
+    if not client or not ids:
+        return False
+    now = datetime.now(timezone.utc).isoformat()
+    try:
+        client.table('monzo_transactions').update({'balance_processed_at': now}).in_('id', ids).execute()
+        return True
+    except Exception as e:
+        logger.warning(f'mark_monzo_transactions_processed failed: {e}')
+        return False
+
+
 def purge_stale_market_scan_news(days: int = 30) -> int:
     """
     Delete market_scan news older than `days`. Per-holding news is kept
