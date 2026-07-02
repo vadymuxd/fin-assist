@@ -110,10 +110,11 @@ export default function Nav() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex h-14 items-center gap-4">
             <Link href="/" className="flex items-center gap-2 shrink-0">
-              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
-                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                  <path d="M3 17l6-6 4 4 8-8" />
-                  <path d="M14 7h7v7" />
+              <span className="inline-flex items-center justify-center w-7 h-7 rounded-lg bg-[#0A84FF] text-white shadow-sm">
+                <svg viewBox="0 0 24 24" className="w-4 h-4" fill="currentColor">
+                  <rect x="4" y="11" width="4" height="8" rx="1.5" />
+                  <rect x="10" y="6" width="4" height="13" rx="1.5" />
+                  <rect x="16" y="14" width="4" height="5" rx="1.5" />
                 </svg>
               </span>
               <span className="font-semibold tracking-tight text-gray-900 dark:text-gray-50">
@@ -153,10 +154,11 @@ export default function Nav() {
       {/* Mobile top bar */}
       <header className="sm:hidden sticky top-0 z-40 border-b border-gray-200 dark:border-gray-800 bg-white/90 dark:bg-gray-950/90 backdrop-blur">
         <div className="px-4 h-12 flex items-center gap-2">
-          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-gradient-to-br from-blue-600 to-indigo-600 text-white shadow-sm">
-            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-              <path d="M3 17l6-6 4 4 8-8" />
-              <path d="M14 7h7v7" />
+          <span className="inline-flex items-center justify-center w-6 h-6 rounded-md bg-[#0A84FF] text-white shadow-sm">
+            <svg viewBox="0 0 24 24" className="w-3.5 h-3.5" fill="currentColor">
+              <rect x="4" y="11" width="4" height="8" rx="1.5" />
+              <rect x="10" y="6" width="4" height="13" rx="1.5" />
+              <rect x="16" y="14" width="4" height="5" rx="1.5" />
             </svg>
           </span>
           <span className="font-semibold tracking-tight text-gray-900 dark:text-gray-50">

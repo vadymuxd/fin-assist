@@ -15,22 +15,25 @@ export default function Icon0() {
           display: "flex",
           alignItems: "center",
           justifyContent: "center",
-          background: "linear-gradient(135deg, #2563eb 0%, #6366f1 100%)",
+          background: "#0A84FF",
         }}
       >
-        <svg
-          width="280"
-          height="280"
-          viewBox="0 0 24 24"
-          fill="none"
-          stroke="white"
-          strokeWidth="2.4"
-          strokeLinecap="round"
-          strokeLinejoin="round"
+        <div
+          style={{
+            width: 300,
+            height: 300,
+            borderRadius: 66,
+            display: "flex",
+            alignItems: "flex-end",
+            justifyContent: "center",
+            gap: 26,
+            paddingBottom: 38,
+          }}
         >
-          <path d="M3 17l6-6 4 4 8-8" />
-          <path d="M14 7h7v7" />
-        </svg>
+          <div style={{ width: 44, height: 126, background: "white", borderRadius: 10 }} />
+          <div style={{ width: 44, height: 208, background: "white", borderRadius: 10 }} />
+          <div style={{ width: 44, height: 78, background: "white", borderRadius: 10 }} />
+        </div>
       </div>
     ),
     { ...size }
