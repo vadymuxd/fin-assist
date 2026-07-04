@@ -29,7 +29,7 @@ It covers: push git, analyse full chat, create Notion session entry, update Memo
 
 Add a detailed summary to the Sessions DB in Notion, then add a one-liner entry to Memory Index pointing to it. Update Agent Config if anything structural changed. Full instructions are in Agent Config.
 
-## Notifying Vadym when work finishes
+## Notifying Vadym when done OR blocked waiting on him
 
-If Vadym asks to be notified/messaged/told when the current task (or the rest of the session) is done — e.g. "notify me when done", "tell me when you're finished", "message me on Telegram" — follow `/notify` (`.claude/commands/notify.md`): finish the work, then send a short Telegram summary via `python3 scripts/notify_telegram.py "<summary>"` as the last step before ending your turn.
+If Vadym asks to be notified/messaged/told — e.g. "notify me when done", "tell me when you're finished", "message me on Telegram" — follow `/notify` (`.claude/commands/notify.md`). This covers two moments, not just completion: (1) done — send a Telegram summary as the last step before ending your turn; (2) blocked — any time you're about to end your turn waiting on him (a clarifying question, a risky-action confirmation, a permission-approval prompt), send a short "⏸️ Need you: ..." ping first so he knows to come back to his Mac. Both use `python3 scripts/notify_telegram.py "<message>"`.
 
