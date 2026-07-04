@@ -67,6 +67,42 @@ def open_sheet():
     return gspread.authorize(creds).open_by_key(SHEET_ID)
 
 
+# Per-run cache: gspread's sh.worksheet(name) re-fetches spreadsheet metadata on
+# EVERY call, and several handlers call ws.get_all_values() repeatedly for data
+# that hasn't changed since the last read within this run. Both are full Sheets
+# API requests, and the pipeline runs multiple scripts back-to-back against the
+# same spreadsheet/user, so redundant reads burst past Google's per-minute quota.
+# Fix: open each worksheet once and cache its values; only re-fetch after a
+# write we made ourselves invalidates the cache.
+_ws_cache = {}
+_values_cache = {}
+
+
+def get_worksheet(sh, title):
+    """Cached sh.worksheet(title) — avoids a fresh metadata fetch on every call."""
+    key = (sh.id, title)
+    ws = _ws_cache.get(key)
+    if ws is None:
+        ws = sh.worksheet(title)
+        _ws_cache[key] = ws
+    return ws
+
+
+def get_values(ws):
+    """Cached ws.get_all_values() — fetched once, reused until invalidate_values()
+    is called after a write to this worksheet."""
+    cached = _values_cache.get(ws.id)
+    if cached is None:
+        cached = ws.get_all_values()
+        _values_cache[ws.id] = cached
+    return cached
+
+
+def invalidate_values(ws):
+    """Drop the cached values for `ws` — call after any write to it."""
+    _values_cache.pop(ws.id, None)
+
+
 def parse_float(val):
     if val is None or str(val).strip() == '':
         return 0.0
@@ -86,7 +122,7 @@ def find_or_create_date_column(ws, header_text):
     """Return 1-based column index of the column whose header matches `header_text`.
     Creates a new column at the end if not found.
     """
-    headers = ws.row_values(1)
+    headers = get_values(ws)[0] if get_values(ws) else []
     for i, h in enumerate(headers, start=1):
         if h.strip() == header_text.strip():
             return i, False  # found, not created
@@ -94,6 +130,7 @@ def find_or_create_date_column(ws, header_text):
     if new_col > ws.col_count:
         ws.add_cols(new_col - ws.col_count)
     ws.update_cell(1, new_col, header_text)
+    invalidate_values(ws)
     return new_col, True
 
 
@@ -116,7 +153,7 @@ def _parse_date_header(h):
 def latest_date_column(ws):
     """Return 1-based index of the chronologically latest date column on `ws`,
     or None if no date columns are present."""
-    headers = ws.row_values(1)
+    headers = get_values(ws)[0] if get_values(ws) else []
     dated = []
     for col_i, h in enumerate(headers, start=1):
         if not _is_date_header(h):
@@ -137,7 +174,7 @@ def self_heal_sparse_columns(sh):
     healed = []
     for sheet_name in ('Savings Balance', 'Pensions'):
         try:
-            ws = sh.worksheet(sheet_name)
+            ws = get_worksheet(sh, sheet_name)
         except Exception as e:
             print(f"  ⚠ {sheet_name}: cannot open ({e})")
             continue
@@ -145,8 +182,10 @@ def self_heal_sparse_columns(sh):
         if col is None:
             print(f"  {sheet_name}: no date columns — skipping")
             continue
+        # Header already known from latest_date_column's cached read above —
+        # no need for a separate ws.cell(1, col) API call.
+        header = get_values(ws)[0][col - 1]
         cf_count = carry_forward_column(ws, col)
-        header = ws.cell(1, col).value
         if cf_count:
             print(f"  {sheet_name} · {header} (col {col}): +{cf_count} carry-fwd")
             healed.append(f"{sheet_name}:{cf_count}")
@@ -164,7 +203,7 @@ def carry_forward_column(ws, target_col):
     complete household snapshot (not just the one NL-updated account), which is
     what snapshot_worker + the web app expect.
     """
-    all_rows = ws.get_all_values()
+    all_rows = get_values(ws)
     if not all_rows:
         return 0
     headers = all_rows[0]
@@ -201,6 +240,7 @@ def carry_forward_column(ws, target_col):
 
     if batch:
         ws.batch_update(batch, value_input_option='USER_ENTERED')
+        invalidate_values(ws)
     return len(batch)
 
 
@@ -222,7 +262,7 @@ def find_savings_row(ws, account_name):
          users who omit the bank prefix).
       3. Otherwise return None (ambiguous — can't tell which 'Cash ISA' they mean).
     """
-    rows = ws.get_all_values()
+    rows = get_values(ws)
     target = _normalise(account_name)
     if not target:
         return None, None, None
@@ -261,7 +301,7 @@ def find_pensions_row(ws, account_name):
       1. Prefer rows where target contains BOTH provider AND employer.
       2. Fall back to unique provider-only or employer-only match.
     """
-    rows = ws.get_all_values()
+    rows = get_values(ws)
     target = _normalise(account_name)
     if not target:
         return None, None, None
@@ -319,7 +359,7 @@ def find_managed_fund_row(ws, account_name):
     start = layout.get('managed_total')  # aggregate row; fund detail begins next row
     if not start:
         return None
-    all_rows = ws.get_all_values()
+    all_rows = get_values(ws)
     a = (account_name or '').lower()
     for i in range(start + 1, len(all_rows) + 1):
         row = all_rows[i - 1] if i - 1 < len(all_rows) else []
@@ -346,12 +386,13 @@ def handle_balance_update(entry, sh):
         raise ValueError("BALANCE_UPDATE missing New Balance £")
 
     if domain == 'savings':
-        ws = sh.worksheet('Savings Balance')
+        ws = get_worksheet(sh, 'Savings Balance')
         row, bank, account = find_savings_row(ws, entry['account'])
         if not row:
             raise ValueError(f"Savings account not found in sheet: {entry['account']!r}")
         col, _created = find_or_create_date_column(ws, today_header())
         ws.update_cell(row, col, new_balance)
+        invalidate_values(ws)
         # Always carry-forward — idempotent, only fills empty cells. Self-heals
         # sparse columns left by earlier runs (e.g. pre-fix Phase 16 syncs).
         cf_count = carry_forward_column(ws, col)
@@ -359,22 +400,24 @@ def handle_balance_update(entry, sh):
         return f"Savings · {bank} {account} · row {row} col {col}{cf_note} = £{new_balance:,.2f}"
 
     if domain == 'pensions':
-        ws = sh.worksheet('Pensions')
+        ws = get_worksheet(sh, 'Pensions')
         row, provider, employer = find_pensions_row(ws, entry['account'])
         if not row:
             raise ValueError(f"Pension not found in sheet: {entry['account']!r}")
         col, _created = find_or_create_date_column(ws, today_header())
         ws.update_cell(row, col, new_balance)
+        invalidate_values(ws)
         cf_count = carry_forward_column(ws, col)
         cf_note = f' (+{cf_count} carry-fwd)' if cf_count else ''
         return f"Pensions · {provider} {employer} · row {row} col {col}{cf_note} = £{new_balance:,.2f}"
 
     if domain == 'investments':
-        ws = sh.worksheet('Investments')
+        ws = get_worksheet(sh, 'Investments')
         row, label = find_investments_balance_row(ws, entry['account'])
         if not row:
             raise ValueError(f"Investments balance row not found for: {entry['account']!r}")
         ws.update_cell(row, COL_VALUE_IDX, new_balance)
+        invalidate_values(ws)
         return f"Investments · {label} · row {row} col G = £{new_balance:,.2f}"
 
     raise ValueError(f"Unknown domain for BALANCE_UPDATE: {domain!r}")
@@ -382,7 +425,7 @@ def handle_balance_update(entry, sh):
 
 def handle_savings_cashflow(entry, sh):
     """DEPOSIT / WITHDRAWAL / TRANSFER on savings — write new balance(s) + Supabase transactions."""
-    ws = sh.worksheet('Savings Balance')
+    ws = get_worksheet(sh, 'Savings Balance')
     typ = entry['type']
     amount = entry['amount']
     if amount is None:
@@ -398,8 +441,9 @@ def handle_savings_cashflow(entry, sh):
         # Read latest non-empty balance from prior date columns to compute new
         # balance. Skip NULL/empty cells (no data), but accept literal £0 as a
         # real balance and stop scanning — a paid-off pot is meaningful data.
-        headers = ws.row_values(1)
-        row_vals = ws.row_values(row)
+        rows = get_values(ws)
+        headers = rows[0] if rows else []
+        row_vals = rows[row - 1] if row - 1 < len(rows) else []
         prior = 0.0
         for i in range(len(headers) - 1, 2, -1):  # scan from latest col backward, skip Bank/Account/Type
             if i + 1 == col:
@@ -412,6 +456,10 @@ def handle_savings_cashflow(entry, sh):
                 break
         new_balance = prior + delta
         ws.update_cell(row, col, new_balance)
+        # Invalidate immediately — TRANSFER calls adjust() twice (from + to) and
+        # the second call's prior-balance scan + carry_forward_column afterwards
+        # must see this write, not a stale pre-write snapshot.
+        invalidate_values(ws)
         return new_balance, f"{bank} {account}"
 
     if typ in ('DEPOSIT', 'WITHDRAWAL'):
@@ -461,8 +509,8 @@ def handle_investments_action(entry, sh):
     """DEPOSIT / WITHDRAWAL / BUY / SELL on investments — delegate to log_trades helpers."""
     import log_trades
 
-    ws_inv = sh.worksheet('Investments')
-    ws_tx  = sh.worksheet('InvTransactions')
+    ws_inv = get_worksheet(sh, 'Investments')
+    ws_tx  = get_worksheet(sh, 'InvTransactions')
 
     trade = {
         'date':     entry['event_date'] or date.today().isoformat(),
@@ -506,6 +554,7 @@ def handle_investments_action(entry, sh):
                 mt_i = _val(mt_row, 9)
                 updates.append({'range': gspread.utils.rowcol_to_a1(mt_row, 9), 'values': [[mt_i + delta]]})
             ws_inv.batch_update(updates, value_input_option='USER_ENTERED')
+            invalidate_values(ws_inv)
             write_transaction({
                 'date':         trade['date'],
                 'domain':       'investments',
@@ -525,6 +574,7 @@ def handle_investments_action(entry, sh):
         cash_vals = ws_inv.row_values(cash_row)
         prior = parse_float(cash_vals[6]) if len(cash_vals) > 6 else 0.0
         ws_inv.update_cell(cash_row, COL_VALUE_IDX, prior + delta)
+        invalidate_values(ws_inv)
         write_transaction({
             'date':         trade['date'],
             'domain':       'investments',
@@ -546,6 +596,9 @@ def handle_investments_action(entry, sh):
             log_trades.add_new_position(ws_inv, trade, layout)
         log_trades.update_cash(ws_inv, trade, layout)
         log_trades.rewrite_aggregate_formulas(ws_inv)
+        # log_trades writes directly to ws_inv (row inserts/deletes included) —
+        # invalidate so a later entry's find_managed_fund_row/get_values sees it.
+        invalidate_values(ws_inv)
         return f"Investments BUY {trade['qty']} {trade['ticker']} @ £{trade['price']:.4f} on {trade['platform']}"
 
     if entry['type'] == 'SELL':
@@ -560,6 +613,7 @@ def handle_investments_action(entry, sh):
             log_trades.remove_position_row(ws_inv, trade['ticker'])
         log_trades.update_cash(ws_inv, trade, layout)
         log_trades.rewrite_aggregate_formulas(ws_inv)
+        invalidate_values(ws_inv)
         return f"Investments SELL {trade['qty']} {trade['ticker']} @ £{trade['price']:.4f} on {trade['platform']}"
 
     raise ValueError(f"Unsupported investments action: {entry['type']!r}")
