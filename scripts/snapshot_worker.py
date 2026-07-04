@@ -59,6 +59,10 @@ COL_STARTED_IDX = 8  # 0-based → col I (Tracking Started Value)
 # single combined bot_sync Telegram message.
 SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_sync_summary.txt')
 
+# Must match MONZO_SYNC_SUMMARY_FILE in monzo_sync.py — same handoff pattern,
+# folded into the same combined message.
+MONZO_SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_monzo_sync_summary.txt')
+
 
 MONTH_NAMES = {
     'january': 1, 'february': 2, 'march': 3, 'april': 4,
@@ -615,6 +619,18 @@ def _read_sync_summary() -> str:
         return ''
 
 
+def _read_monzo_summary() -> str:
+    """Read (and consume) the Monzo-sync summary monzo_sync.py left behind, so it
+    can be folded into the one combined message. Returns '' if absent."""
+    try:
+        with open(MONZO_SYNC_SUMMARY_FILE) as f:
+            text = f.read().strip()
+        os.remove(MONZO_SYNC_SUMMARY_FILE)
+        return text
+    except OSError:
+        return ''
+
+
 def _send_telegram(text: str) -> None:
     token   = os.getenv('TELEGRAM_BOT_TOKEN', '')
     chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
@@ -660,23 +676,40 @@ def main():
     # that gap would re-cache stale values for the ISR window.
     force_revalidate()
 
-    if os.getenv('BOT_SYNC_TELEGRAM') and args.domain == 'all':
-        # HF-B: sync_worker only leaves a handoff file when it processed ≥1 entry.
-        # An absent/empty queue means nothing changed in this sync flow (no price
-        # refresh runs here), so stay silent instead of pinging a "nothing
-        # happened" message.
-        queue = _read_sync_summary()
-        if not queue:
-            print("  No Notion-queue updates this run — skipping combined Telegram message.")
+    if args.domain == 'all':
+        # Single combined "Sync complete" message for the whole pipeline
+        # (monzo_sync.py + sync_worker.py Notion queue + this snapshot),
+        # replacing what used to be up to 3 separate Telegram messages.
+        #
+        # `manual` = the bot_sync.yml flow (Telegram Sync button / bot_analyse) —
+        # always confirms, even if nothing changed, so a button press never
+        # looks like it silently did nothing. daily_monitor.yml's scheduled
+        # cron run does NOT set BOT_SYNC_TELEGRAM, so a routine day with zero
+        # new Monzo rows and an empty Notion queue sends no message at all.
+        manual = bool(os.getenv('BOT_SYNC_TELEGRAM'))
+        monzo  = _read_monzo_summary()
+        queue  = _read_sync_summary()
+        changed = bool(monzo) or bool(queue)
+
+        if not changed and not manual:
+            print("  Nothing new this run — skipping Telegram message.")
             return
 
         today = date.today().isoformat()
         lines = [f"<b>✅ Sync complete</b> · {today}", ""]
 
-        # What was captured from the Notion queue (deferred from sync_worker).
-        lines.append("<b>From Notion queue:</b>")
-        lines.append(queue)
-        lines.append("")
+        if monzo:
+            lines.append("<b>Monzo:</b>")
+            lines.append(monzo)
+            lines.append("")
+
+        if queue:
+            lines.append("<b>From Notion queue:</b>")
+            lines.append(queue)
+            lines.append("")
+        elif not changed:
+            lines.append("No new transactions or queue entries this run.")
+            lines.append("")
 
         # What the Sheet snapshot now holds.
         lines.append("<b>From Sheet snapshot:</b>")

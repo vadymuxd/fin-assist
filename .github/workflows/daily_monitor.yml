@@ -92,6 +92,11 @@ jobs:
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
           APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
+          # Defer sync_worker's own Telegram message so snapshot_worker sends
+          # ONE combined message (Monzo + Notion queue + Sheet snapshot)
+          # instead of separate ones — and stays silent entirely if this
+          # scheduled run found nothing new (no BOT_SYNC_TELEGRAM here).
+          DEFER_SYNC_TELEGRAM:            "1"
         # Phase 18: Monzo sync first (new rows → monzo_transactions), then
         # feature.1 recognises savings/investment transfers among them and
         # queues Financial Updates entries, then drain Notion Financial

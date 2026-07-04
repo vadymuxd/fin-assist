@@ -35,8 +35,6 @@ jobs:
           SUPABASE_SERVICE_ROLE_KEY:      ${{ secrets.SUPABASE_SERVICE_ROLE_KEY }}
           APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
-          TELEGRAM_BOT_TOKEN:             ${{ secrets.TELEGRAM_BOT_TOKEN }}
-          TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
         run: python3 scripts/monzo_sync.py
 
       # feature.1: recognise savings-pot transfers + investment deposits among
@@ -97,6 +95,9 @@ jobs:
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: python3 scripts/sheets_updater.py --snapshot
 
-# One combined Telegram message is sent by snapshot_worker.py: sync_worker
-# defers its Notion-queue summary to a temp file (DEFER_SYNC_TELEGRAM), and
-# snapshot_worker folds it together with the Sheet-snapshot totals.
+# One combined Telegram message is sent by snapshot_worker.py: monzo_sync.py
+# and sync_worker.py each defer their own summary to a temp-file handoff
+# (only writing one when something actually happened), and snapshot_worker
+# folds whichever are present together with the Sheet-snapshot totals.
+# BOT_SYNC_TELEGRAM=1 above means this manual/bot-triggered run always sends
+# a confirmation, even if nothing was new — unlike the scheduled daily run.

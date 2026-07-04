@@ -21,6 +21,7 @@ import os
 import sys
 import argparse
 import logging
+import tempfile
 from datetime import datetime, timezone
 
 import requests as req
@@ -47,8 +48,10 @@ TABS = {
     'joint':    'Joint Account Transactions',
 }
 
-TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN', '')
-TELEGRAM_CHAT_ID   = os.getenv('TELEGRAM_CHAT_ID', '')
+# Handoff file read by snapshot_worker.py, which sends the ONE combined
+# "Sync complete" Telegram message for the whole bot_sync/daily_monitor
+# pipeline. Only written when there's something to report — see main().
+MONZO_SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_monzo_sync_summary.txt')
 
 # Known investment platform name fragments (case-insensitive, exact-phrase only)
 INVESTMENT_PLATFORMS = [
@@ -221,21 +224,6 @@ def sync_account(
     return {'fetched': len(raw_rows), 'upserted': len(parsed), 'classified': class_counts}
 
 
-# ─── Telegram ────────────────────────────────────────────────────────────────
-
-def _send_telegram(msg: str) -> None:
-    if not TELEGRAM_BOT_TOKEN or not TELEGRAM_CHAT_ID:
-        return
-    try:
-        req.post(
-            f'https://api.telegram.org/bot{TELEGRAM_BOT_TOKEN}/sendMessage',
-            json={'chat_id': TELEGRAM_CHAT_ID, 'text': msg, 'parse_mode': 'HTML'},
-            timeout=10,
-        )
-    except Exception as e:
-        logger.warning(f'Telegram send failed: {e}')
-
-
 # ─── Main ────────────────────────────────────────────────────────────────────
 
 def main() -> None:
@@ -266,20 +254,29 @@ def main() -> None:
     if not args.dry_run:
         force_revalidate()
 
-    lines = ['📊 <b>Monzo Sync</b>']
+    lines     = []
+    any_new   = False
     for acct, stats in all_stats.items():
         n = stats['upserted']
         if n == 0:
-            lines.append(f'  {acct}: no new rows')
-        else:
-            cats = ', '.join(f'{v} {k}' for k, v in stats['classified'].items())
-            lines.append(f'  {acct}: +{n} rows ({cats})')
-    if args.dry_run:
-        lines.append('(dry-run — no writes)')
-    summary = '\n'.join(lines)
+            continue
+        any_new = True
+        cats = ', '.join(f'{v} {k}' for k, v in stats['classified'].items())
+        lines.append(f'{acct}: +{n} rows ({cats})')
+    summary = '\n'.join(lines) if lines else 'No new Monzo rows.'
     logger.info(summary)
+
+    # Hand off to snapshot_worker.py, which sends the one combined Telegram
+    # message for the whole run — only when there's actually something new,
+    # so a routine "nothing happened" sync doesn't add noise on its own.
     if not args.dry_run:
-        _send_telegram(summary)
+        try:
+            os.remove(MONZO_SYNC_SUMMARY_FILE)
+        except OSError:
+            pass
+        if any_new:
+            with open(MONZO_SYNC_SUMMARY_FILE, 'w') as f:
+                f.write('\n'.join(lines))
 
 
 if __name__ == '__main__':
