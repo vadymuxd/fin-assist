@@ -189,6 +189,40 @@ def main():
               f"{fmt_pct(r['ret_~1wk']):<9}{fmt_pct(r['ret_~2wk']):<9}{fmt_pct(r['ret_~1mo']):<9}"
               f"{fmt_pct(r['ret_todate']):<10}{fmt_pct(r['alpha_todate'])}")
 
+    # ── Simple scorecard: raw price then/now + Good/Bad by return sign ─────
+    # Good/Bad here is purely the TICKER's own price direction since the
+    # recommendation — NOT adjusted for whether the call was BUY or SELL.
+    # For a SELL/TRIM signal, a "Bad" (price fell) row is actually the
+    # outcome you'd WANT (selling before a drop) — read those two rows in
+    # reverse. This is intentionally the naive version for manual review;
+    # the action-aware hit-rate above already does the adjusted read.
+    print('\n' + '=' * 100)
+    print('SIMPLE SCORECARD — raw ticker price then vs now (Good = price up, Bad = price down)')
+    print('=' * 100)
+    print(f"\n{'Date':<11}{'Ticker':<8}{'Action':<10}{'Price then':<12}{'Price now':<12}{'Δ':<10}{'Return':<9}{'Good/Bad'}")
+    print('-' * 100)
+    good_n, bad_n = 0, 0
+    for r in results:
+        if r['ret_todate'] is None:
+            continue
+        p_now = r['p0'] * (1 + r['ret_todate'])
+        delta = p_now - r['p0']
+        verdict = 'Good' if r['ret_todate'] > 0 else 'Bad'
+        if verdict == 'Good':
+            good_n += 1
+        else:
+            bad_n += 1
+        print(f"{r['date']:<11}{r['ticker']:<8}{r['action']:<10}"
+              f"£{r['p0']:<11.2f}£{p_now:<11.2f}£{delta:<9.2f}{fmt_pct(r['ret_todate']):<9}{verdict}")
+
+    total_n = good_n + bad_n
+    prob = good_n / total_n if total_n else 0
+    print(f"\nGood: {good_n}   Bad: {bad_n}   Total: {total_n}")
+    print(f"Historical hit-rate (naive, price-direction only): {prob * 100:.0f}%")
+    print(f"Naive estimated probability the NEXT recommendation's ticker price is up when you check it: ~{prob * 100:.0f}%")
+    print(f"(n={total_n} is small — treat as a rough estimate, not a reliable probability. Also remember 2 of these")
+    print(f" 20 rows were SELL calls, where a price DROP afterward is actually the good outcome — see caveat above.)")
+
     # ── Hit-rate by action type ─────────────────────────────────────────────
     print('\n' + '=' * 100)
     print('HIT RATE BY ACTION (evaluated "to date", vs your actual Custom Stocks portfolio return)')
