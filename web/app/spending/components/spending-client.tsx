@@ -6,7 +6,7 @@ import { Receipt } from "lucide-react";
 import { type SpendingData } from "@/lib/queries";
 import CategoryChart from "./category-chart";
 import SpendingChart from "./spending-chart";
-import SpendingInsights, { ThisMonthHero } from "./spending-insights";
+import { ThisMonthHero, TopMerchantsCard, SpendingBehaviourChangeCard } from "./spending-insights";
 
 type Account = "all" | "personal" | "joint";
 
@@ -48,8 +48,9 @@ export default function SpendingClient({ data }: Props) {
 
       <ThisMonthHero monthly={d.monthly} daily={d.daily} budget={BUDGETS[account]} recurring={d.recurring} />
       <CategoryChart key={`cat-${account}`} byCategory={d.byCategory} />
+      <SpendingBehaviourChangeCard key={`behaviour-${account}`} byCategory={d.byCategory} />
       <SpendingChart key={`spend-${account}`} monthly={d.monthly} daily={d.daily} />
-      <SpendingInsights topMerchants={d.topMerchants} byCategory={d.byCategory} />
+      <TopMerchantsCard topMerchants={d.topMerchants} monthly={d.monthly} />
     </div>
   );
 }

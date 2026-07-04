@@ -135,10 +135,22 @@ export default function CategoryChart({ byCategory }: Props) {
   const months = [...monthSet].sort();
   const rowByMonthCat = new Map(byCategory.map(r => [`${r.month}|${r.category}`, r.total]));
 
+  // ── Bar chart: 6-month page pagination ────────────────────────────────────
+  const BAR_PAGE_SIZE  = 6;
+  const totalBarPages  = Math.max(1, Math.ceil(months.length / BAR_PAGE_SIZE));
+  const actualBarPage  = barPage === -1 ? totalBarPages - 1 : Math.min(barPage, totalBarPages - 1);
+  const pagedMonths    = months.slice(actualBarPage * BAR_PAGE_SIZE, (actualBarPage + 1) * BAR_PAGE_SIZE);
+  const barPageLabel   = pagedMonths.length > 0
+    ? `${monthLabel(pagedMonths[0])}${pagedMonths.length > 1 ? ` – ${monthLabel(pagedMonths[pagedMonths.length - 1])}` : ""}`
+    : "";
+
   // ── Pie month selection ────────────────────────────────────────────────────
   const actualPieMonthIdx = pieMonthIdx === -1 ? months.length - 1 : Math.min(pieMonthIdx, months.length - 1);
   const selectedPieMonth  = months[actualPieMonthIdx] ?? "";
 
+  // Legend totals track whatever period is currently in view — the selected
+  // month in pie mode, the paginated 6-month window in bars mode — never
+  // an all-time total, so paginating actually changes the numbers below.
   const legendTotals: Record<string, number> = {};
   if (chartType === "pie" && selectedPieMonth) {
     for (const [cat] of allCats) {
@@ -148,20 +160,13 @@ export default function CategoryChart({ byCategory }: Props) {
       legendTotals["Other"] = allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${selectedPieMonth}|${c}`) ?? 0), 0);
     }
   } else {
-    Object.assign(legendTotals, catTotals);
+    for (const [cat] of allCats) {
+      legendTotals[cat] = pagedMonths.reduce((s, m) => s + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0);
+    }
     if (hasOther) {
-      legendTotals["Other"] = allCats.slice(9).reduce((s, [, v]) => s + v, 0);
+      legendTotals["Other"] = allCats.slice(9).reduce((s, [c]) => s + pagedMonths.reduce((s2, m) => s2 + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0), 0);
     }
   }
-
-  // ── Bar chart: 6-month page pagination ────────────────────────────────────
-  const BAR_PAGE_SIZE  = 6;
-  const totalBarPages  = Math.max(1, Math.ceil(months.length / BAR_PAGE_SIZE));
-  const actualBarPage  = barPage === -1 ? totalBarPages - 1 : Math.min(barPage, totalBarPages - 1);
-  const pagedMonths    = months.slice(actualBarPage * BAR_PAGE_SIZE, (actualBarPage + 1) * BAR_PAGE_SIZE);
-  const barPageLabel   = pagedMonths.length > 0
-    ? `${monthLabel(pagedMonths[0])}${pagedMonths.length > 1 ? ` – ${monthLabel(pagedMonths[pagedMonths.length - 1])}` : ""}`
-    : "";
 
   // ── Drill-down: year-based pagination ─────────────────────────────────────
   const monthsByYear: Record<string, string[]> = {};
