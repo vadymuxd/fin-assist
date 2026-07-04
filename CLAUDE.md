@@ -19,6 +19,8 @@ Fetch this page when the user asks about roadmap, phases, scope, or "what's next
 
 Notion is the **single source of truth** for the plan. **After completing phases or updating tasks:** update the Notion Plan page directly. (There is no `PLAN.md` mirror — it has been retired.)
 
+**Work in Focus** (top of the Plan page) is Vadym's near-term "what to check/decide soon" scan — it must only ever contain open items. The moment a `Work N` item there is DONE or SHELVED, move it out (to Completed, or promote to its own Phase if it's substantial/recurring) — see `/planning` (`.claude/commands/planning.md`) for the full structure and procedure. Run `/planning` whenever Vadym asks to clean up/reorganize the plan, or proactively whenever a Work in Focus item you were tracking finishes.
+
 ## Finishing a session
 
 When the user says **"finish the session"** (or similar), run `/finish-session` — a slash command defined in `.claude/commands/finish-session.md`.

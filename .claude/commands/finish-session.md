@@ -88,6 +88,7 @@ Fetch it first to see current state.
 - If a phase is now fully complete, mark it `✅ COMPLETE`
 - If new tasks were discovered, add them under the right phase
 - Update **Immediate Next Steps** list if priorities shifted
+- Run `/planning` (`.claude/commands/planning.md`) to move any finished/shelved **Work in Focus** items out to Completed (or promote to a new Phase if substantial/recurring) — that section must only ever hold open items.
 
 Notion is the single source of truth for the plan — there is no `PLAN.md` mirror to sync.
 
