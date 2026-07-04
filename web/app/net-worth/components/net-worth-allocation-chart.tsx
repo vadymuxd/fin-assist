@@ -23,19 +23,19 @@ function getSlices(latest: NetWorthPoint, owner: Owner): Slice[] {
       { name: "Investments",  value: latest.vadym_investments, color: "#2563eb" },
       { name: "Savings",      value: latest.vadym_savings,     color: "#10b981" },
       { name: "Pensions",     value: latest.vadym_pensions,    color: "#f59e0b" },
-      { name: "Mortgage (½)", value: equityHalf,               color: "#f97316" },
+      { name: "House (½)",    value: equityHalf,               color: "#f97316" },
     ]
     : owner === "Lisa" ? [
       { name: "Investments",  value: latest.lisa_investments,  color: "#2563eb" },
       { name: "Savings",      value: latest.lisa_savings,      color: "#10b981" },
       { name: "Pensions",     value: latest.lisa_pensions,     color: "#f59e0b" },
-      { name: "Mortgage (½)", value: equityHalf,               color: "#f97316" },
+      { name: "House (½)",    value: equityHalf,               color: "#f97316" },
     ]
     : [
-      { name: "Investments",     value: latest.investments,     color: "#2563eb" },
-      { name: "Savings",         value: latest.savings,         color: "#10b981" },
-      { name: "Pensions",        value: latest.pensions,        color: "#f59e0b" },
-      { name: "Mortgage Equity", value: latest.mortgage_equity, color: "#f97316" },
+      { name: "Investments", value: latest.investments,     color: "#2563eb" },
+      { name: "Savings",     value: latest.savings,         color: "#10b981" },
+      { name: "Pensions",    value: latest.pensions,        color: "#f59e0b" },
+      { name: "House Equity", value: latest.mortgage_equity, color: "#f97316" },
     ];
 
   const total = raw.reduce((s, d) => s + d.value, 0);

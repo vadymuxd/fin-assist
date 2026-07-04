@@ -143,19 +143,19 @@ export default function NetWorthKpiCards({ data }: { data: NetWorthPoint[] }) {
       { label: "Investments", value: latest.vadym_investments, color: "#2563eb" },
       { label: "Savings",     value: latest.vadym_savings,     color: "#10b981" },
       { label: "Pensions",    value: latest.vadym_pensions,    color: "#f59e0b" },
-      { label: "Mortgage (½)", value: equityHalf,              color: "#f97316" },
+      { label: "House (½)",   value: equityHalf,              color: "#f97316" },
     ]
     : owner === "Lisa" ? [
       { label: "Investments", value: latest.lisa_investments, color: "#2563eb" },
       { label: "Savings",     value: latest.lisa_savings,     color: "#10b981" },
       { label: "Pensions",    value: latest.lisa_pensions,    color: "#f59e0b" },
-      { label: "Mortgage (½)", value: equityHalf,             color: "#f97316" },
+      { label: "House (½)",   value: equityHalf,              color: "#f97316" },
     ]
     : [
       { label: "Investments", value: latest.investments,      color: "#2563eb" },
       { label: "Savings",     value: latest.savings,          color: "#10b981" },
       { label: "Pensions",    value: latest.pensions,         color: "#f59e0b" },
-      { label: "Mortgage",    value: latest.mortgage_equity,  color: "#f97316" },
+      { label: "House",       value: latest.mortgage_equity,  color: "#f97316" },
     ];
 
   return (

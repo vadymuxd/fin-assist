@@ -53,3 +53,14 @@ export function getCategoryColor(category: string | null | undefined): string {
   if (!category) return "#94a3b8";
   return CATEGORY_COLORS[category] ?? "#94a3b8";
 }
+
+// Blends a hex color toward white — used to show "previous year" as a lighter
+// tint of the same category color, with "current year" left at full saturation.
+export function lightenColor(hex: string, amount: number): string {
+  const n = parseInt(hex.slice(1), 16);
+  const channel = (shift: number) => {
+    const c = (n >> shift) & 255;
+    return Math.round(c + (255 - c) * amount);
+  };
+  return `#${[16, 8, 0].map(shift => channel(shift).toString(16).padStart(2, "0")).join("")}`;
+}

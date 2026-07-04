@@ -1,12 +1,16 @@
 "use client";
 
+import { useState } from "react";
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip,
+  BarChart, Bar, Cell, PieChart, Pie, CartesianGrid,
 } from "recharts";
-import { type MonthlySpend, type DailySpend, type MerchantSpend, type DaySpend, type ScheduledSpend } from "@/lib/queries";
+import { type MonthlySpend, type DailySpend, type MerchantSpend, type ScheduledSpend, type SpendingRow } from "@/lib/queries";
+import { CATEGORY_EMOJIS, getCategoryColor, lightenColor } from "@/lib/category-emojis";
 
 const gbp    = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
 const gbpDec = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 });
+const MONTH_NAMES = ["Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec"];
 
 function daysInMonth(year: number, month: number) {
   return new Date(year, month, 0).getDate();
@@ -148,12 +152,28 @@ export function ThisMonthHero({ monthly, daily, budget, recurring }: { monthly: 
 
 // ── Card: Top merchants ───────────────────────────────────────────────────────
 function TopMerchantsCard({ topMerchants }: { topMerchants: MerchantSpend[] }) {
-  const top5     = topMerchants.slice(0, 5);
+  const [excludeMortgage, setExcludeMortgage] = useState(false);
+  const hasMortgage = topMerchants.some(m => m.category === "Mortgage");
+  const filtered = excludeMortgage ? topMerchants.filter(m => m.category !== "Mortgage") : topMerchants;
+  const top5     = filtered.slice(0, 5);
   const maxTotal = top5[0]?.total ?? 1;
 
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col gap-3">
-      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Top Merchants</span>
+    <div className="flex flex-col gap-3">
+      <div className="flex items-center justify-between gap-3">
+        <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Top Merchants</span>
+        {hasMortgage && (
+          <label className="flex items-center gap-1.5 text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={excludeMortgage}
+              onChange={() => setExcludeMortgage(v => !v)}
+              className="w-3.5 h-3.5 rounded accent-blue-500"
+            />
+            Exclude Mortgage
+          </label>
+        )}
+      </div>
       <div className="flex flex-col gap-2.5">
         {top5.map((m, i) => (
           <div key={m.name} className="flex items-center gap-2">
@@ -174,60 +194,218 @@ function TopMerchantsCard({ topMerchants }: { topMerchants: MerchantSpend[] }) {
   );
 }
 
-// ── Card: Day of week pattern ─────────────────────────────────────────────────
-function DayPatternCard({ byDayOfWeek }: { byDayOfWeek: DaySpend[] }) {
-  const maxDay     = Math.max(...byDayOfWeek.map(d => d.total), 1);
-  const totalSpend = byDayOfWeek.reduce((s, d) => s + d.total, 0);
-  const peakDay    = byDayOfWeek.reduce((best, d) => d.total > best.total ? d : best, byDayOfWeek[0]);
+// ── Card: Spending Behaviour Change (YoY by category) ─────────────────────────
+type YoYRow = { cat: string; prevAvg: number; currentAvg: number; prevTotal: number; currentTotal: number };
 
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
+function BehaviourBarTip({ active, payload }: any) {
+  if (!active || !payload?.length) return null;
+  const row: YoYRow = payload[0].payload;
+  const delta = row.prevAvg > 0 ? ((row.currentAvg - row.prevAvg) / row.prevAvg) * 100 : null;
   return (
-    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4 shadow-sm flex flex-col gap-3">
-      <span className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Spend by Day</span>
-      <div className="flex items-end gap-1.5 h-16">
-        {byDayOfWeek.map((d) => {
-          const pct       = totalSpend > 0 ? d.total / maxDay : 0;
-          const isWeekend = d.day === "Sat" || d.day === "Sun";
-          const isPeak    = d.day === peakDay?.day;
-          return (
-            <div key={d.day} className="flex-1 flex flex-col items-center gap-1">
-              <div className="w-full flex items-end" style={{ height: 44 }}>
-                <div
-                  className={`w-full rounded-t transition-all ${
-                    isPeak ? "bg-blue-500" : isWeekend ? "bg-indigo-300 dark:bg-indigo-700" : "bg-gray-300 dark:bg-gray-700"
-                  }`}
-                  style={{ height: `${Math.max(pct * 100, 4)}%` }}
-                />
-              </div>
-              <span className={`text-[11px] font-medium ${isPeak ? "text-blue-500" : "text-gray-400"}`}>{d.day}</span>
-            </div>
-          );
-        })}
+    <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-xs">
+      <div className="font-semibold mb-1.5 text-gray-800 dark:text-gray-200">
+        {CATEGORY_EMOJIS[row.cat] ?? "📦"} {row.cat}
       </div>
-      {peakDay && (
-        <p className="text-xs text-gray-400">
-          You spend most on <span className="font-medium text-gray-700 dark:text-gray-300">{peakDay.day}s</span>
-          {" — "}
-          <span className="tabular-nums">{totalSpend > 0 ? ((peakDay.total / totalSpend) * 100).toFixed(0) : 0}%</span> of total
-        </p>
+      <div className="flex justify-between gap-3 text-gray-500 dark:text-gray-400">
+        <span>Prev year avg/mo</span>
+        <span className="font-medium text-gray-800 dark:text-gray-200">{gbp.format(row.prevAvg)}</span>
+      </div>
+      <div className="flex justify-between gap-3 text-gray-500 dark:text-gray-400">
+        <span>This year avg/mo</span>
+        <span className="font-medium text-gray-800 dark:text-gray-200">{gbp.format(row.currentAvg)}</span>
+      </div>
+      {delta != null && (
+        <div className="mt-1 pt-1 border-t border-gray-100 dark:border-gray-800 flex justify-between font-semibold">
+          <span className="text-gray-600 dark:text-gray-400">Change</span>
+          <span className={delta > 0 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"}>
+            {delta > 0 ? "+" : ""}{delta.toFixed(0)}%
+          </span>
+        </div>
       )}
     </div>
   );
 }
 
-// ── Main export (TopMerchants + DayPattern only) ──────────────────────────────
-export default function SpendingInsights({
-  topMerchants,
-  byDayOfWeek,
-}: {
-  topMerchants: MerchantSpend[];
-  byDayOfWeek: DaySpend[];
-}) {
+function SpendingBehaviourChangeCard({ byCategory }: { byCategory: SpendingRow[] }) {
+  const [chartType, setChartType] = useState<"bars" | "pie">("bars");
+
+  const months = [...new Set(byCategory.map(r => r.month))].sort();
+  const years  = [...new Set(months.map(m => m.slice(0, 4)))].sort();
+  const currentYear = years[years.length - 1];
+  const prevYear    = years.length > 1 ? String(Number(currentYear) - 1) : null;
+
+  if (!currentYear || !prevYear || !years.includes(prevYear)) {
+    return (
+      <div>
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide mb-3">Spending Behaviour Change</h3>
+        <p className="text-xs text-gray-400">Need at least two years of data to compare year over year.</p>
+      </div>
+    );
+  }
+
+  // Like-for-like comparison: only months that exist for the current year so a
+  // partial year isn't compared against a full one.
+  const monthNums = [...new Set(months.filter(m => m.startsWith(currentYear)).map(m => m.slice(5, 7)))].sort();
+  const monthLabel = monthNums.length > 1
+    ? `${MONTH_NAMES[Number(monthNums[0]) - 1]}–${MONTH_NAMES[Number(monthNums[monthNums.length - 1]) - 1]}`
+    : MONTH_NAMES[Number(monthNums[0]) - 1];
+
+  const totals: Record<string, { prev: number; current: number }> = {};
+  for (const row of byCategory) {
+    const yr = row.month.slice(0, 4);
+    const mm = row.month.slice(5, 7);
+    if (!monthNums.includes(mm) || (yr !== currentYear && yr !== prevYear)) continue;
+    const t = (totals[row.category] ??= { prev: 0, current: 0 });
+    if (yr === currentYear) t.current += row.total;
+    else t.prev += row.total;
+  }
+
+  const n = monthNums.length;
+  const rows: YoYRow[] = Object.entries(totals)
+    .map(([cat, v]) => ({ cat, prevAvg: v.prev / n, currentAvg: v.current / n, prevTotal: v.prev, currentTotal: v.current }))
+    .filter(r => r.prevTotal > 0 || r.currentTotal > 0)
+    .sort((a, b) => (b.prevTotal + b.currentTotal) - (a.prevTotal + a.currentTotal))
+    .slice(0, 7);
+
+  const prevPieTotal    = rows.reduce((s, r) => s + r.prevAvg, 0);
+  const currentPieTotal = rows.reduce((s, r) => s + r.currentAvg, 0);
+
   return (
     <div>
-      <h2 className="text-base font-semibold text-gray-900 dark:text-gray-50 mb-3">Insights</h2>
-      <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+      <div className="flex items-center justify-between mb-1">
+        <h3 className="text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wide">Spending Behaviour Change</h3>
+        <div className="flex items-center gap-0.5 bg-gray-100 dark:bg-gray-800 rounded-md p-0.5">
+          {(["bars", "pie"] as const).map(t => (
+            <button
+              key={t}
+              onClick={() => setChartType(t)}
+              className={`px-2.5 py-1 text-xs font-medium rounded transition-colors ${
+                chartType === t
+                  ? "bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-50 shadow-sm"
+                  : "text-gray-500 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-50"
+              }`}
+            >
+              {t === "bars" ? "Bars" : "Pie"}
+            </button>
+          ))}
+        </div>
+      </div>
+      <p className="text-[11px] text-gray-400 dark:text-gray-500 mb-3">
+        Avg monthly spend, {monthLabel} — <span className="text-gray-500 dark:text-gray-400">{prevYear}</span> vs{" "}
+        <span className="font-medium text-gray-600 dark:text-gray-400">{currentYear}</span>
+      </p>
+
+      {chartType === "bars" ? (
+        <ResponsiveContainer width="100%" height={220}>
+          <BarChart data={rows} margin={{ top: 4, right: 4, left: 0, bottom: 4 }} barGap={2}>
+            <CartesianGrid strokeDasharray="3 3" className="stroke-gray-100 dark:stroke-gray-800" vertical={false} />
+            <XAxis
+              dataKey="cat"
+              tick={{ fontSize: 13 }}
+              tickFormatter={cat => CATEGORY_EMOJIS[cat] ?? "📦"}
+              tickLine={false}
+              axisLine={false}
+              interval={0}
+            />
+            <YAxis
+              tick={{ fontSize: 11, fill: "currentColor" }}
+              tickLine={false}
+              axisLine={false}
+              tickFormatter={v => `£${(v / 1000).toFixed(1)}k`}
+              width={42}
+            />
+            <Tooltip content={<BehaviourBarTip />} cursor={{ fill: "rgba(0,0,0,0.03)" }} />
+            <Bar dataKey="prevAvg" radius={[3, 3, 0, 0]}>
+              {rows.map(r => <Cell key={r.cat} fill={lightenColor(getCategoryColor(r.cat), 0.55)} />)}
+            </Bar>
+            <Bar dataKey="currentAvg" radius={[3, 3, 0, 0]}>
+              {rows.map(r => <Cell key={r.cat} fill={getCategoryColor(r.cat)} />)}
+            </Bar>
+          </BarChart>
+        </ResponsiveContainer>
+      ) : (
+        <div className="grid grid-cols-2 gap-2">
+          {[
+            { label: prevYear, total: prevPieTotal, key: "prevAvg" as const, tint: 0.55 },
+            { label: currentYear, total: currentPieTotal, key: "currentAvg" as const, tint: 0 },
+          ].map(pie => (
+            <div key={pie.label} className="relative h-36">
+              <ResponsiveContainer width="100%" height="100%">
+                <PieChart>
+                  <Pie
+                    data={rows}
+                    dataKey={pie.key}
+                    nameKey="cat"
+                    innerRadius="55%"
+                    outerRadius="90%"
+                    stroke="none"
+                    paddingAngle={2}
+                    isAnimationActive={false}
+                  >
+                    {rows.map(r => (
+                      <Cell key={r.cat} fill={pie.tint > 0 ? lightenColor(getCategoryColor(r.cat), pie.tint) : getCategoryColor(r.cat)} />
+                    ))}
+                  </Pie>
+                  <Tooltip
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    formatter={(v: any, _n: any, p: any) => [gbp.format(Number(v)), p?.payload?.cat]}
+                    contentStyle={{ fontSize: 12, borderRadius: 10, border: "1px solid rgba(0,0,0,0.08)" }}
+                  />
+                </PieChart>
+              </ResponsiveContainer>
+              <div className="pointer-events-none absolute inset-0 flex flex-col items-center justify-center">
+                <div className="text-[10px] uppercase tracking-wide text-gray-400 dark:text-gray-500">{pie.label}</div>
+                <div className="text-sm font-semibold tabular-nums text-gray-900 dark:text-gray-50">
+                  {gbp.format(pie.total)}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      )}
+
+      {/* Legend with per-category YoY delta */}
+      <div className="mt-3 space-y-1.5">
+        {rows.map(r => {
+          const delta = r.prevAvg > 0 ? ((r.currentAvg - r.prevAvg) / r.prevAvg) * 100 : null;
+          return (
+            <div key={r.cat} className="flex items-center gap-2 text-xs">
+              <span className="w-2.5 h-2.5 rounded-sm shrink-0" style={{ backgroundColor: getCategoryColor(r.cat) }} />
+              <span className="text-gray-700 dark:text-gray-300 w-28 shrink-0 truncate">
+                {CATEGORY_EMOJIS[r.cat] ?? "📦"} {r.cat}
+              </span>
+              <span className="text-gray-400 dark:text-gray-500 tabular-nums flex-1 text-right">{gbp.format(r.prevAvg)}</span>
+              <span className="text-gray-300 dark:text-gray-600">→</span>
+              <span className="text-gray-700 dark:text-gray-300 tabular-nums w-16 text-right">{gbp.format(r.currentAvg)}</span>
+              <span className={`tabular-nums w-12 text-right font-medium ${
+                delta == null ? "text-gray-400" : delta > 0 ? "text-red-500 dark:text-red-400" : "text-emerald-600 dark:text-emerald-400"
+              }`}>
+                {delta == null ? "—" : `${delta > 0 ? "+" : ""}${delta.toFixed(0)}%`}
+              </span>
+            </div>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// ── Main export ─────────────────────────────────────────────────────────────
+export default function SpendingInsights({
+  topMerchants,
+  byCategory,
+}: {
+  topMerchants: MerchantSpend[];
+  byCategory: SpendingRow[];
+}) {
+  return (
+    <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-sm divide-y divide-gray-100 dark:divide-gray-800">
+      <div className="p-4 sm:p-6">
         <TopMerchantsCard topMerchants={topMerchants} />
-        <DayPatternCard byDayOfWeek={byDayOfWeek} />
+      </div>
+      <div className="p-4 sm:p-6">
+        <SpendingBehaviourChangeCard byCategory={byCategory} />
       </div>
     </div>
   );

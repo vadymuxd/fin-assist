@@ -177,6 +177,9 @@ export default function CategoryChart({ byCategory }: Props) {
   const pagedDrillMonths   = monthsByYear[drillYear] ?? [];
 
   // ── Stacked bar data (for Recharts) ───────────────────────────────────────
+  // Note: bars are kept mounted in a fixed order (allVisible) with excluded
+  // categories zeroed out, rather than removed — Recharts doesn't reliably
+  // preserve stack order when a Bar is unmounted then remounted later.
   function monthStackTotal(m: string): number {
     let total = 0;
     for (const cat of effectiveCats) {
@@ -189,8 +192,8 @@ export default function CategoryChart({ byCategory }: Props) {
 
   const stackBarData = pagedMonths.map(m => {
     const row: Record<string, string | number> = { label: monthLabel(m) };
-    for (const cat of effectiveCats) {
-      const val = cat === "Other"
+    for (const cat of allVisible) {
+      const val = excludedCats.has(cat) ? 0 : cat === "Other"
         ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0)
         : (rowByMonthCat.get(`${m}|${cat}`) ?? 0);
       row[cat] = Math.round(val * 100) / 100;
@@ -198,6 +201,7 @@ export default function CategoryChart({ byCategory }: Props) {
     row.__total = Math.round(monthStackTotal(m));
     return row;
   });
+  const topmostVisibleCat = [...allVisible].reverse().find(c => !excludedCats.has(c));
   // Fixed across all pages so stacked-bar heights stay comparable while paginating.
   const globalStackMax = Math.max(0, ...months.map(monthStackTotal));
 
@@ -346,8 +350,8 @@ export default function CategoryChart({ byCategory }: Props) {
                 domain={[0, (dataMax: number) => Math.max(dataMax, globalStackMax)]}
               />
               <Tooltip content={<BarTip />} />
-              {effectiveCats.map((cat, i) => {
-                const isTop = i === effectiveCats.length - 1;
+              {allVisible.map(cat => {
+                const isTop = cat === topmostVisibleCat;
                 return (
                   <Bar key={cat} dataKey={cat} stackId="a" fill={getCategoryColor(cat)} radius={isTop ? [3, 3, 0, 0] : 0}>
                     {isTop && (

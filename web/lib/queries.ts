@@ -1122,19 +1122,15 @@ export async function getMonzoTransactions(
 
 export type SpendingRow = { month: string; category: string; total: number };
 export type MonthlySpend = { month: string; total: number };
-export type WeeklySpend = { week: string; total: number };
 export type DailySpend = { date: string; total: number };
-export type MerchantSpend = { name: string; total: number; count: number };
-export type DaySpend = { day: string; total: number };
+export type MerchantSpend = { name: string; total: number; count: number; category: string };
 export type ScheduledSpend = { label: string; day: number; amount: number };
 
 export type SpendingAccountData = {
   byCategory: SpendingRow[];
   monthly: MonthlySpend[];
-  weekly: WeeklySpend[];
   daily: DailySpend[];
   topMerchants: MerchantSpend[];
-  byDayOfWeek: DaySpend[];
   recurring: ScheduledSpend[];
 };
 
@@ -1145,8 +1141,6 @@ export type SpendingData = {
 };
 
 const EXCLUDED_CATEGORIES = new Set(["Savings", "Transfers"]);
-const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
-const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
 
 // Detects recurring fixed-date payments (mortgage, council tax, etc.) from
 // transaction history: same category+merchant, consistent amount and day-of-month.
@@ -1181,10 +1175,8 @@ function aggregateSpending(
 ): SpendingAccountData {
   const catMap: Record<string, number> = {};
   const monthMap: Record<string, number> = {};
-  const weekMap: Record<string, number> = {};
   const dailyMap: Record<string, number> = {};
-  const merchantMap: Record<string, { total: number; count: number }> = {};
-  const dayMap: Record<string, number> = {};
+  const merchantMap: Record<string, { total: number; count: number; catTotals: Record<string, number> }> = {};
 
   for (const row of rows) {
     if (!row.date || !row.amount) continue;
@@ -1197,18 +1189,11 @@ function aggregateSpending(
     monthMap[month] = (monthMap[month] ?? 0) + abs;
     dailyMap[row.date] = (dailyMap[row.date] ?? 0) + abs;
 
-    const dayIdx = d.getUTCDay();
-    const diff = dayIdx === 0 ? -6 : 1 - dayIdx;
-    const monday = new Date(d);
-    monday.setUTCDate(d.getUTCDate() + diff);
-    weekMap[monday.toISOString().slice(0, 10)] = (weekMap[monday.toISOString().slice(0, 10)] ?? 0) + abs;
-
     const merchant = row.name ?? "Unknown";
-    if (!merchantMap[merchant]) merchantMap[merchant] = { total: 0, count: 0 };
+    if (!merchantMap[merchant]) merchantMap[merchant] = { total: 0, count: 0, catTotals: {} };
     merchantMap[merchant].total += abs;
     merchantMap[merchant].count++;
-
-    dayMap[DAY_NAMES[d.getUTCDay()]] = (dayMap[DAY_NAMES[d.getUTCDay()]] ?? 0) + abs;
+    merchantMap[merchant].catTotals[cat] = (merchantMap[merchant].catTotals[cat] ?? 0) + abs;
   }
 
   const round2 = (n: number) => Math.round(n * 100) / 100;
@@ -1223,20 +1208,17 @@ function aggregateSpending(
       .map(([month, total]) => ({ month, total: round2(total) }))
       .sort((a, b) => a.month.localeCompare(b.month)),
 
-    weekly: Object.entries(weekMap)
-      .map(([week, total]) => ({ week, total: round2(total) }))
-      .sort((a, b) => a.week.localeCompare(b.week)),
-
     daily: Object.entries(dailyMap)
       .map(([date, total]) => ({ date, total: round2(total) }))
       .sort((a, b) => a.date.localeCompare(b.date)),
 
     topMerchants: Object.entries(merchantMap)
-      .map(([name, { total, count }]) => ({ name, total: round2(total), count }))
+      .map(([name, { total, count, catTotals }]) => {
+        const category = Object.entries(catTotals).sort((a, b) => b[1] - a[1])[0][0];
+        return { name, total: round2(total), count, category };
+      })
       .sort((a, b) => b.total - a.total)
       .slice(0, 10),
-
-    byDayOfWeek: DAY_ORDER.map(d => ({ day: d, total: round2(dayMap[d] ?? 0) })),
 
     recurring: detectRecurring(rows),
   };
@@ -1263,7 +1245,7 @@ export async function getSpendingData(): Promise<SpendingData> {
   }
 
   const empty: SpendingAccountData = {
-    byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [], recurring: [],
+    byCategory: [], monthly: [], daily: [], topMerchants: [], recurring: [],
   };
 
   const data = allRows;

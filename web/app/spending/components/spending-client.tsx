@@ -48,8 +48,8 @@ export default function SpendingClient({ data }: Props) {
 
       <ThisMonthHero monthly={d.monthly} daily={d.daily} budget={BUDGETS[account]} recurring={d.recurring} />
       <CategoryChart key={`cat-${account}`} byCategory={d.byCategory} />
-      <SpendingChart key={`spend-${account}`} monthly={d.monthly} weekly={d.weekly} daily={d.daily} />
-      <SpendingInsights topMerchants={d.topMerchants} byDayOfWeek={d.byDayOfWeek} />
+      <SpendingChart key={`spend-${account}`} monthly={d.monthly} daily={d.daily} />
+      <SpendingInsights topMerchants={d.topMerchants} byCategory={d.byCategory} />
     </div>
   );
 }
