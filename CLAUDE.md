@@ -29,3 +29,7 @@ It covers: push git, analyse full chat, create Notion session entry, update Memo
 
 Add a detailed summary to the Sessions DB in Notion, then add a one-liner entry to Memory Index pointing to it. Update Agent Config if anything structural changed. Full instructions are in Agent Config.
 
+## Notifying Vadym when work finishes
+
+If Vadym asks to be notified/messaged/told when the current task (or the rest of the session) is done — e.g. "notify me when done", "tell me when you're finished", "message me on Telegram" — follow `/notify` (`.claude/commands/notify.md`): finish the work, then send a short Telegram summary via `python3 scripts/notify_telegram.py "<summary>"` as the last step before ending your turn.
+
