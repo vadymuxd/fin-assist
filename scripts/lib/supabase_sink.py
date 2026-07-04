@@ -316,6 +316,48 @@ def get_recently_alerted_tickers(hours: int = 48) -> set:
     return tickers
 
 
+def get_recommendation_mechanism_summary() -> dict:
+    """Current mechanism_version (whichever produced the most recent ACT
+    alert) + how many signals exist under it + the date of the earliest one.
+    Used to render a live 'Recommendation Quality' section on Investments
+    Context (sheets_updater.py) that survives the page's daily full rebuild,
+    instead of a hand-written note that would get archived on the next run.
+    Returns {} on any error or if no alerts exist.
+    """
+    client = _get_client()
+    if not client:
+        return {}
+    try:
+        latest = (
+            client.table('holdings_alerts')
+            .select('mechanism_version, run_time')
+            .eq('alert_level', 'ACT')
+            .order('run_time', desc=True)
+            .limit(1)
+            .execute()
+        )
+        if not latest.data:
+            return {}
+        version = latest.data[0].get('mechanism_version') or 'untagged'
+        same_version = (
+            client.table('holdings_alerts')
+            .select('run_time')
+            .eq('alert_level', 'ACT')
+            .eq('mechanism_version', version)
+            .order('run_time')
+            .execute()
+        )
+        rows = same_version.data or []
+        return {
+            'version': version,
+            'count':   len(rows),
+            'since':   rows[0]['run_time'][:10] if rows else None,
+        }
+    except Exception as e:
+        logger.warning(f'Recommendation mechanism summary failed: {e}')
+        return {}
+
+
 def get_recent_alert_events(ticker: str = None, days: int = 10) -> dict:
     """
     Return {ticker: [event, ...]} for holdings_alerts logged in the last

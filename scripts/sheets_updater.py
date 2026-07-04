@@ -23,7 +23,7 @@ from datetime import datetime, timezone
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
-from lib.supabase_sink import write_holdings
+from lib.supabase_sink import write_holdings, get_recommendation_mechanism_summary
 from lib.sheets_layout import find_investment_rows as find_inv_rows
 from lib.notion_writer import (
     notion_headers,
@@ -252,6 +252,18 @@ def update_notion_snapshot(sh, results):
                 (r.get('reason', '') or '')[:120],
             ])
         blocks.append(table(score_rows))
+        blocks.append(divider())
+
+    # Recommendation Quality (Work 4, Session 117, 2026-07-04) — live query, not
+    # a hand-written note, so it survives this page's full rebuild every run.
+    rec = get_recommendation_mechanism_summary()
+    if rec:
+        blocks.append(heading2('Recommendation Quality (Work 4)'))
+        blocks.append(paragraph(
+            f"Mechanism: {rec['version']} — {rec['count']} signal(s) since {rec.get('since', '?')}. "
+            f"Re-evaluated monthly (analyze_recommendations.py --telegram, 1st of month). "
+            f"Full mechanism detail on the Scripts & Automation reference page."
+        ))
         blocks.append(divider())
 
     # Footer
