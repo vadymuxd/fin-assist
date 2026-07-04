@@ -121,11 +121,26 @@ def today_header():
 def find_or_create_date_column(ws, header_text):
     """Return 1-based column index of the column whose header matches `header_text`.
     Creates a new column at the end if not found.
+
+    Matches by PARSED DATE, not literal string. ws.update_cell() always sends
+    valueInputOption=USER_ENTERED (gspread hardcodes this for this method) —
+    Sheets silently reinterprets a date-shaped string like 'Jul 3, 2026' as an
+    actual date value and renders it back per the column's number format (seen
+    in practice as 'July 3, 2026'). A literal string compare then never matches
+    on a second call for the same day, so each entry synced that day created
+    its OWN new column instead of sharing one — 6 duplicate 'July 3, 2026'
+    columns were created this way on 2026-07-03 once multiple same-day entries
+    started arriving via monzo_balance_sync. _parse_date_header() already
+    handles both '%b %d, %Y' and '%B %d, %Y', so comparing parsed dates is
+    robust regardless of how Sheets chose to format the round-tripped value.
     """
     headers = get_values(ws)[0] if get_values(ws) else []
+    target_date = _parse_date_header(header_text)
     for i, h in enumerate(headers, start=1):
-        if h.strip() == header_text.strip():
+        if target_date is not None and _parse_date_header(h) == target_date:
             return i, False  # found, not created
+        if h.strip() == header_text.strip():
+            return i, False  # non-date header fallback (exact match)
     new_col = len(headers) + 1
     if new_col > ws.col_count:
         ws.add_cols(new_col - ws.col_count)
