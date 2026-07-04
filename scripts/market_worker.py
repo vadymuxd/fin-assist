@@ -11,10 +11,35 @@ Modes (called separately in GHA with 5-min sleep between each):
 
 Intermediate files act as checkpoints — if dispatch fails, re-run
 --mode dispatch against the existing assessments.json without re-fetching.
+
+Recommendation mechanism (see MECHANISM_VERSION):
+  v1_price_or_news (2026-05-16 → 2026-07-04) — a deterministic price rule
+    (stop-loss/trailing-stop/concentration) and an independent Claude news
+    judgment each fired on their own; if both fired for the same ticker, the
+    price rule won and the news commentary was appended as color only.
+  v2_trend_confirmed (2026-07-04 →) — a 2026-07-04 backtest of 20 real
+    signals (scripts/analyze_recommendations.py) found: the score field
+    clustered at 8/10 with no real spread; the stop-loss SELL had zero trend
+    awareness and fired right before a rebound twice; BUY_MORE fired on
+    positive news even when the stock was already in a confirmed downtrend;
+    and the same underlying catalyst (RIO's AP60 smelter story) re-triggered
+    a BUY_MORE 3 days apart. v2 addresses all four: every AI judgment now
+    gets price-trend context (compute_trend_context); a price-triggered
+    SELL/TRIM candidate is no longer sent blind — the AI confirms/downgrades/
+    vetoes it using news + trend (build_confirmation_prompt) when headlines
+    exist; BUY_MORE is gated against a confirmed downtrend
+    (build_holding_prompt's TREND GATE); and a catalyst-level dedup
+    (is_duplicate_catalyst) suppresses a repeat of the same underlying story
+    within CATALYST_DEDUP_DAYS, not just the same ticker within 48h.
+  Every alert this script writes is tagged with mechanism_version so a
+  future backtest can compare versions without reverse-engineering row
+  ids/dates against session notes. Re-evaluate monthly via
+  scripts/analyze_recommendations.py (see monthly_recommendation_review.yml).
 """
 
 import os
 import json
+import string
 import hashlib
 import argparse
 import requests
@@ -34,6 +59,7 @@ from lib.market_sources import (
 from lib.supabase_sink import (
     write_news_items,
     get_recently_alerted_tickers,
+    get_recent_alert_events,
     write_holding_alert,
     write_prospect_alert,
     write_holding_prices,
@@ -54,6 +80,29 @@ THRESHOLDS_PATH  = 'config/thresholds.json'
 
 LONDON_TZ   = ZoneInfo('Europe/London')
 DEDUP_HOURS = 48
+
+# Work 4 follow-up (2026-07-04, migration 0024): tags every alert this run
+# produces so a future backtest can cleanly compare mechanism versions
+# instead of reverse-engineering row ids/dates against session notes.
+MECHANISM_VERSION = 'v2_trend_confirmed'
+
+# Trend context: is the stock's own recent price action up, down, or flat?
+# Fed into every AI judgment (both fresh BUY_MORE news calls and confirming
+# a price-triggered SELL/TRIM candidate) — a 2026-07-04 backtest of the prior
+# mechanism found every BUY_MORE miss was a stock already in a downtrend
+# when "positive" news landed, and both stop-loss SELLs fired right before a
+# rebound with zero trend awareness.
+TREND_LOOKBACK_DAYS = 10
+TREND_UP_PCT        = 2.0
+TREND_DOWN_PCT       = -2.0
+
+# Catalyst-level dedup: the existing DEDUP_HOURS/get_recently_alerted_tickers
+# check is ticker-level within 48h. That missed RIO's "AP60 smelter expansion"
+# firing twice 3 days apart (same underlying story, different articles) — so
+# BUY_MORE candidates also get checked for event-text overlap against the
+# ticker's own alerts over a longer window before being sent.
+CATALYST_DEDUP_DAYS          = 10
+CATALYST_SIMILARITY_THRESHOLD = 0.5
 
 SELL_THRESHOLD_DEFAULTS = {
     'stop_loss_pct':               15.0,
@@ -514,7 +563,13 @@ def run_fetch():
 
 # ── Mode: assess ──────────────────────────────────────────────────────────────
 
-def build_holding_prompt(ticker, name, position, data):
+def _trend_line(trend_pct, trend_label):
+    if trend_label == 'unknown':
+        return "Price trend: not enough history yet — ignore trend, judge on news alone."
+    return f"Price trend (last ~{TREND_LOOKBACK_DAYS} trading days): {trend_label} ({trend_pct:+.1f}%)"
+
+
+def build_holding_prompt(ticker, name, position, data, trend_pct=None, trend_label='unknown'):
     qty     = position.get('qty', 0)
     avg_buy = position.get('avg_buy', 0)
     current = position.get('current_price', 0)
@@ -523,6 +578,7 @@ def build_holding_prompt(ticker, name, position, data):
     lines   = [
         f"Review {ticker} ({name}) for a UK retail investor who HOLDS this position.",
         f"Position: {qty:.4f} shares | Avg buy £{avg_buy:.4f} | Current £{current:.4f} | P&L {sign}{pnl_pct:.1f}%",
+        _trend_line(trend_pct, trend_label),
         "",
         "Task: is there a CONCRETE, SPECIFIC reason to act on this position based on recent news?",
         "Only flag if a real event occurred — not general market sentiment, analyst opinions, or daily price moves.",
@@ -566,12 +622,73 @@ def build_holding_prompt(ticker, name, position, data):
         "with a score of 4 or below.",
         "Pure analyst-rating noise, macro mood or daily price wiggle is a score 5 (NONE).",
         "",
+        "TREND GATE (added 2026-07-04 — a backtest found every BUY_MORE miss was a stock",
+        "already in a downtrend when 'positive' news landed):",
+        "  If the price trend above is 'downtrend', do NOT score 8+ / BUY_MORE on the news",
+        "  alone — the market is already disagreeing with the story. Cap the score at 6-7",
+        "  (NONE) unless the news is genuinely extraordinary (e.g. would plausibly reverse",
+        "  the trend itself, not just support the existing thesis).",
+        "  If the trend is 'uptrend' or 'unknown', judge on the news as normal.",
+        "",
+        "Use the FULL 1-10 range based on how strong the catalyst + trend + analyst",
+        "consensus alignment is — don't default every qualifying case to exactly 8.",
+        "",
         "Return ONLY a JSON object (no markdown):",
         '{',
         '  "score": <integer 1-10>,',
         '  "action": "<SELL|TRIM|BUY_MORE|NONE>",',
         '  "event": "<short phrase: what drove this, or empty string>",',
         '  "rationale": "<1-2 sentences: what is happening and why it matters for this holder>"',
+        '}',
+    ]
+    return '\n'.join(lines)
+
+
+def build_confirmation_prompt(ticker, name, position, price_signal, trend_pct, trend_label, headlines):
+    """A deterministic price rule (stop-loss/trailing-stop/concentration) has
+    already flagged a candidate action. Ask the AI to confirm, downgrade, or
+    veto it using news + trend context, instead of firing it blind.
+
+    Added 2026-07-04: a backtest found the stop-loss SELL (flat "-15% from
+    cost", no trend input) fired right before a rebound twice in the first
+    20-signal sample. This doesn't remove the deterministic rule — it adds a
+    second, independent check before the alert actually goes out.
+    """
+    qty     = position.get('qty', 0)
+    avg_buy = position.get('avg_buy', 0)
+    current = position.get('current_price', 0)
+    pnl_pct = ((current - avg_buy) / avg_buy * 100) if avg_buy else 0
+    lines = [
+        f"A deterministic rule flagged {ticker} ({name}) for {price_signal['action']}: \"{price_signal['event']}\".",
+        f"Position: {qty:.4f} shares | Avg buy £{avg_buy:.4f} | Current £{current:.4f} | P&L {pnl_pct:+.1f}%",
+        _trend_line(trend_pct, trend_label),
+        "",
+    ]
+    if headlines:
+        lines.append("Recent news:")
+        for i, h in enumerate(headlines[:8], 1):
+            lines.append(f"  {i}. {h.get('headline') if isinstance(h, dict) else str(h)}")
+    else:
+        lines.append("Recent news: (none)")
+    lines += [
+        "",
+        f"The deterministic rule doesn't see news or trend — only distance from cost/high.",
+        "Decide whether to CONFIRM, DOWNGRADE, or VETO it:",
+        "  CONFIRM — the rule's read still holds given news + trend.",
+        "  DOWNGRADE — same direction but less severe (e.g. SELL -> TRIM) because trend or",
+        "    news suggests it's less urgent than the raw price move implies.",
+        "  VETO — cancel the action entirely (return to NONE) because trend or news",
+        "    concretely suggests the move has already reversed or is about to (e.g. price",
+        "    is a downtrend flagged SELL but the trend/news show stabilisation, an oversold",
+        "    bounce forming, or a clear reason the drop is overdone).",
+        "Only DOWNGRADE or VETO with a concrete reason — don't second-guess every",
+        "stop-loss just because the position might recover eventually.",
+        "",
+        "Return ONLY a JSON object (no markdown):",
+        '{',
+        '  "decision": "<CONFIRM|DOWNGRADE|VETO>",',
+        '  "action": "<SELL|TRIM|NONE>",',
+        '  "rationale": "<1-2 sentences: why this decision, referencing trend/news>"',
         '}',
     ]
     return '\n'.join(lines)
@@ -601,6 +718,58 @@ def build_prospect_prompt(ticker, av_items):
         "  BUY  = score ≥ 7 with a concrete thesis (specific news event, valuation trigger, catalyst)",
     ]
     return '\n'.join(lines)
+
+
+def compute_trend_context(ticker, price_history):
+    """Return (trend_pct, trend_label) from the trailing TREND_LOOKBACK_DAYS
+    closes in price_history[ticker] (ascending, oldest first). trend_label is
+    'uptrend' / 'downtrend' / 'flat' — 'unknown' if there isn't enough history
+    yet (new ticker, gap in backfill) so callers can skip the trend gate
+    rather than block on missing data."""
+    hist = price_history.get(ticker) or []
+    if len(hist) < 3:
+        return None, 'unknown'
+    window = hist[-TREND_LOOKBACK_DAYS:]
+    if not window[0]:
+        return None, 'unknown'
+    trend_pct = (window[-1] / window[0] - 1) * 100
+    if trend_pct >= TREND_UP_PCT:
+        label = 'uptrend'
+    elif trend_pct <= TREND_DOWN_PCT:
+        label = 'downtrend'
+    else:
+        label = 'flat'
+    return trend_pct, label
+
+
+_PUNCT_TABLE = str.maketrans('', '', string.punctuation)
+
+
+def _catalyst_similarity(text_a, text_b):
+    """Shared-word count + Jaccard overlap between two short event strings —
+    cheap stand-in for semantic similarity. Raw short headlines are noisy
+    (e.g. 'AP60 smelter expansion concrete capex commitment...' vs 'AP60
+    smelter expansion $1.5B capex greenlit...' only Jaccards to ~0.27 despite
+    clearly being the same story), so a shared-word-count floor catches
+    duplicates that a pure ratio would miss."""
+    def words(s):
+        return {w for w in (w.translate(_PUNCT_TABLE) for w in (s or '').lower().split())
+                if len(w) > 3}
+    a, b = words(text_a), words(text_b)
+    if not a or not b:
+        return 0.0, 0
+    shared = a & b
+    return len(shared) / len(a | b), len(shared)
+
+
+def is_duplicate_catalyst(ticker, event, recent_events):
+    """True if `event` overlaps enough with a same-ticker event already
+    alerted within CATALYST_DEDUP_DAYS to be the same underlying story."""
+    for past in recent_events.get(ticker, []):
+        jaccard, shared_n = _catalyst_similarity(event, past)
+        if shared_n >= 3 or jaccard >= CATALYST_SIMILARITY_THRESHOLD:
+            return True
+    return False
 
 
 def compute_price_signal(position, total_portfolio, price_history, thr):
@@ -695,19 +864,53 @@ def run_assess():
     for ticker, data in holdings.items():
         position = data.get('position') or {}
         signal   = compute_price_signal(position, total_portfolio, price_history, thr)
-        if signal:
-            signal.update({
-                'type':     'holding',
-                'name':     position.get('name', ticker),
-                'run_time': run_time,
-            })
-            holding_assessments[ticker] = signal
-            print(f"  {ticker}: {signal['action']} — {signal['event']}")
+        if not signal:
+            continue
+
+        trend_pct, trend_label = compute_trend_context(ticker, price_history)
+        headlines = data.get('headlines', [])
+
+        if headlines:
+            # 2026-07-04: don't fire a price-triggered signal blind anymore —
+            # have the AI confirm/downgrade/veto it with news + trend context.
+            confirm = call_claude(
+                client,
+                build_confirmation_prompt(ticker, position.get('name', ticker), position,
+                                           signal, trend_pct, trend_label, headlines),
+                ticker,
+            )
+            decision = (confirm or {}).get('decision', 'CONFIRM')
+            if confirm and decision == 'VETO':
+                print(f"  {ticker}: {signal['action']} candidate VETOed by AI — {confirm.get('rationale', '')}")
+                continue
+            if confirm and decision == 'DOWNGRADE' and confirm.get('action') in ('SELL', 'TRIM', 'NONE'):
+                new_action = confirm['action']
+                print(f"  {ticker}: {signal['action']} DOWNGRADED to {new_action} by AI — {confirm.get('rationale', '')}")
+                if new_action == 'NONE':
+                    continue
+                signal['action'] = new_action
+                signal['rationale'] += f" AI downgrade: {confirm.get('rationale', '')}"
+            elif confirm:
+                signal['rationale'] += f" AI confirmed: {confirm.get('rationale', '')}"
+                print(f"  {ticker}: {signal['action']} CONFIRMED by AI — {signal['event']}")
+            else:
+                print(f"  {ticker}: {signal['action']} — {signal['event']} (AI confirmation call failed, kept as-is)")
+        else:
+            signal['rationale'] += ' (no recent news available to confirm against)'
+            print(f"  {ticker}: {signal['action']} — {signal['event']} (no news to confirm)")
+
+        signal.update({
+            'type':     'holding',
+            'name':     position.get('name', ticker),
+            'run_time': run_time,
+        })
+        holding_assessments[ticker] = signal
     if not holding_assessments:
         print("  none triggered")
 
     # ── News-based assessment (Claude, holdings with headlines) ──────────────
     print(f"\nNews assessment of {len(holdings)} holdings...")
+    recent_events = get_recent_alert_events(days=CATALYST_DEDUP_DAYS)
     for ticker, data in holdings.items():
         position  = data.get('position', {})
         name      = position.get('name', ticker)
@@ -715,7 +918,12 @@ def run_assess():
         if not headlines:
             print(f"  {ticker}: no headlines — skip")
             continue
-        result = call_claude(client, build_holding_prompt(ticker, name, position, data), ticker)
+        if ticker in holding_assessments:
+            continue  # already handled by the price-signal + confirmation pass above
+        trend_pct, trend_label = compute_trend_context(ticker, price_history)
+        result = call_claude(
+            client, build_holding_prompt(ticker, name, position, data, trend_pct, trend_label), ticker,
+        )
         if not result:
             continue
         action = result.get('action', 'NONE')
@@ -725,18 +933,15 @@ def run_assess():
             continue
         event     = (result.get('event') or '').strip()
         rationale = (result.get('rationale') or '').strip()
+        if action == 'BUY_MORE' and is_duplicate_catalyst(ticker, event, recent_events):
+            print(f"  {ticker}: BUY_MORE suppressed — same catalyst alerted within {CATALYST_DEDUP_DAYS}d ({event!r})")
+            continue
         print(f"  {ticker}: {action} (score {score}) — {event or 'no event'}")
-        if ticker in holding_assessments:
-            # Price signal already fired — fold the news context into it.
-            if rationale:
-                holding_assessments[ticker]['rationale'] += f' News: {rationale}'
-            print(f"    (merged into price signal {holding_assessments[ticker]['action']})")
-        else:
-            holding_assessments[ticker] = {
-                'type': 'holding', 'ticker': ticker, 'name': name,
-                'action': action, 'score': score, 'signal': 'news',
-                'event': event, 'rationale': rationale, 'run_time': run_time,
-            }
+        holding_assessments[ticker] = {
+            'type': 'holding', 'ticker': ticker, 'name': name,
+            'action': action, 'score': score, 'signal': 'news',
+            'event': event, 'rationale': rationale, 'run_time': run_time,
+        }
 
     # ── Prospect discovery (AV market scan signal — morning run only) ────────
     prospect_tickers = set(av_mentions.keys()) - set(holdings.keys())
@@ -770,6 +975,8 @@ def run_assess():
         print("\nNo prospect candidates this run (AV scan empty or midday/close run).")
 
     assessments = list(holding_assessments.values()) + prospect_assessments
+    for a in assessments:
+        a['mechanism_version'] = MECHANISM_VERSION
     os.makedirs('data', exist_ok=True)
     with open(ASSESSMENTS_PATH, 'w') as f:
         json.dump(assessments, f, indent=2)

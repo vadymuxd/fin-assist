@@ -316,20 +316,48 @@ def get_recently_alerted_tickers(hours: int = 48) -> set:
     return tickers
 
 
+def get_recent_alert_events(ticker: str = None, days: int = 10) -> dict:
+    """
+    Return {ticker: [event, ...]} for holdings_alerts logged in the last
+    `days`. Used for catalyst-level dedup (same underlying story re-surfacing
+    a few days later isn't a new signal) — a longer, event-text-aware
+    complement to get_recently_alerted_tickers()'s 48h ticker-level dedup.
+    Fails open: returns {} on any error.
+    """
+    client = _get_client()
+    if not client:
+        return {}
+    cutoff = (datetime.now(timezone.utc) - timedelta(days=days)).isoformat()
+    events: dict = {}
+    try:
+        q = client.table('holdings_alerts').select('ticker,event').gte('run_time', cutoff)
+        if ticker:
+            q = q.eq('ticker', ticker)
+        for row in (q.execute().data or []):
+            if row.get('event'):
+                events.setdefault(row['ticker'], []).append(row['event'])
+    except Exception as e:
+        logger.warning(f'Catalyst dedup check failed: {e}')
+    return events
+
+
 def write_holding_alert(run_id: str, run_time: str, assessment: dict) -> bool:
     """
     Insert a single actionable holding alert from alert_dispatcher.py.
     assessment must have: ticker, action, score, event, rationale.
+    mechanism_version (optional) tags which recommendation mechanism
+    produced this row, so future backtests can filter cleanly.
     """
     row = {
-        'run_id':           run_id,
-        'run_time':         run_time,
-        'ticker':           assessment['ticker'],
-        'alert_level':      'ACT',
-        'score':            assessment.get('score'),
-        'event':            assessment.get('event', ''),
-        'rationale':        assessment.get('rationale', ''),
-        'suggested_action': assessment.get('action', 'HOLD'),
+        'run_id':            run_id,
+        'run_time':          run_time,
+        'ticker':            assessment['ticker'],
+        'alert_level':       'ACT',
+        'score':             assessment.get('score'),
+        'event':             assessment.get('event', ''),
+        'rationale':         assessment.get('rationale', ''),
+        'suggested_action':  assessment.get('action', 'HOLD'),
+        'mechanism_version': assessment.get('mechanism_version'),
     }
     ok = _insert('holdings_alerts', [row])
     if ok:

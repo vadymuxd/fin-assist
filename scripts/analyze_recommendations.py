@@ -27,15 +27,29 @@ total hypothetical P&L of following every signal against what the same
 the actual Custom Stocks portfolio instead — i.e. did tilting toward/away
 from these specific tickers beat doing nothing.
 
+Every alert is tagged with mechanism_version (migration 0024) — by default
+this script analyzes only the CURRENT version (the version of the most
+recent alert), so re-running this after a mechanism change compares like
+with like automatically instead of needing to manually check row ids/dates
+against session notes. Pass --version to inspect an older version instead.
+
+Scheduled monthly via .github/workflows/monthly_recommendation_review.yml
+(python3 scripts/analyze_recommendations.py --telegram), so the mechanism
+gets re-evaluated on a cadence instead of only when asked.
+
 Run:
-    python3 scripts/analyze_recommendations.py
+    python3 scripts/analyze_recommendations.py                    # current version, full report
+    python3 scripts/analyze_recommendations.py --version v1_price_or_news
+    python3 scripts/analyze_recommendations.py --telegram          # + compact Telegram summary
 """
 
 import os
 import sys
 import bisect
+import argparse
 from datetime import date
 
+import requests
 from dotenv import load_dotenv
 from supabase import create_client
 
@@ -56,6 +70,20 @@ def get_client():
         print('Missing SUPABASE_URL / SUPABASE_SERVICE_ROLE_KEY in .env', file=sys.stderr)
         sys.exit(1)
     return create_client(url, key)
+
+
+def send_telegram(text):
+    token   = os.getenv('TELEGRAM_BOT_TOKEN', '')
+    chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
+    if not token or not chat_id:
+        print('Missing TELEGRAM_BOT_TOKEN / TELEGRAM_CHAT_ID — skipping Telegram send', file=sys.stderr)
+        return False
+    resp = requests.post(
+        f'https://api.telegram.org/bot{token}/sendMessage',
+        json={'chat_id': chat_id, 'text': text, 'parse_mode': 'HTML'},
+        timeout=15,
+    )
+    return resp.ok
 
 
 def build_series(rows, date_key, value_key):
@@ -117,19 +145,39 @@ def fmt_pct(x):
 
 
 def main():
+    parser = argparse.ArgumentParser()
+    parser.add_argument('--version', default=None,
+                         help='Analyze one mechanism_version only (default: the version of the most recent alert)')
+    parser.add_argument('--telegram', action='store_true',
+                         help='Also send a compact summary via Telegram (used by the monthly scheduled run)')
+    args = parser.parse_args()
+
     sb = get_client()
 
-    alerts = (
+    all_alerts = (
         sb.table('holdings_alerts')
-        .select('ticker, run_time, alert_level, suggested_action, event, rationale')
+        .select('ticker, run_time, alert_level, suggested_action, event, rationale, mechanism_version')
         .eq('alert_level', 'ACT')
         .order('run_time')
         .execute()
     ).data
 
-    if not alerts:
+    if not all_alerts:
         print('No ACT-level alerts found.')
         return
+
+    by_version = {}
+    for a in all_alerts:
+        by_version.setdefault(a.get('mechanism_version') or 'untagged', []).append(a)
+
+    target_version = args.version or (all_alerts[-1].get('mechanism_version') or 'untagged')
+    alerts = by_version.get(target_version, [])
+    if not alerts:
+        print(f'No alerts found for mechanism_version={target_version!r}. '
+              f'Versions present: { {v: len(r) for v, r in by_version.items()} }')
+        return
+
+    other_versions = {v: len(r) for v, r in by_version.items() if v != target_version}
 
     # Fetch per-ticker (not a single .in_() query) — a combined query across
     # several hundred-row-each tickers can silently hit Supabase's 1000-row
@@ -147,9 +195,22 @@ def main():
 
     print('=' * 100)
     print('WORK 4 — Recommendation quality analysis (ACT-level Telegram alerts only)')
-    print(f'{len(alerts)} signals, {alerts[0]["run_time"][:10]} → {alerts[-1]["run_time"][:10]}. Evaluated as of {today}.')
+    print(f'Mechanism version: {target_version}  |  {len(alerts)} signals, '
+          f'{alerts[0]["run_time"][:10]} → {alerts[-1]["run_time"][:10]}. Evaluated as of {today}.')
+    if other_versions:
+        print(f'(Other versions in the data, excluded from this run: {other_versions} '
+              f'— pass --version <name> to inspect them.)')
     print('Benchmark: your actual Custom Stocks portfolio (TWR, deposit-neutral) — not a market index.')
     print('=' * 100)
+    if len(alerts) < 8:
+        print(f'⚠ Only {len(alerts)} signal(s) under {target_version} so far — too early for a reliable read.')
+
+    digest_lines = [
+        f"<b>📊 Recommendation review</b> · {today}",
+        f"Mechanism: {target_version} · {len(alerts)} signal(s) since {alerts[0]['run_time'][:10]}",
+    ]
+    if len(alerts) < 8:
+        digest_lines.append(f"⚠ Small sample ({len(alerts)}) — too early for a reliable read.")
 
     results = []
     for a in alerts:
@@ -220,8 +281,9 @@ def main():
     print(f"\nGood: {good_n}   Bad: {bad_n}   Total: {total_n}")
     print(f"Historical hit-rate (naive, price-direction only): {prob * 100:.0f}%")
     print(f"Naive estimated probability the NEXT recommendation's ticker price is up when you check it: ~{prob * 100:.0f}%")
-    print(f"(n={total_n} is small — treat as a rough estimate, not a reliable probability. Also remember 2 of these")
-    print(f" 20 rows were SELL calls, where a price DROP afterward is actually the good outcome — see caveat above.)")
+    print(f"(n={total_n} is small — treat as a rough estimate, not a reliable probability. Also remember some of these")
+    print(f" rows may be SELL calls, where a price DROP afterward is actually the good outcome — see caveat above.)")
+    digest_lines.append(f"Naive hit-rate: {good_n} Good / {bad_n} Bad ({prob * 100:.0f}%)")
 
     # ── Hit-rate by action type ─────────────────────────────────────────────
     print('\n' + '=' * 100)
@@ -241,6 +303,7 @@ def main():
         avg_alpha = sum(r['alpha_todate'] for r in rows if r['alpha_todate'] is not None) / len(rows)
         print(f"{action:<10} n={len(rows):<3} hit-rate={len(hits)}/{len(rows)} ({desc})"
               f"   avg return={fmt_pct(avg_ret)}   avg vs your portfolio={fmt_pct(avg_alpha)}")
+        digest_lines.append(f"{action}: {len(hits)}/{len(rows)} correct, avg vs portfolio {fmt_pct(avg_alpha)}")
 
     # ── Concentration check: is this broad-based, or one ticker doing the work? ─
     print('\n' + '=' * 100)
@@ -273,6 +336,7 @@ def main():
     print(f"Hypothetical P&L from following every signal:            £{total_signal_pnl:+,.0f}")
     print(f"Same cash flows, same timing, left in your portfolio as-is: £{total_asis_pnl:+,.0f}")
     print(f"Net effect of following the bot vs doing nothing:         £{total_signal_pnl - total_asis_pnl:+,.0f}")
+    digest_lines.append(f"Net effect vs doing nothing: £{total_signal_pnl - total_asis_pnl:+,.0f} (£{NOTIONAL_PER_SIGNAL:,.0f}/signal)")
 
     # Sensitivity: how much of that net effect comes from the single most-
     # repeated ticker? A result that evaporates when you drop one name isn't
@@ -287,8 +351,11 @@ def main():
         net_full   = total_signal_pnl - total_asis_pnl
         n_ex = len(by_ticker_agg[top_ticker])
         print(f"\nExcluding {top_ticker} ({n_ex} of {len(results)} signals): net effect = £{net_ex:+,.0f}  (full sample was £{net_full:+,.0f})")
+        flips = (net_ex > 0) != (net_full > 0)
         print(f"{top_ticker} alone accounts for £{net_full - net_ex:+,.0f} of the £{net_full:+,.0f} total"
-              f" — {'the sign FLIPS without it, so this result is really about ' + top_ticker + ', not the process' if (net_ex > 0) != (net_full > 0) else 'result direction holds without it too'}.")
+              f" — {'the sign FLIPS without it, so this result is really about ' + top_ticker + ', not the process' if flips else 'result direction holds without it too'}.")
+        if flips:
+            digest_lines.append(f"⚠ Result flips sign excluding {top_ticker} ({n_ex}/{len(results)} signals) — concentrated, not broad-based.")
 
     # ── Version B: one concrete ~1-month-ago example ───────────────────────
     print('\n' + '=' * 100)
@@ -305,6 +372,11 @@ def main():
         print(f"  Return to date: {fmt_pct(best['ret_todate'])}  |  vs your Custom Stocks portfolio: {fmt_pct(best['alpha_todate'])}")
 
     print()
+
+    if args.telegram:
+        digest_lines.append('Full breakdown: python3 scripts/analyze_recommendations.py')
+        ok = send_telegram('\n'.join(digest_lines))
+        print(f"Telegram digest: {'sent' if ok else 'FAILED'}")
 
 
 if __name__ == '__main__':
