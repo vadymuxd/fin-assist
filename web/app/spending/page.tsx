@@ -6,9 +6,9 @@ export const metadata = { title: "Spending" };
 
 export default async function SpendingPage() {
   const data = await getSpendingData().catch(() => ({
-    personal: { byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [] },
-    joint:    { byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [] },
-    all:      { byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [] },
+    personal: { byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [], recurring: [] },
+    joint:    { byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [], recurring: [] },
+    all:      { byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [], recurring: [] },
   }));
 
   return (

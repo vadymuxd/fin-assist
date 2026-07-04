@@ -1126,6 +1126,7 @@ export type WeeklySpend = { week: string; total: number };
 export type DailySpend = { date: string; total: number };
 export type MerchantSpend = { name: string; total: number; count: number };
 export type DaySpend = { day: string; total: number };
+export type ScheduledSpend = { label: string; day: number; amount: number };
 
 export type SpendingAccountData = {
   byCategory: SpendingRow[];
@@ -1134,6 +1135,7 @@ export type SpendingAccountData = {
   daily: DailySpend[];
   topMerchants: MerchantSpend[];
   byDayOfWeek: DaySpend[];
+  recurring: ScheduledSpend[];
 };
 
 export type SpendingData = {
@@ -1145,6 +1147,34 @@ export type SpendingData = {
 const EXCLUDED_CATEGORIES = new Set(["Savings", "Transfers"]);
 const DAY_NAMES = ["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"];
 const DAY_ORDER = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"];
+
+// Detects recurring fixed-date payments (mortgage, council tax, etc.) from
+// transaction history: same category+merchant, consistent amount and day-of-month.
+function detectRecurring(
+  rows: { date: string | null; category: string | null; amount: number | null; name: string | null }[]
+): ScheduledSpend[] {
+  const groups: Record<string, { category: string; name: string; amounts: number[]; days: number[] }> = {};
+  for (const row of rows) {
+    if (!row.date || !row.amount) continue;
+    const key = `${row.category ?? "General"}|${row.name ?? "Unknown"}`;
+    const day = new Date(row.date + "T12:00:00Z").getUTCDate();
+    const g = (groups[key] ??= { category: row.category ?? "General", name: row.name ?? "Unknown", amounts: [], days: [] });
+    g.amounts.push(Math.abs(Number(row.amount)));
+    g.days.push(day);
+  }
+
+  const schedule: ScheduledSpend[] = [];
+  for (const g of Object.values(groups)) {
+    if (g.amounts.length < 6) continue;
+    const avgAmt = g.amounts.reduce((a, b) => a + b, 0) / g.amounts.length;
+    if (avgAmt < 150) continue;
+    const avgDay = g.days.reduce((a, b) => a + b, 0) / g.days.length;
+    const variance = g.days.reduce((s, d) => s + (d - avgDay) ** 2, 0) / g.days.length;
+    if (Math.sqrt(variance) > 3) continue;
+    schedule.push({ label: g.name, day: Math.round(avgDay), amount: Math.round(avgAmt) });
+  }
+  return schedule.sort((a, b) => a.day - b.day);
+}
 
 function aggregateSpending(
   rows: { date: string | null; category: string | null; amount: number | null; name: string | null }[]
@@ -1207,6 +1237,8 @@ function aggregateSpending(
       .slice(0, 10),
 
     byDayOfWeek: DAY_ORDER.map(d => ({ day: d, total: round2(dayMap[d] ?? 0) })),
+
+    recurring: detectRecurring(rows),
   };
 }
 
@@ -1231,7 +1263,7 @@ export async function getSpendingData(): Promise<SpendingData> {
   }
 
   const empty: SpendingAccountData = {
-    byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [],
+    byCategory: [], monthly: [], weekly: [], daily: [], topMerchants: [], byDayOfWeek: [], recurring: [],
   };
 
   const data = allRows;

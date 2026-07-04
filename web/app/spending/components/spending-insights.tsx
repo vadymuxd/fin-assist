@@ -3,7 +3,7 @@
 import {
   ResponsiveContainer, LineChart, Line, XAxis, YAxis, Tooltip,
 } from "recharts";
-import { type MonthlySpend, type DailySpend, type MerchantSpend, type DaySpend } from "@/lib/queries";
+import { type MonthlySpend, type DailySpend, type MerchantSpend, type DaySpend, type ScheduledSpend } from "@/lib/queries";
 
 const gbp    = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 0 });
 const gbpDec = new Intl.NumberFormat("en-GB", { style: "currency", currency: "GBP", maximumFractionDigits: 2 });
@@ -13,7 +13,7 @@ function daysInMonth(year: number, month: number) {
 }
 
 // ── Hero: This month with budget chart ────────────────────────────────────────
-export function ThisMonthHero({ monthly, daily, budget }: { monthly: MonthlySpend[]; daily: DailySpend[]; budget: number }) {
+export function ThisMonthHero({ monthly, daily, budget, recurring }: { monthly: MonthlySpend[]; daily: DailySpend[]; budget: number; recurring: ScheduledSpend[] }) {
   const now          = new Date();
   const year         = now.getFullYear();
   const month        = now.getMonth() + 1;
@@ -41,16 +41,24 @@ export function ThisMonthHero({ monthly, daily, budget }: { monthly: MonthlySpen
     }
   }
 
-  // Both lines descend: budget → 0 (remaining budget left)
+  // Fixed-date payments (mortgage, council tax, ...) clamped into this month's day range.
+  const scheduled       = recurring.map(r => ({ ...r, day: Math.min(r.day, totalDays) }));
+  const totalScheduled  = scheduled.reduce((s, r) => s + r.amount, 0);
+  const flexibleBudget  = Math.max(0, budget - totalScheduled);
+  const flexiblePerDay  = flexibleBudget / totalDays;
+
+  // Both lines descend: budget → 0 (remaining budget left).
+  // Target dips on scheduled payment days instead of assuming a flat daily burn.
   let cumul = 0;
   const chartData = Array.from({ length: totalDays }, (_, i) => {
     const day    = i + 1;
     const isDone = day <= dayOfMonth;
     if (isDone) cumul += dayMap[day] ?? 0;
+    const scheduledDue = scheduled.filter(r => r.day <= day).reduce((s, r) => s + r.amount, 0);
     return {
       day: String(day),
       actual: isDone ? Math.round(budget - cumul) : null,
-      target: Math.round(budget - (budget / totalDays) * day),
+      target: Math.round(budget - scheduledDue - flexiblePerDay * day),
     };
   });
 
