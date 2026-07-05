@@ -1,0 +1,91 @@
+{
+  "date": "2026-07-05",
+  "balance": 550410.6,
+  "ltv": 83.4,
+  "remaining_term": 352,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-07-02",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-05-31",
+    "prev_as_of": "2026-04-30",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.92,
+        "prev_rate": 5.14
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.32,
+        "prev_rate": 5.46
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.8,
+        "prev_rate": 4.98
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 5.1,
+        "prev_rate": 5.22
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 5.12,
+  "avg_5yr_rate": 4.95,
+  "avg_2yr_payment": 3024,
+  "avg_5yr_payment": 2967,
+  "prev_avg_2yr_rate": 5.12,
+  "prev_avg_5yr_rate": 4.95,
+  "avg_2yr_wow_bps": 0,
+  "avg_5yr_wow_bps": 0,
+  "news": [
+    {
+      "title": "Homes harder to sell as high mortgage rates frustrate buyers",
+      "description": "Three in five homes listed for sale since January remain on the market, says property portal Zoopla.",
+      "source": "bbc.co.uk",
+      "published": "2026-06-29",
+      "url": "https://www.bbc.co.uk/news/articles/cdr4env2v14o?at_medium=RSS&at_campaign=rss"
+    },
+    {
+      "title": "Stocks Fall on Weakness in Chipmakers and AI Stocks",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is down -0.47%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is down -0.22%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is down -1.09%. September E-mini S&P futures (ESU26 ) are down -0.40%, and September E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-07-01",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-fall-weakness-chipmakers-ai-140649556.html"
+    },
+    {
+      "title": "Mixed signals, research findings, and policy judgements \u2212 speech by Catherine L. Mann",
+      "description": "Given at the Natixis CIB Private Debt Forum",
+      "source": "bankofengland.co.uk",
+      "published": "2026-07-02",
+      "url": "https://www.bankofengland.co.uk/speech/2026/july/catherine-l-mann-fireside-chat-at-the-natixis-cib-conference-on-private-debt"
+    }
+  ]
+}
