@@ -41,9 +41,6 @@ export function ThisMonthHero({ monthly, daily, budget, recurring }: { monthly: 
 
   const spent     = monthly.find(m => m.month === currentKey)?.total ?? 0;
   const lastTotal = monthly.find(m => m.month === prevKey)?.total ?? 0;
-  const dailyRate = dayOfMonth > 0 ? spent / dayOfMonth : 0;
-  const projected = Math.round(dailyRate * totalDays);
-  const pctChange = lastTotal > 0 ? ((projected - lastTotal) / lastTotal) * 100 : null;
   const overBudget = spent > budget;
 
   // Cumulative daily spend for current month
@@ -60,6 +57,14 @@ export function ThisMonthHero({ monthly, daily, budget, recurring }: { monthly: 
   const totalScheduled  = scheduled.reduce((s, r) => s + r.amount, 0);
   const flexibleBudget  = Math.max(0, budget - totalScheduled);
   const flexiblePerDay  = flexibleBudget / totalDays;
+
+  // Lump-sum recurring payments (mortgage etc.) shouldn't be assumed to repeat daily —
+  // split spend-to-date into scheduled vs flexible, mirroring the target-pace line above.
+  const scheduledPaidToDate = scheduled.filter(r => r.day <= dayOfMonth).reduce((s, r) => s + r.amount, 0);
+  const scheduledRemaining  = scheduled.filter(r => r.day > dayOfMonth).reduce((s, r) => s + r.amount, 0);
+  const dailyRate = dayOfMonth > 0 ? Math.max(0, spent - scheduledPaidToDate) / dayOfMonth : 0;
+  const projected = Math.round(spent + dailyRate * daysLeft + scheduledRemaining);
+  const pctChange = lastTotal > 0 ? ((projected - lastTotal) / lastTotal) * 100 : null;
 
   // Both lines descend: budget → 0 (remaining budget left).
   // Target dips on scheduled payment days instead of assuming a flat daily burn.
