@@ -31,7 +31,7 @@ REVALIDATE_SEC  = os.getenv('APP_REVALIDATE_SECRET', '')
 ANNUAL_RATE      = Decimal('0.0526')
 MONTHLY_RATE     = ANNUAL_RATE / 12
 MONTHLY_PAYMENT  = Decimal('3072.00')
-PROPERTY_VALUE   = Decimal('660000.00')
+DEFAULT_PROPERTY_VALUE = Decimal('660000.00')  # used only when seeding history from scratch
 LENDER           = 'Co-operative Bank'
 START_DATE       = date(2024, 10, 1)   # mortgage start; no payment on this date
 
@@ -67,12 +67,12 @@ def calc_prev_balance(balance: Decimal) -> Decimal:
     )
 
 
-def make_row(d: date, balance: Decimal) -> dict:
-    equity = PROPERTY_VALUE - balance
+def make_row(d: date, balance: Decimal, property_value: Decimal) -> dict:
+    equity = property_value - balance
     return {
         'date':            d.isoformat(),
         'balance':         float(balance),
-        'property_value':  float(PROPERTY_VALUE),
+        'property_value':  float(property_value),
         'equity':          float(equity),
         'equity_half':     float((equity / 2).quantize(Decimal('0.01'))),
         'monthly_payment': float(MONTHLY_PAYMENT),
@@ -92,7 +92,7 @@ def build_history() -> list[dict]:
     balance = CONFIRMED_BALANCE
     d = CONFIRMED_DATE
     while d >= START_DATE:
-        rows[d.isoformat()] = make_row(d, balance)
+        rows[d.isoformat()] = make_row(d, balance, DEFAULT_PROPERTY_VALUE)
         if d == START_DATE:
             break
         balance = calc_prev_balance(balance)
@@ -104,7 +104,7 @@ def build_history() -> list[dict]:
     this_month = date(today.year, today.month, 1)
     while d <= this_month:
         balance = calc_next_balance(balance)
-        rows[d.isoformat()] = make_row(d, balance)
+        rows[d.isoformat()] = make_row(d, balance, DEFAULT_PROPERTY_VALUE)
         d = next_month(d)
 
     return sorted(rows.values(), key=lambda r: r['date'])
@@ -143,7 +143,7 @@ def main() -> None:
     target = date(today.year, today.month, 1)
     print(f'=== Mortgage Snapshot — {target} ===')
 
-    result = client.table('mortgage_snapshots').select('date, balance') \
+    result = client.table('mortgage_snapshots').select('date, balance, property_value') \
         .order('date', desc=True).limit(1).execute()
 
     if not result.data:
@@ -155,13 +155,18 @@ def main() -> None:
         print(f'  Already have snapshot for {target} — nothing to do.')
         return
 
+    # Carry forward whatever property_value is currently on record — it may
+    # have been updated since (see update_property_value.py) and must not
+    # snap back to a hardcoded default on the next monthly run.
+    property_value = Decimal(str(result.data[0]['property_value']))
+
     # Step forward month by month from latest to target
     balance = Decimal(str(result.data[0]['balance']))
     d = next_month(latest_date)
     new_rows = []
     while d <= target:
         balance = calc_next_balance(balance)
-        new_rows.append(make_row(d, balance))
+        new_rows.append(make_row(d, balance, property_value))
         d = next_month(d)
 
     upsert(client, new_rows)

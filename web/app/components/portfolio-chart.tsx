@@ -121,6 +121,18 @@ function buildPerformanceData(
     return customTwr * 100;
   });
 
+  // Lisa = deposit-neutral TWR of her GIC ISA (same chaining as Custom Stocks
+  // above) — a raw lisa_total ratio would show deposits/withdrawals as growth.
+  let lisaTwr = 1.0;
+  const lisaTwrValues: number[] = snapshots.map((s, i) => {
+    if (i > 0) {
+      const prev = snapshots[i - 1];
+      const lisaBase = (prev.lisa_total ?? 0) + ((s.lisa_started_value ?? 0) - (prev.lisa_started_value ?? 0));
+      if (lisaBase > 0) lisaTwr *= 1 + ((s.lisa_total ?? 0) - lisaBase) / lisaBase;
+    }
+    return lisaTwr * 100;
+  });
+
   const includeCustom = active.includes("Custom Stocks");
   const directActive = active.filter((l): l is DirectBenchmarkLabel => l !== "Custom Stocks");
 
@@ -144,6 +156,10 @@ function buildPerformanceData(
     const r: Row = { date: s.date, Portfolio: stockValues[i] };
     if (includeCustom) r["Custom Stocks"] = customTwrValues[i];
     for (const label of directWithData) {
+      if (label === "Lisa") {
+        r[label] = (s.lisa_total ?? 0) > 0 && (s.lisa_started_value ?? 0) > 0 ? lisaTwrValues[i] : null;
+        continue;
+      }
       const k = benchmarkKeys[label];
       const v = s[k];
       const b = baseBench[label]!;
