@@ -43,7 +43,7 @@ from lib.notion_db import (
     prop_checkbox,
     FINANCIAL_UPDATES_DB_ID,
 )
-from lib.supabase_sink import write_transaction
+from lib.supabase_sink import write_transaction, write_property_value
 
 
 load_dotenv()
@@ -434,6 +434,17 @@ def handle_balance_update(entry, sh):
         ws.update_cell(row, COL_VALUE_IDX, new_balance)
         invalidate_values(ws)
         return f"Investments · {label} · row {row} col G = £{new_balance:,.2f}"
+
+    if domain == 'mortgage':
+        # mortgage_snapshots isn't Sheet-backed like the other domains — write
+        # straight to Supabase (see write_property_value). Recalculates
+        # equity/equity_half against the current balance so Mortgage KPI and
+        # Net Worth's House/House Equity chips pick up the change immediately.
+        result = write_property_value(new_balance)
+        if not result:
+            raise ValueError("Property value update failed — check Supabase logs")
+        return (f"Mortgage · Property Value · £{result['old_value']:,.0f} → "
+                f"£{result['new_value']:,.0f} (equity £{result['equity']:,.0f})")
 
     raise ValueError(f"Unknown domain for BALANCE_UPDATE: {domain!r}")
 

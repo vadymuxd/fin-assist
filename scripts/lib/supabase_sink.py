@@ -10,7 +10,7 @@ breaks the Google Sheets pipeline.
 import os
 import logging
 import requests as _requests
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from supabase import create_client, Client
 
 logger = logging.getLogger(__name__)
@@ -293,6 +293,54 @@ def write_pension_snapshot(date: str, total: float, vadym: float = 0.0, lisa: fl
     if ok:
         _trigger_revalidate()
     return ok
+
+
+def write_property_value(new_value: float) -> dict | None:
+    """
+    Manual house valuation update — the mortgage equivalent of a savings/
+    pension BALANCE_UPDATE. mortgage_snapshots isn't Sheet-backed (unlike
+    savings/pensions/investments), so this reads the latest row directly,
+    recalculates equity/equity_half against the current balance, and upserts
+    a row dated today. Returns {old_value, new_value, balance, equity} on
+    success, or None (fails open, same convention as the rest of this module).
+    """
+    client = _get_client()
+    if not client:
+        return None
+    try:
+        result = client.table('mortgage_snapshots') \
+            .select('date, balance, property_value, monthly_payment, rate, lender, deal_expires, deal_term_years') \
+            .order('date', desc=True).limit(1).execute()
+        if not result.data:
+            logger.warning('write_property_value: no existing mortgage_snapshots rows')
+            return None
+
+        latest = result.data[0]
+        balance = float(latest['balance'])
+        old_value = float(latest['property_value'])
+        equity = new_value - balance
+
+        row = {
+            'date':            date.today().isoformat(),
+            'balance':         balance,
+            'property_value':  new_value,
+            'equity':          equity,
+            'equity_half':     round(equity / 2, 2),
+            'monthly_payment': latest['monthly_payment'],
+            'rate':            latest['rate'],
+            'lender':          latest['lender'],
+            'deal_expires':    latest['deal_expires'],
+            'deal_term_years': latest['deal_term_years'],
+            'updated_at':      datetime.now(timezone.utc).isoformat(),
+        }
+        ok = _upsert('mortgage_snapshots', [row], on_conflict='date')
+        if not ok:
+            return None
+        _trigger_revalidate()
+        return {'old_value': old_value, 'new_value': new_value, 'balance': balance, 'equity': equity}
+    except Exception as e:
+        logger.warning(f'write_property_value failed: {e}')
+        return None
 
 
 def get_recently_alerted_tickers(hours: int = 48) -> set:
