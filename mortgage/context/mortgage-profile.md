@@ -24,9 +24,9 @@
 
 | Field | Value |
 |---|---|
-| Estimated Value | £660,000 |
-| Equity | ~16% (~£107,628) |
-| LTV (Loan-to-Value) | ~84% |
+| Estimated Value | £650,000 (revalued down from £660,000, 2026-07-11) |
+| Equity | ~15% (~£99,589) |
+| LTV (Loan-to-Value) | ~85% |
 | Location | United Kingdom |
 
 ## Remortgage Window

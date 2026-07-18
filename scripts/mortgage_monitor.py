@@ -56,7 +56,7 @@ DATA_PATH     = SNAPSHOTS_DIR / f'{TODAY}-data.json'
 CURRENT_RATE     = 0.0526          # 5.26% fixed
 CURRENT_PAYMENT  = 3072.00         # £/month
 CURRENT_LENDER   = 'Co-operative Bank'
-PROPERTY_VALUE   = 660000.00
+PROPERTY_VALUE   = 650000.00       # revalued down from £660k, 2026-07-11
 FALLBACK_BALANCE = 552371.48       # confirmed by bank statement, 1 Apr 2026
 FIX_ENDS         = '31 January 2027'
 
@@ -217,7 +217,7 @@ def _boe_avg_rates(quoted: dict) -> tuple[float | None, float | None]:
     """
     Market-average 2yr and 5yr fixed rates at ~85% LTV, derived from BoE quoted
     series.  We interpolate the midpoint of the 75% and 90% LTV bands, which
-    bracket the 84% LTV at which Vadym & Lisa sit.  BoE data lags ~1–2 months
+    bracket the ~85% LTV at which Vadym & Lisa sit.  BoE data lags ~1–2 months
     behind live best-buy deals but is the most authoritative market-wide average.
     Returns (avg_2yr, avg_5yr) with None where data is missing.
     """
@@ -405,7 +405,8 @@ def render_quoted_trend(data: dict) -> str:
         lines.append(f"| {s['label']}, {s['ltv']}% LTV | {prev} | {cur} | {chg} |")
 
     lines += ['',
-              "*Vadym & Lisa's ~84% LTV sits between the 75% and 90% bands — closer to the 90% figure.*",
+              f"*Vadym & Lisa's ~{data['ltv']}% LTV sits between the 75% and 90% bands — "
+              "closer to the 90% figure.*",
               '']
     return '\n'.join(lines)
 
