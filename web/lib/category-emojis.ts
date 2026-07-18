@@ -19,6 +19,7 @@ export const CATEGORY_EMOJIS: Record<string, string> = {
   "Home":          "🏡",
   "Subscription":  "🔔",
   "Cats":          "🐱",
+  "Car":           "🚗",
 };
 
 export const CATEGORY_COLORS: Record<string, string> = {
@@ -41,7 +42,10 @@ export const CATEGORY_COLORS: Record<string, string> = {
   "Mortgage":      "#1d4ed8",
   "Home":          "#16a34a",
   "Subscription":  "#7c3aed",
-  "Cats":          "#f97316",
+  // Was #f97316, which collided with "Eating out" — both are active categories
+  // and now always render side by side, so Cats gets its own hue.
+  "Cats":          "#06b6d4",
+  "Car":           "#b45309",
 };
 
 export function getCategoryEmoji(category: string | null | undefined): string {

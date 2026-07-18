@@ -2,7 +2,7 @@
 
 import { useEffect, useRef, useState } from "react";
 import {
-  Bar, BarChart, CartesianGrid, LabelList,
+  Bar, BarChart, CartesianGrid, LabelList, Rectangle,
   ResponsiveContainer, Tooltip, XAxis, YAxis,
 } from "recharts";
 import { type SpendingRow } from "@/lib/queries";
@@ -69,9 +69,17 @@ function BarTip({ active, payload, label }: any) {
   return (
     <div className="rounded-xl border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-3 text-xs">
       <div className="font-semibold mb-1.5 text-gray-800 dark:text-gray-200">{label}</div>
+      {/* The swatch is the only thing tying each row to its segment in the
+          stack — unlike the legend below, which carries its own colour bars. */}
       {items.map((p: any) => (
-        <div key={p.name} className="flex justify-between gap-3 text-gray-600 dark:text-gray-400">
-          <span>{CATEGORY_EMOJIS[p.name] ?? "📦"} {p.name}</span>
+        <div key={p.name} className="flex items-center justify-between gap-3 text-gray-600 dark:text-gray-400">
+          <span className="flex items-center gap-1.5">
+            <span
+              className="w-2.5 h-2.5 rounded-sm shrink-0"
+              style={{ backgroundColor: getCategoryColor(p.name) }}
+            />
+            {CATEGORY_EMOJIS[p.name] ?? "📦"} {p.name}
+          </span>
           <span className="font-medium text-gray-800 dark:text-gray-200">{gbp.format(p.value)}</span>
         </div>
       ))}
@@ -126,12 +134,6 @@ export default function CategoryChart({ byCategory }: Props) {
     catTotals[row.category] = (catTotals[row.category] ?? 0) + row.total;
   }
 
-  const allCats    = Object.entries(catTotals).sort((a, b) => b[1] - a[1]);
-  const topCats    = allCats.slice(0, 9).map(([c]) => c);
-  const hasOther   = allCats.length > 9;
-  const allVisible = hasOther ? [...topCats, "Other"] : topCats;
-  const effectiveCats = allVisible.filter(c => !excludedCats.has(c));
-
   const months = [...monthSet].sort();
   const rowByMonthCat = new Map(byCategory.map(r => [`${r.month}|${r.category}`, r.total]));
 
@@ -148,25 +150,28 @@ export default function CategoryChart({ byCategory }: Props) {
   const actualPieMonthIdx = pieMonthIdx === -1 ? months.length - 1 : Math.min(pieMonthIdx, months.length - 1);
   const selectedPieMonth  = months[actualPieMonthIdx] ?? "";
 
-  // Legend totals track whatever period is currently in view — the selected
-  // month in pie mode, the paginated 6-month window in bars mode — never
-  // an all-time total, so paginating actually changes the numbers below.
-  const legendTotals: Record<string, number> = {};
-  if (chartType === "pie" && selectedPieMonth) {
-    for (const [cat] of allCats) {
-      legendTotals[cat] = rowByMonthCat.get(`${selectedPieMonth}|${cat}`) ?? 0;
-    }
-    if (hasOther) {
-      legendTotals["Other"] = allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${selectedPieMonth}|${c}`) ?? 0), 0);
-    }
-  } else {
-    for (const [cat] of allCats) {
-      legendTotals[cat] = pagedMonths.reduce((s, m) => s + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0);
-    }
-    if (hasOther) {
-      legendTotals["Other"] = allCats.slice(9).reduce((s, [c]) => s + pagedMonths.reduce((s2, m) => s2 + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0), 0);
-    }
+  // ── Categories in view ─────────────────────────────────────────────────────
+  // Every category with spend in the period currently on screen — the selected
+  // month in pie mode, the paginated 6-month window in bars mode — ranked by
+  // that period's total. Categories with nothing spent in the period are
+  // dropped. There is no top-N cap or "Other" bucket: a month runs to ~13
+  // categories, which the stack and the list both show comfortably, and
+  // capping buried real spend (Car, Entertainment) in an opaque roll-up.
+  const periodMonths = chartType === "pie"
+    ? (selectedPieMonth ? [selectedPieMonth] : [])
+    : pagedMonths;
+
+  const periodTotals: Record<string, number> = {};
+  for (const cat of Object.keys(catTotals)) {
+    const total = periodMonths.reduce((s, m) => s + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0);
+    if (total > 0) periodTotals[cat] = total;
   }
+
+  const allVisible    = Object.entries(periodTotals).sort((a, b) => b[1] - a[1]).map(([c]) => c);
+  const effectiveCats = allVisible.filter(c => !excludedCats.has(c));
+
+  // Legend totals track the same period, so paginating changes the numbers below.
+  const legendTotals: Record<string, number> = periodTotals;
 
   // ── Drill-down: year-based pagination ─────────────────────────────────────
   const monthsByYear: Record<string, string[]> = {};
@@ -188,33 +193,42 @@ export default function CategoryChart({ byCategory }: Props) {
   function monthStackTotal(m: string): number {
     let total = 0;
     for (const cat of effectiveCats) {
-      total += cat === "Other"
-        ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0)
-        : (rowByMonthCat.get(`${m}|${cat}`) ?? 0);
+      total += rowByMonthCat.get(`${m}|${cat}`) ?? 0;
     }
     return total;
   }
 
-  const stackBarData = pagedMonths.map(m => {
-    const row: Record<string, string | number> = { label: monthLabel(m) };
+  // Which segment sits at the very top of each month's stack. This varies month
+  // to month, so the stack total can't be pinned to one fixed Bar: the last
+  // category in `allVisible` is the period's smallest, which is £0 in most
+  // individual months — Recharts draws nothing for a zero-value segment, and
+  // the total label disappears along with it. Resolve the topmost segment that
+  // actually has a value, per month, and let that one carry the label.
+  const topCatByMonth = pagedMonths.map(m => {
+    for (let i = allVisible.length - 1; i >= 0; i--) {
+      const cat = allVisible[i];
+      if (excludedCats.has(cat)) continue;
+      if ((rowByMonthCat.get(`${m}|${cat}`) ?? 0) > 0) return cat;
+    }
+    return null;
+  });
+
+  const stackBarData = pagedMonths.map((m, i) => {
+    const row: Record<string, string | number | null> = { label: monthLabel(m) };
     for (const cat of allVisible) {
-      const val = excludedCats.has(cat) ? 0 : cat === "Other"
-        ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${m}|${c}`) ?? 0), 0)
-        : (rowByMonthCat.get(`${m}|${cat}`) ?? 0);
+      const val = excludedCats.has(cat) ? 0 : (rowByMonthCat.get(`${m}|${cat}`) ?? 0);
       row[cat] = Math.round(val * 100) / 100;
     }
-    row.__total = Math.round(monthStackTotal(m));
+    row.__total   = Math.round(monthStackTotal(m));
+    row.__topCat  = topCatByMonth[i];
     return row;
   });
-  const topmostVisibleCat = [...allVisible].reverse().find(c => !excludedCats.has(c));
   // Fixed across all pages so stacked-bar heights stay comparable while paginating.
   const globalStackMax = Math.max(0, ...months.map(monthStackTotal));
 
   // ── Drill-down bar data (for Recharts) ────────────────────────────────────
   function monthDrillValue(m: string): number {
-    return drillCat === "Other"
-      ? allCats.slice(9).reduce((s, [cat]) => s + (rowByMonthCat.get(`${m}|${cat}`) ?? 0), 0)
-      : (rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0);
+    return rowByMonthCat.get(`${m}|${drillCat ?? ""}`) ?? 0;
   }
 
   const drillAllTotal = months.reduce((s, m) => s + monthDrillValue(m), 0);
@@ -228,18 +242,10 @@ export default function CategoryChart({ byCategory }: Props) {
   const globalDrillMax = Math.max(0, ...months.map(monthDrillValue));
 
   // ── Pie/donut data ─────────────────────────────────────────────────────────
+  // In pie mode the period is the selected month, so legendTotals already holds
+  // exactly the per-slice values.
   const pieTotals: Record<string, number> = {};
-  for (const cat of effectiveCats) {
-    if (selectedPieMonth) {
-      pieTotals[cat] = cat === "Other"
-        ? allCats.slice(9).reduce((s, [c]) => s + (rowByMonthCat.get(`${selectedPieMonth}|${c}`) ?? 0), 0)
-        : (rowByMonthCat.get(`${selectedPieMonth}|${cat}`) ?? 0);
-    } else {
-      pieTotals[cat] = cat === "Other"
-        ? allCats.slice(9).reduce((s, [, v]) => s + v, 0)
-        : (catTotals[cat] ?? 0);
-    }
-  }
+  for (const cat of effectiveCats) pieTotals[cat] = legendTotals[cat] ?? 0;
   const pieGrand = Object.values(pieTotals).reduce((s, v) => s + v, 0);
   let cumA = -Math.PI / 2;
   const pieSlices = effectiveCats
@@ -268,7 +274,9 @@ export default function CategoryChart({ byCategory }: Props) {
     });
   }
 
-  const exclusionOffers = allVisible.filter(c => ["Mortgage", "Home", "Bills"].includes(c));
+  // Drawn from all-time categories, not the current period, so the checkboxes
+  // don't appear/disappear as you paginate.
+  const exclusionOffers = ["Mortgage", "Home", "Bills"].filter(c => c in catTotals);
   const legendGrand     = effectiveCats.reduce((s, c) => s + (legendTotals[c] ?? 0), 0);
   const drillColor      = drillCat ? getCategoryColor(drillCat) : "#3b82f6";
 
@@ -355,16 +363,35 @@ export default function CategoryChart({ byCategory }: Props) {
                 domain={[0, (dataMax: number) => Math.max(dataMax, globalStackMax)]}
               />
               <Tooltip content={<BarTip />} />
-              {allVisible.map(cat => {
-                const isTop = cat === topmostVisibleCat;
-                return (
-                  <Bar key={cat} dataKey={cat} stackId="a" fill={getCategoryColor(cat)} radius={isTop ? [3, 3, 0, 0] : 0}>
-                    {isTop && (
-                      <LabelList dataKey="__total" position="top" formatter={fmtBarLabel} style={{ fontSize: 11, fill: "currentColor", opacity: 0.55 }} />
-                    )}
-                  </Bar>
-                );
-              })}
+              {allVisible.map(cat => (
+                <Bar
+                  key={cat}
+                  dataKey={cat}
+                  stackId="a"
+                  fill={getCategoryColor(cat)}
+                  // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                  shape={(p: any) => (
+                    <Rectangle {...p} radius={p.payload?.__topCat === cat ? [3, 3, 0, 0] : 0} />
+                  )}
+                >
+                  <LabelList
+                    dataKey="__total"
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    content={(p: any) =>
+                      topCatByMonth[p.index] === cat && p.value ? (
+                        <text
+                          x={p.x + p.width / 2}
+                          y={p.y - 6}
+                          textAnchor="middle"
+                          style={{ fontSize: 11, fill: "currentColor", opacity: 0.55 }}
+                        >
+                          {fmtBarLabel(p.value)}
+                        </text>
+                      ) : null
+                    }
+                  />
+                </Bar>
+              ))}
             </BarChart>
           </ResponsiveContainer>
 
@@ -511,10 +538,6 @@ export default function CategoryChart({ byCategory }: Props) {
                 className="w-full flex items-center gap-2 py-1.5 px-2 rounded-lg text-left hover:bg-gray-50 dark:hover:bg-gray-900 transition-colors group"
                 onClick={() => { setDrillCat(cat); setDrillYearIdx(-1); }}
               >
-                <span
-                  className="w-2.5 h-2.5 rounded-sm shrink-0"
-                  style={{ backgroundColor: getCategoryColor(cat) }}
-                />
                 <span className="text-xs text-gray-700 dark:text-gray-300 w-28 shrink-0 truncate">
                   {CATEGORY_EMOJIS[cat] ?? "📦"} {cat}
                 </span>
