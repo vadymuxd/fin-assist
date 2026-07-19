@@ -1,0 +1,91 @@
+{
+  "date": "2026-07-19",
+  "balance": 550410.6,
+  "ltv": 83.4,
+  "remaining_term": 352,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-07-16",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-06-30",
+    "prev_as_of": "2026-05-31",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.81,
+        "prev_rate": 4.92
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.19,
+        "prev_rate": 5.32
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.65,
+        "prev_rate": 4.8
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 4.94,
+        "prev_rate": 5.1
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 5.0,
+  "avg_5yr_rate": 4.79,
+  "avg_2yr_payment": 2984,
+  "avg_5yr_payment": 2914,
+  "prev_avg_2yr_rate": 5.0,
+  "prev_avg_5yr_rate": 4.79,
+  "avg_2yr_wow_bps": 0,
+  "avg_5yr_wow_bps": 0,
+  "news": [
+    {
+      "title": "How Payday Loans UK Helps You Handle a Financial Emergency Before Your Next Paycheck",
+      "description": "Learn how payday loans in the UK can provide short-term financial support before your next paycheck when used responsibly.",
+      "source": "europeanbusinessreview.com",
+      "published": "2026-07-13",
+      "url": "https://www.europeanbusinessreview.com/how-payday-loans-uk-helps-you-handle-a-financial-emergency-before-your-next-paycheck/"
+    },
+    {
+      "title": "Q2 Recap: Markets Get Back on Track",
+      "description": "In financial markets, there is a concept known as \u201cthe wall of worry.\u201d Put plainly, this concept describes how markets often see past short-term concerns to post positive returns, essentially climbing over the proverbial wall of worry.",
+      "source": "etftrends.com",
+      "published": "2026-07-17",
+      "url": "https://www.etftrends.com/etf-strategist-content-hub/q2-recap-markets-get-back-on-track-2/"
+    },
+    {
+      "title": "Stocks Supported By Favorable Inflation News",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is up +0.23%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is up +0.26%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is up +0.31%. September E-mini S&P futures (ESU26 ) are up +0.27%, and September E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-07-15",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-supported-favorable-inflation-news-141442584.html"
+    }
+  ]
+}
