@@ -1,0 +1,91 @@
+{
+  "date": "2026-07-26",
+  "balance": 550410.6,
+  "ltv": 83.4,
+  "remaining_term": 352,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-07-23",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-06-30",
+    "prev_as_of": "2026-05-31",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.81,
+        "prev_rate": 4.92
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.19,
+        "prev_rate": 5.32
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.65,
+        "prev_rate": 4.8
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 4.94,
+        "prev_rate": 5.1
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-07-30",
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 5.0,
+  "avg_5yr_rate": 4.79,
+  "avg_2yr_payment": 2984,
+  "avg_5yr_payment": 2914,
+  "prev_avg_2yr_rate": 5.0,
+  "prev_avg_5yr_rate": 4.79,
+  "avg_2yr_wow_bps": 0,
+  "avg_5yr_wow_bps": 0,
+  "news": [
+    {
+      "title": "UK mortgage rates rise to highest level for a month as global tensions persist",
+      "description": "Renewed tensions in the Middle East feed through to the costs faced by lenders, pushing up borrowing costs.",
+      "source": "bbc.co.uk",
+      "published": "2026-07-23",
+      "url": "https://www.bbc.co.uk/news/articles/c70gknr7z1eo?at_medium=RSS&at_campaign=rss"
+    },
+    {
+      "title": "Oil Prices Near $100 \u2014 And More Rises to Come",
+      "description": "Yesterday, oil prices surged to $100, and it wasn\u2019t even the biggest news as President Trump announced a new wave of global tariffs. Hormuz is effectively shut, the oil isn\u2019t getting through, but it is now more than just Hormuz being closed. It is about shrinking inventories, oil stuck in\u2026",
+      "source": "economicshelp.org",
+      "published": "2026-07-24",
+      "url": "https://www.economicshelp.org/blog/222297/economics/oil-prices-near-100-and-more-rises-to-come/"
+    },
+    {
+      "title": "Stock Indexes Retreat as Crude Oil and Bond Yields Climb",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is down -0.13%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is up +0.15%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is down -0.48%. September E-mini S&P futures (ESU26 ) are down -0.10%, and September E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-07-22",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stock-indexes-retreat-crude-oil-141142353.html"
+    }
+  ]
+}
