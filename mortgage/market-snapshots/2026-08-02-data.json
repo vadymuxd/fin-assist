@@ -1,0 +1,104 @@
+{
+  "date": "2026-08-02",
+  "balance": 549751.23,
+  "ltv": 83.3,
+  "remaining_term": 351,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-07-30",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-06-30",
+    "prev_as_of": "2026-05-31",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.81,
+        "prev_rate": 4.92
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.19,
+        "prev_rate": 5.32
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.65,
+        "prev_rate": 4.8
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 4.94,
+        "prev_rate": 5.1
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 5.0,
+  "avg_5yr_rate": 4.79,
+  "avg_2yr_payment": 2984,
+  "avg_5yr_payment": 2914,
+  "prev_avg_2yr_rate": 5.0,
+  "prev_avg_5yr_rate": 4.79,
+  "avg_2yr_wow_bps": 0,
+  "avg_5yr_wow_bps": 0,
+  "news": [
+    {
+      "title": "Burnham Is Maxing Out Britain's Credit Card, Tax Hikes and Borrowing Will Foot the Bill",
+      "description": "deVere Group CEO Nigel Green on rising gilt yields, mortgage rate increases, and the tax hikes or borrowing needed to fund Prime Minister Andy Burnham's spending pledges ahead of the autumn Budget.",
+      "source": "investorideas.com",
+      "published": "2026-07-27",
+      "url": "https://www.investorideas.com/news/2026/main/07272-burnham-maxing-out-britains-credit-card.asp"
+    },
+    {
+      "title": "Monetary Policy Report - July 2026",
+      "description": "Our quarterly Monetary Policy Report sets out the economic analysis and inflation projections that the Monetary Policy Committee uses to make its interest rate decisions.",
+      "source": "bankofengland.co.uk",
+      "published": "2026-07-30",
+      "url": "https://www.bankofengland.co.uk/monetary-policy-report/2026/july-2026"
+    },
+    {
+      "title": "Stocks Pressured by Renewed US-Iran Hostilities",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) today is down -0.18%, the Dow Jones Industrial Average ($DOWI ) (DIA ) is down -0.85%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is down -0.23%. September E-mini S&P futures (ESU26 ) are down -0.25%, and September E-mini Nasdaq futures...",
+      "source": "finance.yahoo.com",
+      "published": "2026-07-29",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-pressured-renewed-us-iran-140628817.html"
+    },
+    {
+      "title": "Futures Rise After Record Rip In Kospi; Bond Bounce Fades As Oil Jumps, BoJ On Hold",
+      "description": "ZeroHedge - On a long enough timeline, the survival rate for everyone drops to zero",
+      "source": "zerohedge.com",
+      "published": "2026-07-31",
+      "url": "https://www.zerohedge.com/markets/futures-rise-after-record-rip-kospi-bond-bounce-fades-oil-jumps-boj-hold"
+    },
+    {
+      "title": "Futures Rise As Oil Drops, Bond Selling Slows, Meta Tumbles And Microsoft Soars",
+      "description": "ZeroHedge - On a long enough timeline, the survival rate for everyone drops to zero",
+      "source": "zerohedge.com",
+      "published": "2026-07-30",
+      "url": "https://www.zerohedge.com/markets/futures-rise-oil-drops-bond-selling-slows-meta-tumbles-and-microsoft-soars"
+    }
+  ]
+}
