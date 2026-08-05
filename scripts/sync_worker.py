@@ -550,9 +550,8 @@ def handle_investments_action(entry, sh):
         'notes':    entry['notes'] or entry['title'] or '',
     }
 
-    log_trades.append_to_inv_transactions(ws_tx, trade)
-
     if entry['type'] in ('DEPOSIT', 'WITHDRAWAL'):
+        log_trades.append_to_inv_transactions(ws_tx, trade)
         delta = trade['total'] if entry['type'] == 'DEPOSIT' else -trade['total']
 
         # Managed-fund contributions (e.g. Nutmeg) go straight into the fund, not
@@ -612,35 +611,23 @@ def handle_investments_action(entry, sh):
         })
         return f"Investments {entry['type']} £{trade['total']:,.2f} on {trade['platform']} (cash {prior:,.2f} → {prior + delta:,.2f})"
 
-    if entry['type'] == 'BUY':
-        layout = find_investment_rows(ws_inv)
-        col_a = ws_inv.col_values(1)
-        try:
-            row_idx = col_a.index(trade['ticker']) + 1
-            log_trades.update_existing_position(ws_inv, row_idx, trade)
-        except ValueError:
-            log_trades.add_new_position(ws_inv, trade, layout)
-        log_trades.update_cash(ws_inv, trade, layout)
+    if entry['type'] in ('BUY', 'SELL'):
+        # Delegate wholesale to log_trades.process_trade — the SAME code path as
+        # /log-trades. Reimplementing it here meant the Notion-queue route quietly
+        # skipped the Supabase writes process_trade does (holding_trades, sectors,
+        # holdings delete on full exit), so a mobile-logged BUY never got its
+        # marker on the ticker page (IITU, 2026-08-05). Anything added to the
+        # trade path from now on lands on both routes automatically.
+        if entry['type'] == 'SELL' and trade['ticker'] not in ws_inv.col_values(1):
+            raise ValueError(f"SELL of {trade['ticker']} but no holding row found")
+
+        log_trades.process_trade(ws_inv, ws_tx, trade)
         log_trades.rewrite_aggregate_formulas(ws_inv)
         # log_trades writes directly to ws_inv (row inserts/deletes included) —
         # invalidate so a later entry's find_managed_fund_row/get_values sees it.
         invalidate_values(ws_inv)
-        return f"Investments BUY {trade['qty']} {trade['ticker']} @ £{trade['price']:.4f} on {trade['platform']}"
-
-    if entry['type'] == 'SELL':
-        layout = find_investment_rows(ws_inv)
-        col_a = ws_inv.col_values(1)
-        try:
-            row_idx = col_a.index(trade['ticker']) + 1
-        except ValueError:
-            raise ValueError(f"SELL of {trade['ticker']} but no holding row found")
-        remaining = log_trades.update_existing_position(ws_inv, row_idx, trade)
-        if remaining <= 0:
-            log_trades.remove_position_row(ws_inv, trade['ticker'])
-        log_trades.update_cash(ws_inv, trade, layout)
-        log_trades.rewrite_aggregate_formulas(ws_inv)
-        invalidate_values(ws_inv)
-        return f"Investments SELL {trade['qty']} {trade['ticker']} @ £{trade['price']:.4f} on {trade['platform']}"
+        return (f"Investments {entry['type']} {trade['qty']} {trade['ticker']} "
+                f"@ £{trade['price']:.4f} on {trade['platform']}")
 
     raise ValueError(f"Unsupported investments action: {entry['type']!r}")
 

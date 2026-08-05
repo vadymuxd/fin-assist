@@ -5,8 +5,16 @@ log_trades.py — Log investment trades to all stores.
 Writes to:
   1. InvTransactions tab (Google Sheets) — appends one row per trade
   2. Investments tab (Google Sheets)     — adds/updates/removes stock rows,
-                                           adjusts cash, rewrites aggregate formulas
-  3. Supabase transactions table         — inserts DEPOSIT/WITHDRAWAL cash events
+                                           adjusts cash and the col I tracking
+                                           baseline, rewrites aggregate formulas
+  3. Supabase holding_trades             — one row per BUY/SELL (drives the
+                                           dotted trade markers on the ticker page)
+  4. Supabase sectors                    — sector/market for a newly bought ticker
+  5. Supabase holdings                   — deletes the row on a full exit
+  6. Supabase transactions table         — inserts DEPOSIT/WITHDRAWAL cash events
+
+sync_worker calls process_trade() for BUY/SELL rows coming off the Notion queue,
+so both entry routes write the same stores. Add new writes there, not in callers.
 
 After running this script, call:
   python3 scripts/snapshot_worker.py --domain portfolio
@@ -197,15 +205,23 @@ def remove_position_row(ws, ticker):
 def update_existing_position(ws, row_idx, trade):
     """Update Qty + Avg Buy for an existing position. Returns new_qty.
 
-    Also keeps col I (Tracking Started Value) in sync with col H (cost basis)
-    for script-managed positions — detected by I ≈ H (within 1%). Positions
-    with an Apr-13 tracking baseline (where I ≠ H) are left untouched.
+    Also moves col I (Tracking Started Value) by the cash that crosses the
+    stocks boundary: +total on a BUY, -total on a SELL. Col I is the baseline
+    the app subtracts to isolate organic (market) movement — I11 feeds
+    portfolio_snapshots.stocks_started_value, and the dashboard's delta() is
+    (Δ self_managed - Δ stocks_started_value). Leaving I alone on a BUY books
+    the whole purchase as market gain: a £2,000 cash→stock move showed up as
+    +£2,000 in WoW/MoM (IITU, 2026-08-05).
+
+    This applies to EVERY position. The old rule only bumped I when I ≈ H
+    (within 1%), i.e. positions the script itself had created, and skipped the
+    ones carrying an Apr-13 tracking baseline (I ≠ H) — precisely the ones the
+    phantom-gain bug hits.
     """
     action = trade['action'].upper()
     row_vals = ws.row_values(row_idx)
     old_qty = parse_float(row_vals[3]) if len(row_vals) > 3 else 0.0
     old_avg = parse_float(row_vals[4]) if len(row_vals) > 4 else 0.0
-    old_h   = parse_float(row_vals[7]) if len(row_vals) > 7 else 0.0  # col H
     old_i   = parse_float(row_vals[8]) if len(row_vals) > 8 else 0.0  # col I
 
     if action == 'BUY':
@@ -223,10 +239,18 @@ def update_existing_position(ws, row_idx, trade):
         ws.update_cell(row_idx, 5, round(new_avg, 6))
         print(f"  ✓ Investments row {row_idx} ({trade['ticker']}): Qty {old_qty}→{new_qty}, Avg Buy £{old_avg:.4f}→£{new_avg:.4f}")
 
-        if action == 'BUY' and old_h > 0 and abs(old_h - old_i) / old_h < 0.01:
-            new_h = new_qty * new_avg
-            ws.update_cell(row_idx, 9, round(new_h, 2))
-            print(f"  ✓ Tracking Started Value (col I) synced: £{old_i:,.2f} → £{new_h:,.2f}")
+        # Move the baseline by the cash crossing the boundary, so the trade is
+        # return-neutral: value and baseline both move by `total`, they cancel
+        # in delta(), and only market movement survives.
+        delta_i = trade['total'] if action == 'BUY' else -trade['total']
+        new_i = max(0.0, old_i + delta_i)
+        ws.update_cell(row_idx, 9, round(new_i, 2))
+        print(f"  ✓ Tracking Started Value (col I): £{old_i:,.2f} → £{new_i:,.2f} "
+              f"({'+' if delta_i >= 0 else '−'}£{abs(delta_i):,.2f}, keeps the trade return-neutral)")
+    # NOTE full exit (new_qty == 0): the caller deletes the row, so I11 loses
+    # the whole baseline while G11 loses the market value — the position's
+    # realised gain drops out of the tracking series. Pre-existing; needs a
+    # realised-adjustments row in the stocks range to hold the residual.
     return new_qty
 
 
