@@ -22,7 +22,7 @@ Runs twice daily (8am + 3:30pm weekdays) via GitHub Actions cron.
 
 Claude remembers context across all surfaces via **Notion**:
 
-- **Mac (Claude Code)** — reads `CLAUDE.md` → fetches Agent Config + Memory Index from Notion
+- **Mac (Claude Code)** — reads `CLAUDE.md` → fetches Agent Config + Memory Index (current state + one row per past session) from Notion
 - **Mobile (claude.ai)** — Fin Assist Claude Project fetches same Notion pages on startup
 - **Sessions DB** — structured log of every meaningful decision or outcome
 

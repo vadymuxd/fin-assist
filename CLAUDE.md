@@ -5,7 +5,7 @@
 1. **Agent Config** — your identity, current phase, safety rules, scripts, and what to update where
    → https://www.notion.so/33f416f27566811aa994e1a3561adac7
 
-2. **Memory Index** — decision log of everything meaningful that's been decided or built
+2. **Memory Index** — where things stand right now, plus a one-line-per-session index of past sessions
    → https://www.notion.so/33f416f27566812a8b25fea944567cab
 
 Agent Config tells you when to fetch reference pages (User Profile, Architecture, Credentials, Sheet Structure, Sessions) — only load those when the topic requires it.
@@ -25,11 +25,31 @@ Notion is the **single source of truth** for the plan. **After completing phases
 
 When the user says **"finish the session"** (or similar), run `/finish-session` — a slash command defined in `.claude/commands/finish-session.md`.
 
-It covers: push git, analyse full chat, create Notion session entry, update Memory Index (prune stale entries), update Agent Config current phase + scripts, tick Plan tasks in Notion, update Architecture/Sheet Structure/other references where facts changed.
+It covers: push git, analyse full chat, create Notion session entry, the short-term memory sweep (below), tick Plan tasks in Notion, update Architecture/Sheet Structure/other references where facts changed.
+
+## Short-term memory — three places, one job each
+
+Short-term memory lives in exactly three places. Each is **capped** and gets cleaned every session (`/finish-session` step 4). The failure mode to guard against is append-instead-of-replace.
+
+| Place | Its one job | Cap |
+|---|---|---|
+| **Plan → Work in Focus** | Open work only | Zero finished items |
+| **Memory Index → Current State** | Where things stand right now | ~1,200 chars, ONE session |
+| **Memory Index → Sessions Index** | One summary row per *finished* session | 1 row/session, ~200 chars, ~12 months |
+| **Agent Config** | Permanent identity + config only | No phases, no session state, ever |
+
+Full narrative always goes to the **Sessions DB** — the only uncapped store. The three places above hold pointers, never prose. A completed phase is never a reason to edit Agent Config; most sessions should leave it untouched.
 
 ## After every meaningful decision or outcome (mid-session)
 
-Add a detailed summary to the Sessions DB in Notion, then add a one-liner entry to Memory Index pointing to it. Update Agent Config if anything structural changed. Full instructions are in Agent Config.
+Two writes, every time:
+
+1. **Sessions DB** — add the decision, with its reasoning, to *this session's* page. Every decision lives here and nowhere else.
+2. **Memory Index → Current State** — refresh the single one-liner block so it summarises this session as it now stands. Overwrite in place; never append a second block.
+
+**Never add a Sessions Index row mid-session.** That table gets exactly one row per session, written once at `/finish-session`. A new decision is not a new row — it goes to (1) and is reflected in (2).
+
+Only touch Agent Config if something **permanent** changed (identity, key IDs, reference table, structural rule) — not phases or current work. Full instructions are in Agent Config.
 
 ## Notifying Vadym when done OR blocked waiting on him
 

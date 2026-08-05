@@ -75,9 +75,11 @@ Session pages — link to those, don't re-explain them in Plan.
    insert. If an `update_content` call fails with "no matches found", re-fetch
    the page first; don't guess at reformatted whitespace/escaping.
 5. After any structural change, follow the project's standard mid-session
-   memory rule (Agent Config): log the outcome in the Sessions DB, add a
-   Memory Index one-liner, and update Agent Config only if something
-   structural (not just a Plan edit) changed.
+   memory rule (Agent Config): log the outcome on this session's Sessions DB
+   page, refresh the Memory Index Current State one-liner, and update Agent
+   Config only if something structural (not just a Plan edit) changed. Do
+   **not** add a Sessions Index row here — that table gets one row per session,
+   written at `/finish-session`, never mid-session.
 
 ## Notes
 
