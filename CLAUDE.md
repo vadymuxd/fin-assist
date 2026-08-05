@@ -51,8 +51,6 @@ Two writes, every time:
 
 Only touch Agent Config if something **permanent** changed (identity, key IDs, reference table, structural rule) — not phases or current work. Full instructions are in Agent Config.
 
-## Notifying Vadym when done OR blocked waiting on him
-
 ## Git — commit AND push, every time, without asking
 
 Pushing is part of making a change, not a separate decision. Never end a turn with a fix committed but unpushed, and never ask "want me to push?"
