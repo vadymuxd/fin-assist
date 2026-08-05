@@ -63,6 +63,11 @@ SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_sync_summary
 # folded into the same combined message.
 MONZO_SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_monzo_sync_summary.txt')
 
+# Must match SYNC_FAILURES_FILE in sync_worker.py — failures only. Present only
+# when at least one Notion-queue entry failed, which is the sole reason a
+# scheduled run sends anything at all.
+SYNC_FAILURES_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_sync_failures.txt')
+
 
 MONTH_NAMES = {
     'january': 1, 'february': 2, 'march': 3, 'april': 4,
@@ -631,6 +636,18 @@ def _read_monzo_summary() -> str:
         return ''
 
 
+def _read_sync_failures() -> str:
+    """Read (and consume) the failures-only handoff sync_worker leaves when one or
+    more Notion-queue entries failed. Returns '' when the queue drained cleanly."""
+    try:
+        with open(SYNC_FAILURES_FILE) as f:
+            text = f.read().strip()
+        os.remove(SYNC_FAILURES_FILE)
+        return text
+    except OSError:
+        return ''
+
+
 def _send_telegram(text: str) -> None:
     token   = os.getenv('TELEGRAM_BOT_TOKEN', '')
     chat_id = os.getenv('TELEGRAM_CHAT_ID', '')
@@ -677,24 +694,32 @@ def main():
     force_revalidate()
 
     if args.domain == 'all':
-        # Single combined "Sync complete" message for the whole pipeline
-        # (monzo_sync.py + sync_worker.py Notion queue + this snapshot),
-        # replacing what used to be up to 3 separate Telegram messages.
-        #
         # `manual` = the bot_sync.yml flow (Telegram Sync button / bot_analyse) —
-        # always confirms, even if nothing changed, so a button press never
-        # looks like it silently did nothing. daily_monitor.yml's scheduled
-        # cron run does NOT set BOT_SYNC_TELEGRAM, so a routine day with zero
-        # new Monzo rows and an empty Notion queue sends no message at all.
-        manual = bool(os.getenv('BOT_SYNC_TELEGRAM'))
-        monzo  = _read_monzo_summary()
-        queue  = _read_sync_summary()
-        changed = bool(monzo) or bool(queue)
+        # a button press always gets a reply, so it never looks like it silently
+        # did nothing. daily_monitor.yml's scheduled cron run does NOT set
+        # BOT_SYNC_TELEGRAM: it is silent on success and only pings on errors
+        # (2026-08-05 — the daily "✅ Sync complete" was pure noise). Anything
+        # that crashes outright is caught by the workflow's `if: failure()` step.
+        manual   = bool(os.getenv('BOT_SYNC_TELEGRAM'))
+        monzo    = _read_monzo_summary()
+        queue    = _read_sync_summary()
+        failures = _read_sync_failures()
 
-        if not changed and not manual:
-            print("  Nothing new this run — skipping Telegram message.")
+        if not manual:
+            if failures:
+                _send_telegram(
+                    f"<b>❌ Sync errors</b> · {date.today().isoformat()}\n\n"
+                    f"{failures}\n\n"
+                    "Those rows are now Status=failed in the Notion Financial "
+                    "Updates DB. They will NOT retry on their own — fix the row, "
+                    "then set Status back to confirmed."
+                )
+            else:
+                print("  Sync clean — no Telegram message (scheduled runs are silent on success).")
             return
 
+        # Manual run: full confirmation, whether or not anything changed.
+        changed = bool(monzo) or bool(queue)
         today = date.today().isoformat()
         lines = [f"<b>✅ Sync complete</b> · {today}", ""]
 

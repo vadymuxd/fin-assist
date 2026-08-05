@@ -59,6 +59,12 @@ COL_VALUE_IDX = 7  # col G (1-based) for cash/managed/lisa value cells in Invest
 # reads it and sends one message. Same path must be used by both scripts.
 SYNC_SUMMARY_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_sync_summary.txt')
 
+# Second handoff file, failures only. Scheduled runs are silent on success, so
+# snapshot_worker needs to tell "queue drained fine" from "some rows failed"
+# without parsing SYNC_SUMMARY_FILE (which mixes both). Written only when at
+# least one entry failed.
+SYNC_FAILURES_FILE = os.path.join(tempfile.gettempdir(), 'fin_assist_sync_failures.txt')
+
 
 # ── Sheet utilities ──────────────────────────────────────────────────────────
 
@@ -681,6 +687,15 @@ def _entry_summary_line(entry):
     return f"• {typ} · {acct}"
 
 
+def build_failures_section(failures):
+    """The failure portion on its own — also what a scheduled run alerts with."""
+    lines = [f"<b>⚠️ Failed ({len(failures)}):</b>"]
+    for entry, err in failures:
+        label = entry['account'] or entry['from_account'] or entry['type']
+        lines.append(f"• {label} — {err[:100]}")
+    return '\n'.join(lines)
+
+
 def build_queue_section(successes, failures):
     """The Notion-queue portion of the Telegram digest (no header), shared by the
     standalone message and the combined bot_sync message that snapshot_worker sends."""
@@ -692,10 +707,7 @@ def build_queue_section(successes, failures):
     if failures:
         if lines:
             lines.append("")
-        lines.append(f"<b>⚠️ Failed ({len(failures)}):</b>")
-        for entry, err in failures:
-            label = entry['account'] or entry['from_account'] or entry['type']
-            lines.append(f"• {label} — {err[:100]}")
+        lines.append(build_failures_section(failures))
     if not successes and not failures:
         lines.append("No pending entries in Notion queue.")
     return '\n'.join(lines)
@@ -721,11 +733,19 @@ def emit_sync_summary(successes, failures):
     processed = bool(successes or failures)
 
     if os.getenv('DEFER_SYNC_TELEGRAM'):
-        # Clear any stale handoff first so an empty run can't reuse a prior file.
-        try:
-            os.remove(SYNC_SUMMARY_FILE)
-        except OSError:
-            pass
+        # Clear any stale handoffs first so an empty run can't reuse a prior file.
+        for path in (SYNC_SUMMARY_FILE, SYNC_FAILURES_FILE):
+            try:
+                os.remove(path)
+            except OSError:
+                pass
+        if failures:
+            # The one thing a scheduled (silent-on-success) run still reports.
+            try:
+                with open(SYNC_FAILURES_FILE, 'w') as f:
+                    f.write(build_failures_section(failures))
+            except OSError as e:
+                print(f"  ⚠ could not write sync failures file: {e}")
         if not processed:
             return  # silent run — snapshot_worker skips the combined message
         try:

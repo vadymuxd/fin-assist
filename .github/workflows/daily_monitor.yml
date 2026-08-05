@@ -92,10 +92,10 @@ jobs:
           TELEGRAM_CHAT_ID:               ${{ secrets.TELEGRAM_CHAT_ID }}
           APP_REVALIDATE_URL:             ${{ secrets.APP_REVALIDATE_URL }}
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
-          # Defer sync_worker's own Telegram message so snapshot_worker sends
-          # ONE combined message (Monzo + Notion queue + Sheet snapshot)
-          # instead of separate ones — and stays silent entirely if this
-          # scheduled run found nothing new (no BOT_SYNC_TELEGRAM here).
+          # Defer sync_worker's own Telegram message to snapshot_worker, which
+          # owns the single message for this pipeline. On this scheduled run
+          # (no BOT_SYNC_TELEGRAM) that message is only ever sent when a Notion
+          # queue entry FAILED — a clean sync says nothing at all.
           DEFER_SYNC_TELEGRAM:            "1"
         # Phase 18: Monzo sync first (new rows → monzo_transactions), then
         # feature.1 recognises savings/investment transfers among them and
@@ -107,3 +107,22 @@ jobs:
           python3 scripts/sync_worker.py
           python3 scripts/snapshot_worker.py --domain all
           python3 scripts/sheets_updater.py --snapshot
+
+      # A successful run is silent by design, so silence must not be ambiguous:
+      # if any step above died, say so here. Uses curl rather than
+      # notify_telegram.py so it still works when the failure was pip install.
+      - name: Notify on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG=$(printf '%s\n%s\n%s' \
+            "❌ <b>Daily Monitor failed</b>" \
+            "A step errored — today's sync may be incomplete." \
+            "$RUN_URL")
+          curl -sS -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d parse_mode=HTML \
+            --data-urlencode text="$MSG"

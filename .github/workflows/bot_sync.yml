@@ -95,9 +95,28 @@ jobs:
           APP_REVALIDATE_SECRET:          ${{ secrets.APP_REVALIDATE_SECRET }}
         run: python3 scripts/sheets_updater.py --snapshot
 
+      - name: Notify on failure
+        if: failure()
+        env:
+          TELEGRAM_BOT_TOKEN: ${{ secrets.TELEGRAM_BOT_TOKEN }}
+          TELEGRAM_CHAT_ID:   ${{ secrets.TELEGRAM_CHAT_ID }}
+          RUN_URL: ${{ github.server_url }}/${{ github.repository }}/actions/runs/${{ github.run_id }}
+        run: |
+          MSG=$(printf '%s\n%s\n%s' \
+            "❌ <b>Sync failed</b>" \
+            "The sync you triggered errored partway through." \
+            "$RUN_URL")
+          curl -sS -X POST "https://api.telegram.org/bot$TELEGRAM_BOT_TOKEN/sendMessage" \
+            -d chat_id="$TELEGRAM_CHAT_ID" \
+            -d parse_mode=HTML \
+            --data-urlencode text="$MSG"
+
 # One combined Telegram message is sent by snapshot_worker.py: monzo_sync.py
 # and sync_worker.py each defer their own summary to a temp-file handoff
 # (only writing one when something actually happened), and snapshot_worker
 # folds whichever are present together with the Sheet-snapshot totals.
 # BOT_SYNC_TELEGRAM=1 above means this manual/bot-triggered run always sends
-# a confirmation, even if nothing was new — unlike the scheduled daily run.
+# a confirmation, even if nothing was new — a button press must always get a
+# reply. The scheduled daily run sets no such flag: it is silent on success
+# and only messages when a queue entry fails (or when the job itself dies,
+# via the failure step above).
