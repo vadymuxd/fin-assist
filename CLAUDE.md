@@ -53,5 +53,15 @@ Only touch Agent Config if something **permanent** changed (identity, key IDs, r
 
 ## Notifying Vadym when done OR blocked waiting on him
 
+## Git — commit AND push, every time, without asking
+
+Pushing is part of making a change, not a separate decision. Never end a turn with a fix committed but unpushed, and never ask "want me to push?"
+
+**Why:** the scheduled GitHub Actions workflows run whatever is on `main`. An unpushed fix means the automation keeps executing the broken code while the local repo looks correct — the bug then re-occurs on the next scheduled run. This has happened twice (1 Jul 2026: two commits unpushed, so Vercel had nothing to deploy; 5 Aug 2026: the mortgage-valuation fix `af06e87` found still unpushed from an earlier session, alongside five uncommitted doc files).
+
+Never create a branch — work on `main`. Expect the remote to be ahead: the scheduled workflows push their own `chore: mortgage snapshot` commits, so `git pull --rebase --autostash origin main` before pushing is routine. Verify the push landed (`git status -sb` shows no "ahead"), not just the commit.
+
+## Notifying Vadym when done OR blocked waiting on him
+
 If Vadym asks to be notified/messaged/told — e.g. "notify me when done", "tell me when you're finished", "message me on Telegram" — follow `/notify` (`.claude/commands/notify.md`). This covers two moments, not just completion: (1) done — send a Telegram summary as the last step before ending your turn; (2) blocked — any time you're about to end your turn waiting on him (a clarifying question, a risky-action confirmation, a permission-approval prompt), send a short "⏸️ Need you: ..." ping first so he knows to come back to his Mac. Both use `python3 scripts/notify_telegram.py "<message>"`.
 
