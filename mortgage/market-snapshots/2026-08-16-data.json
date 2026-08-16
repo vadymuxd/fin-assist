@@ -1,0 +1,90 @@
+{
+  "date": "2026-08-16",
+  "balance": 549751.23,
+  "ltv": 84.6,
+  "remaining_term": 351,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-08-13",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-07-31",
+    "prev_as_of": "2026-06-30",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.79,
+        "prev_rate": 4.81
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.07,
+        "prev_rate": 5.19
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.61,
+        "prev_rate": 4.65
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 4.87,
+        "prev_rate": 4.94
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 4.93,
+  "avg_5yr_rate": 4.74,
+  "avg_2yr_payment": 2961,
+  "avg_5yr_payment": 2898,
+  "prev_avg_2yr_rate": 4.93,
+  "prev_avg_5yr_rate": 4.74,
+  "avg_2yr_wow_bps": 0,
+  "avg_5yr_wow_bps": 0,
+  "news": [
+    {
+      "title": "UK inflation set to rise as AI chip crunch, energy costs add pressure",
+      "description": "Data on Wednesday are set to show inflation accelerating for the first time in four months, with the median economist estimate in a Bloomberg survey predicting a 2.9% jump in July",
+      "source": "business-standard.com",
+      "published": "2026-08-16",
+      "url": "https://www.business-standard.com/world-news/uk-inflation-set-to-rise-as-ai-chip-crunch-energy-costs-add-pressure-126081600048_1.html"
+    },
+    {
+      "title": "Charting the global economy: US employment declines unexpectedly",
+      "description": "The El Ni\u00f1o on track to become the most powerful of the past 76 years is strengthening rapidly, posing a major threat to fragile economies already roiled by conflict in the Middle East.",
+      "source": "economictimes.indiatimes.com",
+      "published": "2026-08-09",
+      "url": "https://economictimes.indiatimes.com/small-biz/trade/exports/insights/charting-the-global-economy-us-employment-declines-unexpectedly/articleshow/133061769.cms"
+    },
+    {
+      "title": "Futures Rise, Just Under Record High Ahead Of PPI Report",
+      "description": "ZeroHedge - On a long enough timeline, the survival rate for everyone drops to zero",
+      "source": "zerohedge.com",
+      "published": "2026-08-13",
+      "url": "https://www.zerohedge.com/markets/futures-rise-just-under-record-high-ahead-ppi-report"
+    }
+  ]
+}
