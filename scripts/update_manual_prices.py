@@ -11,7 +11,7 @@ Currently managed:
 
 Writes a "Last updated" timestamp to cell B2 after all prices are updated.
 
-Runs 3× daily via daily_monitor.yml (09:30 / 13:00 / 16:30 BST).
+Runs 1× daily via daily_monitor.yml (16:30 BST close run).
 """
 
 import os
@@ -20,6 +20,11 @@ import requests
 from dotenv import load_dotenv
 import gspread
 from google.oauth2.service_account import Credentials
+
+# Side-effect import: patches gspread to retry transient Sheets API errors
+# (429 + 5xx) instead of crashing. Without it a single 503 on the first call
+# kills the whole Daily Monitor run (18 + 19 Aug 2026).
+import lib  # noqa: F401
 
 load_dotenv()
 
