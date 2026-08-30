@@ -1,0 +1,97 @@
+{
+  "date": "2026-08-30",
+  "balance": 549751.23,
+  "ltv": 84.6,
+  "remaining_term": 351,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-08-27",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-07-31",
+    "prev_as_of": "2026-06-30",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.79,
+        "prev_rate": 4.81
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.07,
+        "prev_rate": 5.19
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.61,
+        "prev_rate": 4.65
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 4.87,
+        "prev_rate": 4.94
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 4.93,
+  "avg_5yr_rate": 4.74,
+  "avg_2yr_payment": 2961,
+  "avg_5yr_payment": 2898,
+  "prev_avg_2yr_rate": 4.93,
+  "prev_avg_5yr_rate": 4.74,
+  "avg_2yr_wow_bps": 0,
+  "avg_5yr_wow_bps": 0,
+  "news": [
+    {
+      "title": "Locking in the rate or staying flexible? Mortgage refinancing around an interest rate shock",
+      "description": "This paper examines UK mortgage refinancing around the 23 September 2022 mini-budget interest rate shock, exploiting predetermined expiry dates of discounted two and five year fixed-rate mortgages.",
+      "source": "bankofengland.co.uk",
+      "published": "2026-08-28",
+      "url": "https://www.bankofengland.co.uk/working-paper/2026/locking-in-the-rate-or-staying-flexible-mortgage-refinancing-around-an-interest-rate-shock"
+    },
+    {
+      "title": "Smile \u2014 Greater Fool \u2013 Authored by Garth Turner \u2013 The Troubled Future of Real Estate",
+      "description": "",
+      "source": "greaterfool.ca",
+      "published": "2026-08-28",
+      "url": "https://www.greaterfool.ca/2026/08/28/smile-2/"
+    },
+    {
+      "title": "Stocks Slip Ahead of Nvidia Earnings as Bond Yields Rise",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) is down by -0.02% today, the Dow Jones Industrial Average ($DOWI ) (DIA ) is down by -0.23%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is down by -0.10%. E-mini S&P futures (ESU26 ) are down -0.03%, and September E-mini...",
+      "source": "finance.yahoo.com",
+      "published": "2026-08-26",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-slip-ahead-nvidia-earnings-151335301.html"
+    },
+    {
+      "title": "PEXA Group Ltd (ASX:PXA) (FY 2026) Earnings Call Highlights: Record Revenue and Strategic Expansion Amid Regulatory Headwinds",
+      "description": "Revenue: Group revenue exceeded $400 million for the first time, up 7% on FY25.EBITDA: Increased by 12% to $152 million, with EBITDA margin expanding to 37.3%.N",
+      "source": "gurufocus.com",
+      "published": "2026-08-28",
+      "url": "https://www.gurufocus.com/news/9057879/pexa-group-ltd-asxpxa-fy-2026-earnings-call-highlights-record-revenue-and-strategic-expansion-amid-regulatory-headwinds"
+    }
+  ]
+}
