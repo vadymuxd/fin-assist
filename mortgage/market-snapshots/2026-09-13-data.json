@@ -1,0 +1,90 @@
+{
+  "date": "2026-09-13",
+  "balance": 549088.97,
+  "ltv": 84.5,
+  "remaining_term": 350,
+  "base_rate": {
+    "rate": 3.75,
+    "as_of": "2026-09-10",
+    "last_change": "2025-12-18",
+    "previous_rate": 4.0
+  },
+  "quoted": {
+    "as_of": "2026-08-31",
+    "prev_as_of": "2026-07-31",
+    "series": [
+      {
+        "code": "IUMBV34",
+        "label": "2-year fixed",
+        "ltv": 75,
+        "rate": 4.92,
+        "prev_rate": 4.79
+      },
+      {
+        "code": "IUMB482",
+        "label": "2-year fixed",
+        "ltv": 90,
+        "rate": 5.16,
+        "prev_rate": 5.07
+      },
+      {
+        "code": "IUMBV42",
+        "label": "5-year fixed",
+        "ltv": 75,
+        "rate": 4.78,
+        "prev_rate": 4.58
+      },
+      {
+        "code": "IUMZO28",
+        "label": "5-year fixed",
+        "ltv": 90,
+        "rate": 4.95,
+        "prev_rate": 4.85
+      }
+    ]
+  },
+  "mpc_dates": [
+    "2026-09-17",
+    "2026-11-05",
+    "2026-12-17",
+    "2027-02-04",
+    "2027-03-18",
+    "2027-04-29",
+    "2027-06-17",
+    "2027-07-29",
+    "2027-09-16",
+    "2027-11-04",
+    "2027-12-16"
+  ],
+  "avg_2yr_rate": 5.04,
+  "avg_5yr_rate": 4.87,
+  "avg_2yr_payment": 2998,
+  "avg_5yr_payment": 2941,
+  "prev_avg_2yr_rate": 4.93,
+  "prev_avg_5yr_rate": 4.74,
+  "avg_2yr_wow_bps": 11,
+  "avg_5yr_wow_bps": 13,
+  "news": [
+    {
+      "title": "Amazon and Uber Tap Debt Markets as UK Air Traffic Chaos Deepens",
+      "description": "Amazon.com Inc. (AMZN) made a landmark entry into the British debt market on Wednesday, attracting massive investor interest for its inaugural",
+      "source": "thestockmarketwatch.com",
+      "published": "2026-09-09",
+      "url": "https://www2.stockmarketwatch.com/stock-market-news/amazon-and-uber-tap-debt-markets-as-uk-air-traffic-chaos-deepens/71572/"
+    },
+    {
+      "title": "The UK Economy Is Improving. Why Does It Feel Worse?",
+      "description": "Real weekly pay in Britain has never been higher. It's also just 5% above where it was in 2008 \u2014 eighteen years for a 5% pay rise. That gap is this entire video. Because the government are right that the UK grew faster than the rest of the G7 this\u2026",
+      "source": "economicshelp.org",
+      "published": "2026-09-10",
+      "url": "https://www.economicshelp.org/blog/222592/economics/the-uk-economy-is-improving-why-does-it-feel-worse/"
+    },
+    {
+      "title": "Stocks Pressured as Inflation Fears Boost Bond Yields",
+      "description": "The S&P 500 Index ($SPX ) (SPY ) is down -0.25% today, the Dow Jones Industrial Average ($DOWI ) (DIA ) is down -0.69%, and the Nasdaq 100 Index ($IUXX ) (QQQ ) is up +0.12%. E-mini S&P futures (ESU26 ) are down -0.92%, and September E-mini Nasdaq futures (NQU26...",
+      "source": "finance.yahoo.com",
+      "published": "2026-09-09",
+      "url": "https://finance.yahoo.com/markets/stocks/articles/stocks-pressured-inflation-fears-boost-142039912.html"
+    }
+  ]
+}
